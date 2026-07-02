@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+
+{% block title %}Import Assets{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="asset-section">
+        <h2>Import Assets from CSV</h2>
+        <p class="metric-label">Upload a CSV file with columns: name,equipment_type,serial_number,warranty_expiry(YYYY-MM-DD),cost,subsidiary,location,status</p>
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="filters-row">
+                <input type="file" name="csv_file" accept=".csv">
+            </div>
+            <div class="filters-row">
+                <button type="submit" class="action-btn">Import</button>
+                <a href="{% url 'dashboard' %}" class="action-btn secondary">Back to Dashboard</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

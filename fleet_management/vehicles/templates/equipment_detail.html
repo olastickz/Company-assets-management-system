@@ -1,0 +1,283 @@
+{% extends 'base.html' %}
+
+{% block title %}Equipment Details - Assets Management System{% endblock %}
+
+{% block extra_head %}{% endblock %}
+
+{% block content %}
+{% include 'partials/back_to_dashboard.html' %}
+<div class="page-header">
+    <div>
+        <a href="{{ back_url }}" class="link">← Back</a>
+        <h1>Equipment Details</h1>
+        <p>Review asset details, maintenance records, and staff transfer actions with a polished dashboard-style layout.</p>
+    </div>
+</div>
+
+<div class="card-panel">
+    <div class="detail-grid">
+        <div class="detail-card">
+            <h2>Basic Information</h2>
+            <div class="detail-item">
+                <label>Equipment Name</label>
+                <p>{{ equipment.name }}</p>
+            </div>
+            <div class="detail-item">
+                <label>Equipment Type</label>
+                <p>{{ equipment.get_equipment_type_display }}</p>
+            </div>
+            <div class="detail-item">
+                <label>Status</label>
+                <p>
+                    {% if equipment.status == 'active' %}
+                        <span class="status-badge status-active">Active</span>
+                    {% elif equipment.status == 'inactive' %}
+                        <span class="status-badge status-inactive">Inactive</span>
+                    {% else %}
+                        <span class="status-badge status-damaged">Damaged</span>
+                    {% endif %}
+                </p>
+            </div>
+            <div class="detail-item">
+                <label>Location</label>
+                <p>{{ equipment.location|default:"N/A" }}</p>
+            </div>
+        </div>
+        <div class="detail-card">
+            <h2>Asset Summary</h2>
+            {% if equipment.subsidiary %}
+            <div class="detail-item">
+                <label>Subsidiary</label>
+                <p>{{ equipment.subsidiary }}</p>
+            </div>
+            {% endif %}
+            {% if equipment.serial_number %}
+            <div class="detail-item">
+                <label>Serial Number</label>
+                <p style="font-family:monospace;">{{ equipment.serial_number }}</p>
+            </div>
+            {% endif %}
+            {% if equipment.tag_number %}
+            <div class="detail-item">
+                <label>Asset Tag</label>
+                <p>{{ equipment.tag_number }}</p>
+            </div>
+            {% endif %}
+            {% if equipment.quantity %}
+            <div class="detail-item">
+                <label>Quantity</label>
+                <p>{{ equipment.quantity }}</p>
+            </div>
+            {% endif %}
+            {% if equipment.assigned_staff or equipment.assigned_user %}
+            <div class="detail-item">
+                <label>Assigned User</label>
+                <p>{{ equipment.assigned_to_display }}</p>
+            </div>
+            {% endif %}
+            {% if equipment.remarks %}
+            <div class="detail-item">
+                <label>Remarks</label>
+                <p>{{ equipment.remarks }}</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% if equipment.asset %}
+<div class="card-panel">
+    <div class="detail-grid">
+        <div class="detail-card">
+            <h2>Asset Assignment History</h2>
+            {% if assignment_history %}
+            <div style="overflow-x:auto;">
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead>
+                        <tr>
+                            <th style="text-align:left; padding:10px 0;">Staff Member</th>
+                            <th style="text-align:left; padding:10px 0;">Branch</th>
+                            <th style="text-align:left; padding:10px 0;">Assigned At</th>
+                            <th style="text-align:left; padding:10px 0;">Released At</th>
+                            <th style="text-align:left; padding:10px 0;">Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for assignment in assignment_history %}
+                        <tr>
+                            <td style="padding:10px 0;">{{ assignment.staff_member|default:'Unassigned' }}</td>
+                            <td style="padding:10px 0;">{{ assignment.branch|default:'-' }}</td>
+                            <td style="padding:10px 0;">{{ assignment.assigned_at|date:"M d, Y H:i" }}</td>
+                            <td style="padding:10px 0;">
+                                {% if assignment.released_at %}
+                                    {{ assignment.released_at|date:"M d, Y H:i" }}
+                                {% else %}
+                                    <span class="status-badge status-active">Current</span>
+                                {% endif %}
+                            </td>
+                            <td style="padding:10px 0;">{{ assignment.notes|default:'-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p>No assignment history is available for this asset yet.</p>
+            {% endif %}
+        </div>
+        <div class="detail-card">
+            <h2>Linked Assets</h2>
+            {% if related_assets %}
+            <ul style="margin:0; padding-left:18px; color:#0f172a;">
+                {% for asset in related_assets %}
+                <li style="margin-bottom:10px;">
+                    <strong>{{ asset.name }}</strong> <span style="color:#475569;">({{ asset.get_asset_type_display }})</span>
+                    {% if asset.assigned_staff %}
+                        <br><small style="color:#475569;">Assigned to {{ asset.assigned_staff }}{% if asset.assigned_staff.branch %} at {{ asset.assigned_staff.branch }}{% endif %}</small>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p>No linked asset relationships have been created.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="card-panel">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h2 style="margin:0; color:#0F172A;">Linked Documents</h2>
+        {% if is_superuser %}
+        <a href="{% url 'company_document_create' %}?related_equipment={{ equipment.pk }}&back_url={{ request.get_full_path|urlencode }}" class="button-inline" style="white-space:nowrap;">📄 Create Equipment Document</a>
+        {% endif %}
+    </div>
+    {% if related_documents %}
+    <div style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse;">
+            <thead>
+                <tr>
+                    <th style="text-align:left; padding:10px 0;">Document</th>
+                    <th style="text-align:left; padding:10px 0;">Type</th>
+                    <th style="text-align:left; padding:10px 0;">Expiry</th>
+                    <th style="text-align:left; padding:10px 0;">Status</th>
+                    <th style="text-align:left; padding:10px 0;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for document in related_documents %}
+                <tr>
+                    <td style="padding:10px 0;">{{ document.name }}</td>
+                    <td style="padding:10px 0;">{{ document.get_document_type_display }}</td>
+                    <td style="padding:10px 0;">{{ document.expiry_date|date:'M d, Y'|default:'N/A' }}</td>
+                    <td style="padding:10px 0;">
+                        {% if document.get_status == 'expired' %}
+                            <span class="status-badge status-damaged">Expired</span>
+                        {% elif document.get_status == 'expiring' %}
+                            <span class="status-badge status-inactive">Expiring</span>
+                        {% else %}
+                            <span class="status-badge status-active">Valid</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding:10px 0;"><a href="{% url 'company_document_detail' document.pk %}?back_url={{ request.get_full_path|urlencode }}" class="link">View</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p>No related documents have been attached to this equipment yet.</p>
+    {% endif %}
+</div>
+
+<div class="card-panel">
+    <h2 style="margin-top:0; color:#0F172A;">General Information</h2>
+    <div class="detail-grid" style="margin-top:18px;">
+        <div class="detail-card">
+            <label>Purchase Date</label>
+            <p>{{ equipment.purchase_date|date:"M d, Y"|default:"N/A" }}</p>
+        </div>
+        <div class="detail-card">
+            <label>Warranty Expiry</label>
+            <p>{{ equipment.warranty_expiry|date:"M d, Y"|default:"N/A" }}</p>
+        </div>
+        <div class="detail-card">
+            <label>Cost</label>
+            <p>{{ equipment.cost|floatformat:2|default:"N/A" }}</p>
+        </div>
+        <div class="detail-card">
+            <label>Notes</label>
+            <p>{{ equipment.notes|default:"N/A"|truncatewords:24 }}</p>
+        </div>
+    </div>
+</div>
+
+{% if equipment.description %}
+<div class="card-panel">
+    <h2 style="margin-top:0; color:#0F172A;">Detailed Description</h2>
+    <p style="margin:16px 0 0; color:#475569; line-height:1.8; white-space:pre-wrap; word-break:break-word;">{{ equipment.description }}</p>
+</div>
+{% endif %}
+
+<div class="card-panel">
+    <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:12px; align-items:flex-start; margin-bottom:18px;">
+        <div>
+            <h2 style="margin:0; color:#0F172A;">Maintenance Records</h2>
+            <p style="margin:8px 0 0; color:#64748B;">Track equipment maintenance, due dates, and costs.</p>
+        </div>
+        {% if is_superuser %}
+        <a href="{% url 'equipment_maintenance_create' equipment.pk %}" class="button-inline">+ Add Maintenance Record</a>
+        {% endif %}
+    </div>
+    <div class="table-card">
+        <table>
+            <thead>
+                <tr>
+                    <th>Description</th>
+                    <th>Maintenance Date</th>
+                    <th>Due Date</th>
+                    <th>Cost</th>
+                    {% if is_superuser %}<th style="text-align:center;">Actions</th>{% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for record in maintenance_records %}
+                <tr>
+                    <td>{{ record.description }}</td>
+                    <td>{{ record.maintenance_date|date:"M d, Y" }}</td>
+                    <td>{{ record.due_date|date:"M d, Y"|default:"N/A" }}</td>
+                    <td>{{ record.cost|floatformat:2|default:"N/A" }}</td>
+                    {% if is_superuser %}
+                    <td style="text-align:center;">
+                        <a href="{% url 'equipment_maintenance_update' record.pk %}" class="link">Edit</a>
+                        <a href="{% url 'equipment_maintenance_delete' record.pk %}" class="link" style="margin-left:12px; color:#e74c3c;">Delete</a>
+                    </td>
+                    {% endif %}
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="{% if is_superuser %}5{% else %}4{% endif %}" style="text-align:center; color:#64748B; padding:24px;">No maintenance records found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="alert-panel">
+    <h3>Staff Transfer</h3>
+    <p>Record equipment handover to another staff member and preserve transfer history with departments and dates.</p>
+</div>
+
+<div class="actions-block">
+    <a href="{% url 'equipment_transfer' equipment.pk %}" class="button-inline" style="background:#27ae60;">🔄 New Transfer</a>
+    <a href="{% url 'equipment_transfer_history' equipment.pk %}" class="button-inline">📋 View Transfer History</a>
+    {% if is_superuser %}
+    <a href="{% url 'equipment_update' equipment.pk %}?back_url={{ request.get_full_path|urlencode }}" class="button-inline">Edit Equipment</a>
+    <a href="{% url 'equipment_delete' equipment.pk %}?back_url={{ request.get_full_path|urlencode }}" class="button-inline" style="background:#e74c3c;">Delete Equipment</a>
+    {% endif %}
+</div>
+
+<p style="margin-top:24px;"><a href="{{ back_url }}" class="link">← Back</a></p>
+{% endblock %}

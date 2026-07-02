@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delete Maintenance Record</title>
+    <style>
+        body { font-family: Arial; background:#f4f6f9; padding:30px; }
+        h1 { text-align:center; color:#e74c3c; }
+        .container { max-width:600px; margin:auto; background:white; padding:20px; border-radius:10px; }
+        p { font-size:16px; }
+        button { padding:10px 20px; background:#e74c3c; color:white; border:none; border-radius:5px; cursor:pointer; margin-right:10px; }
+        a { text-decoration:none; color:#3498db; margin-right:15px; }
+        .btn-group { margin-top:20px; text-align:center; }
+        .back-btn { display:inline-flex; align-items:center; gap:8px; padding:8px 16px; background:#6c757d; color:white; border-radius:4px; font-weight:600; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="{{ back_url }}" class="back-btn">← Back</a>
+
+        <h1>Delete Maintenance Record</h1>
+        <p>Are you sure you want to delete the maintenance record for <strong>{{ maintenance.equipment.name }}</strong>?</p>
+        <p><em>{{ maintenance.description }} ({{ maintenance.maintenance_date }})</em></p>
+        <div class="btn-group">
+            <form method="post" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit">Yes, Delete</button>
+            </form>
+            <a href="{{ back_url }}">Cancel</a>
+        </div>
+    </div>
+</body>
+</html>
+        <form method="post">
+            {% csrf_token %}
+            <button type="submit">Yes, Delete</button>
+            <a href="{% url 'equipment_detail' maintenance.equipment.pk %}">Cancel</a>
+        </form>
+    </div>
+</body>
+</html>

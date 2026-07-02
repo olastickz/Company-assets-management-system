@@ -1,0 +1,8 @@
+{% comment %}Summary card showing total vehicle asset documents and a quick link to vehicle scope{% endcomment %}
+<a href="{% url 'company_documents_list' %}?scope=vehicle{% if scope_query_string %}&{{ scope_query_string }}{% endif %}" class="doc-stat-card total" style="text-decoration:none; display:inline-flex; align-items:center; gap:12px;" title="View Vehicle Asset Documents">
+    <div>
+        <h4 style="color:white;">Vehicle Asset Documents</h4>
+        <div id="vehicle-doc-count" class="value" style="color:white;">{{ vehicle_document_count }}</div>
+    </div>
+    <span class="card-icon">🚗</span>
+</a>

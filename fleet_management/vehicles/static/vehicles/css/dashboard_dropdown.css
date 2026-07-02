@@ -1,0 +1,65 @@
+/* Dashboard create dropdown styles */
+.action-dropdown {
+    font-family: inherit;
+}
+.action-dropdown .action-btn {
+    cursor: pointer;
+    background: #0f172a;
+    color: #ffffff;
+    border: none;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.action-dropdown .action-btn:hover,
+.action-dropdown .action-btn:focus {
+    background: #111827;
+    outline: none;
+    box-shadow: 0 6px 18px rgba(2,6,23,0.12);
+}
+#dashboardCreateDropdownMenu {
+    min-width: 240px;
+    padding: 6px 0;
+}
+#dashboardCreateDropdownMenu a {
+    color: #0f172a;
+    display: block;
+    padding: 10px 16px;
+    text-decoration: none;
+}
+#dashboardCreateDropdownMenu a:hover,
+#dashboardCreateDropdownMenu a:focus {
+    background: #f3f4f6;
+    outline: none;
+}
+.action-dropdown .submenu-wrapper {
+    padding: 6px 8px;
+}
+.action-dropdown .submenu-wrapper > button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 8px 10px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: #0f172a;
+    font-weight: 700;
+}
+.action-dropdown .submenu-wrapper > button:hover,
+.action-dropdown .submenu-wrapper > button:focus {
+    background: #f3f4f6;
+    outline: none;
+}
+.action-dropdown .submenu-wrapper > div {
+    padding-left: 8px;
+}
+
+/* keyboard focus improvements */
+a[role="menuitem"]:focus, a[role="menuitem"]:hover {
+    background: #eef2ff;
+}

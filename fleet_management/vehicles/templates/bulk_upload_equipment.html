@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+
+{% block title %}Bulk Upload Equipment - Telnet Assets Management System{% endblock %}
+
+{% block content %}
+    <div style="max-width:900px; margin:0 auto;">
+        <a href="{% url 'equipment_list' %}" style="display:inline-flex; align-items:center; gap:8px; margin-bottom:20px; padding:8px 16px; background:#6c757d; color:white; text-decoration:none; border-radius:4px; font-weight:600;">
+            <span>←</span> Back to Equipment List
+        </a>
+        
+        <h2>Bulk Upload Office Equipment</h2>
+        
+        <div class="form-card">
+            <h3>📤 Import Equipment from Multiple Formats</h3>
+            
+            <form method="POST" enctype="multipart/form-data" style="margin-bottom:30px;">
+                {% csrf_token %}
+                
+                <div style="background:#f0f8ff; padding:15px; border-radius:5px; margin-bottom:20px;">
+                    <p style="color:#0066cc; font-weight:600;">Select one file type to upload:</p>
+                </div>
+                
+                <div class="form-item" style="margin-bottom:20px;">
+                    <label>📄 CSV File:</label>
+                    <input type="file" name="csv_file" accept=".csv" style="padding: 10px; cursor: pointer;">
+                </div>
+
+                <div class="form-item" style="margin-bottom:20px;">
+                    <label>📊 Excel File (.xlsx) - Laptop Tagging format:</label>
+                    <input type="file" name="excel_file" accept=".xlsx" style="padding: 10px; cursor: pointer;">
+                </div>
+                
+                <button type="submit" class="button" style="background:#9b59b6; margin-bottom:20px;">✓ Upload Equipment</button>
+            </form>
+
+            <hr style="border:none; border-top:2px solid #ddd; margin:30px 0;">
+
+            <h4>📋 CSV Format Requirements:</h4>
+            <p style="font-size:14px; color:#666;">Your CSV file should have the following columns (headers required):</p>
+            
+            <div style="background:#f5f5f5; padding:15px; border-radius:5px; font-family:monospace; font-size:12px;">
+                <strong>Required columns:</strong><br>
+                • <strong>name</strong> - Equipment name (e.g., "Dell Desktop Computer")<br>
+                • <strong>equipment_type</strong> - computer, printer, scanner, copier, ac, generator, furniture, other<br>
+                <br>
+                <strong>Optional columns:</strong><br>
+                • description - Detailed description<br>
+                • location - Office location (e.g., "Office 1")<br>
+                • status - active, inactive, damaged (default: active)<br>
+                • purchase_date - YYYY-MM-DD format<br>
+                • warranty_expiry - YYYY-MM-DD format<br>
+                • cost - Purchase cost (e.g., 5000.00)<br>
+                • notes - Additional notes<br>
+            </div>
+
+            <h4 style="margin-top:30px;">📝 Example CSV:</h4>
+            <div style="background:#f5f5f5; padding:15px; border-radius:5px; font-family:monospace; font-size:12px; overflow-x:auto;">
+name,equipment_type,location,status,purchase_date,cost<br>
+Dell Desktop Computer,computer,Office 1,active,2022-01-15,3500.00<br>
+HP LaserJet Printer,printer,Office 1,active,2021-06-20,2500.00<br>
+LG Air Conditioner,ac,Office 2,active,2020-03-10,8000.00<br>
+            </div>
+
+            <h4 style="margin-top:30px;">📊 Excel Format (Laptop Tagging):</h4>
+            <p style="font-size:14px; color:#666;">Your Excel file should include columns like:</p>
+            <div style="background:#f5f5f5; padding:15px; border-radius:5px; font-size:14px;">
+                SUBSIDIARY | ITEM DESCRIPTION | LOCATION | QTY | SERIAL NUMBER | YOP (Year) | TAG NUMBER | USER | REMARKS
+            </div>
+            <p style="font-size:14px; color:#666; margin-top:10px;">The system will automatically extract and organize this data into computer equipment entries with serial numbers stored in notes.</p>
+
+            <h4 style="margin-top:30px;">✅ Tips:</h4>
+            <ul style="font-size:14px; color:#555;">
+                <li>Use YYYY-MM-DD format for all dates (e.g., 2025-12-31)</li>
+                <li>Leave date fields empty if not available</li>
+                <li>Valid equipment types: computer, printer, scanner, copier, ac, generator, furniture, other</li>
+                <li>Default status is "active" if not specified</li>
+                <li>Cost should be a numerical value</li>
+                <li>For Excel files: Serial numbers and tag numbers are automatically stored in notes</li>
+                <li>Choose only ONE file type per upload</li>
+            </ul>
+        </div>
+
+        <div style="text-align:center; margin-top:20px; display:flex; gap:10px; justify-content:center;">
+            <a href="{% url 'equipment_list' %}" class="button" style="background:#9b59b6; display:inline-block; width:auto; padding:10px 20px;">← Back to Equipment</a>
+            <a href="{% url 'dashboard' %}" class="button" style="background:#3498db; display:inline-block; width:auto; padding:10px 20px;">← Back to Dashboard</a>
+        </div>
+    </div>
+{% endblock %}

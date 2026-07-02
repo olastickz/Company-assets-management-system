@@ -1,0 +1,508 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Company Documents - Assets Management System{% endblock %}
+
+{% block extra_head %}
+<style>
+    .doc-stat-card {
+        flex: 1;
+        min-width: 170px;
+        max-width: 220px;
+        padding: 18px 20px;
+        border-radius: 14px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        color: white;
+        text-decoration: none;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .doc-stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 24px rgba(0,0,0,0.12);
+    }
+
+    .doc-stat-card.expired { background: linear-gradient(135deg, #d64545 0%, #c0392b 100%); }
+    .doc-stat-card.expiring { background: linear-gradient(135deg, #f39c12 0%, #d68910 100%); }
+    .doc-stat-card.valid { background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%); }
+    .doc-stat-card.total { background: linear-gradient(135deg, #3498db 0%, #2e86de 100%); }
+
+    .doc-stat-card h4 {
+        margin: 0;
+        font-size: 0.87rem;
+        opacity: 0.9;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+    }
+
+    .doc-stat-card .value {
+        font-size: 1.7rem;
+        font-weight: 800;
+        line-height: 1;
+        min-width: 42px;
+        text-align: center;
+    }
+
+    .doc-stat-card .card-icon {
+        font-size: 1.7rem;
+        opacity: 0.92;
+        margin-left: 10px;
+    }
+
+    .doc-filter-bar {
+        background: #ffffff;
+        padding: 18px 20px;
+        border-radius: 14px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+        margin-bottom: 24px;
+    }
+
+    .doc-filter-group a {
+        margin-right: 10px;
+    }
+
+    .doc-table thead th {
+        background: #2c3e50;
+        color: white;
+        position: sticky;
+        top: 0;
+        z-index: 2;
+    }
+
+    .doc-table tbody tr:hover {
+        background: #f7f9fc;
+    }
+
+    .doc-empty-state {
+        padding: 36px 0;
+    }
+
+    .doc-empty-state p {
+        margin-bottom: 14px;
+        color: #6c757d;
+    }
+
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px 16px;
+        border-radius: 10px;
+        border: 1px solid transparent;
+        font-weight: 700;
+        font-size: 0.95rem;
+        text-decoration: none;
+        transition: all 0.18s ease;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+
+    .btn:hover {
+        transform: translateY(-1px);
+    }
+
+    .btn:active,
+    .btn:focus {
+        transform: translateY(0);
+    }
+
+    .btn-primary {
+        background: #3b82f6;
+        color: #ffffff;
+        border-color: #2563eb;
+    }
+
+    .btn-primary:hover {
+        background: #2563eb;
+    }
+
+    .btn-primary:active,
+    .btn-primary:focus {
+        background: #1d4ed8;
+        outline: none;
+    }
+
+    .btn-sm {
+        padding: 7px 12px;
+        font-size: 0.85rem;
+    }
+
+    .btn-outline-secondary,
+    .btn-outline-danger,
+    .btn-outline-warning,
+    .btn-outline-success {
+        background: #ffffff;
+        color: #374151;
+        border-width: 1px;
+        border-style: solid;
+    }
+
+    .btn-outline-secondary { border-color: #9ca3af; }
+    .btn-outline-danger { border-color: #ef4444; color: #ef4444; }
+    .btn-outline-warning { border-color: #f59e0b; color: #b45309; }
+    .btn-outline-success { border-color: #22c55e; color: #166534; }
+
+    .btn-outline-secondary:active,
+    .btn-outline-secondary:focus,
+    .btn-outline-danger:active,
+    .btn-outline-danger:focus,
+    .btn-outline-warning:active,
+    .btn-outline-warning:focus,
+    .btn-outline-success:active,
+    .btn-outline-success:focus {
+        opacity: 0.9;
+        outline: none;
+    }
+
+    .btn-outline-secondary.active {
+        background: #f3f4f6;
+        color: #374151;
+        border-color: #9ca3af;
+        white-space: nowrap;
+    }
+
+    .btn-outline-danger.active {
+        background: #fee2e2;
+        color: #ef4444;
+        border-color: #ef4444;
+        white-space: nowrap;
+    }
+
+    .btn-outline-warning.active {
+        background: #fef3c7;
+        color: #b45309;
+        border-color: #f59e0b;
+        white-space: nowrap;
+    }
+
+    .btn-outline-success.active {
+        background: #dcfce7;
+        color: #166534;
+        border-color: #22c55e;
+        white-space: nowrap;
+    }
+
+    .btn-info { background: #38bdf8; color: #0f172a; border-color: transparent; }
+    .btn-warning { background: #f59e0b; color: #0f172a; border-color: transparent; }
+    .btn-danger { background: #ef4444; color: #ffffff; border-color: transparent; }
+
+    .btn-info:active,
+    .btn-info:focus,
+    .btn-warning:active,
+    .btn-warning:focus,
+    .btn-danger:active,
+    .btn-danger:focus {
+        opacity: 0.9;
+        outline: none;
+    }
+
+    .table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 100%;
+    }
+
+    .table th,
+    .table td {
+        padding: 16px 18px;
+        border-bottom: 1px solid #e5e7eb;
+        vertical-align: middle;
+    }
+
+    .table-light th {
+        background: #f8fafc;
+        color: #111827;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+        font-size: 0.85rem;
+        border-bottom-width: 2px;
+    }
+
+    .table-hover tbody tr:hover {
+        background: #f8fafc;
+    }
+
+    .badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 5px 10px;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        line-height: 1;
+    }
+
+    .bg-info { background: #38bdf8; color: #0f172a; }
+    .bg-success { background: #22c55e; color: #ffffff; }
+    .bg-warning { background: #fbbf24; color: #92400e; }
+    .bg-danger { background: #ef4444; color: #ffffff; }
+
+    .text-muted { color: #6b7280 !important; }
+    .text-warning { color: #b45309 !important; }
+    .text-success { color: #15803d !important; }
+    .font-weight-bold { font-weight: 700 !important; }
+    .me-2 { margin-right: 0.5rem !important; }
+    .justify-content-center { justify-content: center !important; }
+    .mt-4 { margin-top: 1.5rem !important; }
+
+    .pagination {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .page-item {
+        display: inline;
+    }
+
+    .page-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 42px;
+        padding: 10px 14px;
+        border-radius: 8px;
+        border: 1px solid #d1d5db;
+        color: #374151;
+        text-decoration: none;
+        background: #ffffff;
+    }
+
+    .page-item.active .page-link {
+        background: #3b82f6;
+        color: #ffffff;
+        border-color: #2563eb;
+    }
+
+    @media (max-width: 768px) {
+        .doc-stat-card { min-width: 100%; }
+        .doc-filter-bar { padding: 16px; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'partials/back_to_dashboard.html' %}
+<div style="max-width:1200px; margin:0 auto; padding:20px;">
+    <div style="display:flex; flex-direction:column; gap:16px; margin-bottom:24px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px;">
+            <div>
+                {% if scope_filter == 'vehicle' %}
+                    <h1 style="margin-bottom:8px;">🚗 Vehicle Asset Documents</h1>
+                    <p style="margin:0; color:#6b7280;">Track and manage asset document expiries.</p>
+                {% elif scope_filter == 'equipment' %}
+                    <h1 style="margin-bottom:8px;">🛠️ Equipment Documents</h1>
+                    <p style="margin:0; color:#6b7280;">Track and manage equipment document expiries.</p>
+                {% elif scope_filter == 'company' %}
+                    <h1 style="margin-bottom:8px;">📋 Company Documents</h1>
+                    <p style="margin:0; color:#6b7280;">Track and manage company-wide document expiries.</p>
+                {% else %}
+                    <h1 style="margin-bottom:8px;">📋 All Documents</h1>
+                    <p style="margin:0; color:#6b7280;">Track and manage all documents for company, vehicle assets, and equipment.</p>
+                {% endif %}
+            </div>
+            {% if can_create_company_document %}
+            <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:flex-end;">
+                {% include 'partials/document_dropdown.html' with back_url=request.get_full_path %}
+            </div>
+            {% endif %}
+        </div>
+
+        <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+            <a id="scope-all" href="{% url 'company_documents_list' %}?scope=all{% if scope_query_string %}&{{ scope_query_string }}{% endif %}" class="btn btn-outline-secondary {% if scope_filter == 'all' %}active{% endif %}">All Documents (<span id="count-all">{{ total_count }}</span>)</a>
+            <a id="scope-company" href="{% url 'company_documents_list' %}?scope=company{% if scope_query_string %}&{{ scope_query_string }}{% endif %}" class="btn btn-outline-secondary {% if scope_filter == 'company' %}active{% endif %}">Company (<span id="count-company">{{ company_document_count }}</span>)</a>
+            <a id="scope-vehicle" href="{% url 'company_documents_list' %}?scope=vehicle{% if scope_query_string %}&{{ scope_query_string }}{% endif %}" class="btn btn-outline-secondary {% if scope_filter == 'vehicle' %}active{% endif %}">Vehicle Asset Documents (<span id="count-vehicle">{{ vehicle_document_count }}</span>)</a>
+            <a id="scope-equipment" href="{% url 'company_documents_list' %}?scope=equipment{% if scope_query_string %}&{{ scope_query_string }}{% endif %}" class="btn btn-outline-secondary {% if scope_filter == 'equipment' %}active{% endif %}">Equipment (<span id="count-equipment">{{ equipment_document_count }}</span>)</a>
+        </div>
+    </div>
+
+    {% comment %}Vehicle documents summary card (quick access) — shows vehicle document count{% endcomment %}
+    <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:12px;">
+        {% include 'partials/vehicle_documents_card.html' %}
+    </div>
+
+    <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:28px;">
+        <div class="doc-stat-card expired">
+            <div>
+                <h4>Expired Documents</h4>
+                <div id="count-expired" class="value">{{ expired_count }}</div>
+            </div>
+            <span class="card-icon">❌</span>
+        </div>
+        <div class="doc-stat-card expiring">
+            <div>
+                <h4>Expiring Soon</h4>
+                <div id="count-expiring" class="value">{{ expiring_count }}</div>
+            </div>
+            <span class="card-icon">⚠️</span>
+        </div>
+        <div class="doc-stat-card valid">
+            <div>
+                <h4>Valid Documents</h4>
+                <div id="count-safe" class="value">{{ safe_count }}</div>
+            </div>
+            <span class="card-icon">✅</span>
+        </div>
+        <div class="doc-stat-card total">
+            <div>
+                <h4>Total Documents</h4>
+                <div id="count-total" class="value">{{ total_count }}</div>
+            </div>
+            <span class="card-icon">📄</span>
+        </div>
+    </div>
+
+    <div class="doc-filter-bar" style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:16px; margin-bottom:24px; align-items:flex-end;">
+        <form method="get" style="display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
+            {% if status_filter != 'all' %}
+                <input type="hidden" name="status" value="{{ status_filter }}">
+            {% endif %}
+            {% if scope_filter != 'all' %}
+                <input type="hidden" name="scope" value="{{ scope_filter }}">
+            {% endif %}
+            <input type="search" name="search" placeholder="Search documents..." value="{{ search_query }}" class="form-control" style="min-width:240px;">
+            <select name="type" class="form-control" style="min-width:200px;">
+                <option value="all">All document types</option>
+                {% for value, label in document_type_choices %}
+                    <option value="{{ value }}" {% if type_filter == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <button class="btn btn-primary" type="submit">Filter</button>
+        </form>
+        <div class="doc-filter-group" style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+            <a href="{% url 'company_documents_list' %}{% if status_query_string %}?{{ status_query_string }}{% endif %}" class="btn btn-outline-secondary {% if status_filter == 'all' %}active{% endif %}">All Documents</a>
+            <a href="{% url 'company_documents_list' %}?status=expired{% if status_query_string %}&{{ status_query_string }}{% endif %}{% if scope_filter != 'all' %}&scope={{ scope_filter }}{% endif %}" class="btn btn-outline-danger {% if status_filter == 'expired' %}active{% endif %}">❌ Expired</a>
+            <a href="{% url 'company_documents_list' %}?status=expiring{% if status_query_string %}&{{ status_query_string }}{% endif %}{% if scope_filter != 'all' %}&scope={{ scope_filter }}{% endif %}" class="btn btn-outline-warning {% if status_filter == 'expiring' %}active{% endif %}">⚠️ Expiring Soon</a>
+            <a href="{% url 'company_documents_list' %}?status=safe{% if status_query_string %}&{{ status_query_string }}{% endif %}{% if scope_filter != 'all' %}&scope={{ scope_filter }}{% endif %}" class="btn btn-outline-success {% if status_filter == 'safe' %}active{% endif %}">✅ Valid</a>
+        </div>
+    </div>
+
+    <div style="background:#ffffff; border-radius:14px; box-shadow:0 6px 18px rgba(0,0,0,0.06); overflow:hidden;">
+        <div class="table-responsive">
+            <table class="table table-hover doc-table mb-0">
+                <thead>
+                    <tr>
+                        <th>Document Name</th>
+                        <th>Type</th>
+                        <th>Asset</th>
+                        <th>Expiry Date</th>
+                        <th>Status</th>
+                        <th>Responsible</th>
+                        <th>Days Until Expiry</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for document in documents %}
+                    <tr data-document-id="{{ document.pk }}">
+                        <td>
+                            <strong>{{ document.name }}</strong><br>
+                            <small class="text-muted doc-number">{% if document.document_number %}{{ document.document_number }}{% endif %}</small>
+                            {% if document.issuing_authority %}
+                                <br><small class="text-muted doc-issuing">Issued by: {{ document.issuing_authority }}</small>
+                            {% else %}
+                                <br><small class="text-muted doc-issuing"></small>
+                            {% endif %}
+                            {% if document.location %}
+                                <br><small class="text-muted doc-location">Location: {{ document.location }}</small>
+                            {% else %}
+                                <br><small class="text-muted doc-location"></small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-info">{{ document.get_document_type_display }}</span>
+                        </td>
+                        <td class="doc-asset">
+                            {% if document.related_vehicle %}
+                                <a href="{% url 'asset_detail' document.related_vehicle.pk %}?asset_type=vehicles">{{ document.related_vehicle.name }}{% if document.related_vehicle.license_plate %} ({{ document.related_vehicle.license_plate }}){% endif %}</a>
+                            {% elif document.related_equipment %}
+                                <a href="{% url 'equipment_detail' document.related_equipment.pk %}">{{ document.related_equipment.name }}</a>
+                            {% elif document.related_asset %}
+                                {{ document.related_asset }}
+                            {% else %}
+                                Company-wide
+                            {% endif %}
+                        </td>
+                        <td class="doc-expiry">{{ document.expiry_date|date:"M d, Y" }}</td>
+                        <td class="doc-status">
+                            {% if document.get_status == 'expired' %}
+                                <span class="badge bg-danger">❌ Expired</span>
+                            {% elif document.get_status == 'expiring' %}
+                                <span class="badge bg-warning">⚠️ Expiring Soon</span>
+                            {% else %}
+                                <span class="badge bg-success">✅ Valid</span>
+                            {% endif %}
+                        </td>
+                        <td class="doc-responsible">{{ document.responsible_display }}</td>
+                        <td class="doc-days">
+                            {% if document.status == 'expired' %}
+                                <span class="text-danger font-weight-bold">Expired</span>
+                            {% else %}
+                                {% if document.days_until_expiry %}
+                                    <span class="{% if document.days_until_expiry <= document.notify_days_before %}text-warning{% else %}text-success{% endif %}">
+                                        {{ document.days_until_expiry }} days
+                                    </span>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'company_document_detail' document.pk %}?back_url={{ request.get_full_path|urlencode }}" class="btn btn-sm btn-info" title="View">👁</a>
+                            <a href="{% url 'company_document_edit' document.pk %}?back_url={{ request.get_full_path|urlencode }}" class="btn btn-sm btn-warning" title="Edit">✏️</a>
+                            <a href="{% url 'company_document_delete' document.pk %}?back_url={{ request.get_full_path|urlencode }}" class="btn btn-sm btn-danger" title="Delete">🗑️</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center doc-empty-state">
+                            <p>No documents found.</p>
+                            {% if can_create_company_document %}
+                                <a href="{% url 'company_document_create' %}?back_url={{ request.get_full_path|urlencode }}" class="btn btn-primary btn-sm">Create First Document</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if documents.has_other_pages %}
+    <nav aria-label="Page navigation" class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if documents.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page=1&status={{ status_filter }}">First</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ documents.previous_page_number }}&status={{ status_filter }}">Previous</a>
+                </li>
+            {% endif %}
+            <li class="page-item active">
+                <span class="page-link">Page {{ documents.number }} of {{ documents.paginator.num_pages }}</span>
+            </li>
+            {% if documents.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ documents.next_page_number }}&status={{ status_filter }}">Next</a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ documents.paginator.num_pages }}&status={{ status_filter }}">Last</a>
+                </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'vehicles/js/document_counts.js' %}"></script>
+{% endblock %}

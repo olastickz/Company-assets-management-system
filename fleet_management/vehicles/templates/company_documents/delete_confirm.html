@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Delete Document - Company Documents{% endblock %}
+
+{% block content %}
+{% include 'partials/back_to_dashboard.html' %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-md-6 offset-md-3">
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0">⚠️ Delete Document</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-danger" role="alert">
+                        <strong>Warning!</strong> This action cannot be undone.
+                    </div>
+
+                    <p class="mb-2">
+                        Are you sure you want to delete the following document?
+                    </p>
+
+                    <div class="card mb-4 bg-light">
+                        <div class="card-body">
+                            <h5 class="card-title">{{ document.name }}</h5>
+                            <p class="card-text mb-1">
+                                <strong>Type:</strong> {{ document.get_document_type_display }}<br>
+                                <strong>Expiry Date:</strong> {{ document.expiry_date|date:"M d, Y" }}<br>
+                                <strong>Document Number:</strong> {{ document.document_number|default:'-' }}
+                            </p>
+                        </div>
+                    </div>
+
+                    <p class="text-muted small mb-4">
+                        <strong>Note:</strong> This will permanently remove the document record from the system. 
+                        Consider exporting or archiving data if needed.
+                    </p>
+
+                    <form method="post" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fas fa-trash"></i> Delete Document
+                        </button>
+                    </form>
+                    <a href="{{ back_url }}" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Cancel
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

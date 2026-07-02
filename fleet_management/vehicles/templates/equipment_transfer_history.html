@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+
+{% block title %}Transfer History - Assets Management System{% endblock %}
+
+{% block content %}
+{% include 'partials/back_to_dashboard.html' %}
+<div style="max-width:1000px; margin:0 auto; padding:20px;">
+
+    <!-- Back Button -->
+    <a href="{{ back_url }}" style="display:inline-flex; align-items:center; gap:8px; margin-bottom:20px; padding:8px 16px; background:#6c757d; color:white; text-decoration:none; border-radius:4px; font-weight:600; transition:background 0.3s;">
+        <span>←</span> Back
+    </a>
+
+    <h1>Transfer History</h1>
+
+    <div style="background:#f0f4f8; padding:20px; border-radius:8px; margin-bottom:30px; border-left:4px solid #3498db;">
+        <h3 style="margin-top:0; color:#2c3e50;">Equipment Details</h3>
+        <p><strong>Equipment Name:</strong> {{ equipment.name }}</p>
+        <p><strong>Type:</strong> {{ equipment.get_equipment_type_display }}</p>
+        <p><strong>Serial Number:</strong> {{ equipment.serial_number|default:"Not provided" }}</p>
+        <p><strong>Total Transfers:</strong> <span style="background:#e8f4f8; padding:4px 12px; border-radius:20px; font-weight:600;">{{ total_transfers }}</span></p>
+    </div>
+
+    {% if transfers %}
+    <div style="display:flex; gap:10px; margin-bottom:20px;">
+        <a href="{% url 'equipment_transfer' equipment.pk %}" style="padding:10px 20px; background:#27ae60; color:white; text-decoration:none; border-radius:5px; font-weight:600;">
+            + New Transfer
+        </a>
+    </div>
+
+    <table style="width:100%; border-collapse:collapse; background:white; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+        <thead>
+            <tr style="background:#2c3e50; color:white;">
+                <th style="padding:15px; text-align:left;">Date & Time</th>
+                <th style="padding:15px; text-align:left;">From (Previous User)</th>
+                <th style="padding:15px; text-align:left;">To (New User)</th>
+                <th style="padding:15px; text-align:left;">Department</th>
+                <th style="padding:15px; text-align:left;">Reason</th>
+                <th style="padding:15px; text-align:left;">Recorded By</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for transfer in transfers %}
+            <tr style="border-bottom:1px solid #ecf0f1; transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f9f9f9'" onmouseout="this.style.backgroundColor='white'">
+                <td style="padding:15px;">
+                    {{ transfer.transfer_date|date:"M d, Y" }}<br>
+                    <small style="color:#7f8c8d;">{{ transfer.transfer_date|time:"H:i" }}</small>
+                </td>
+                <td style="padding:15px;">
+                    <strong>{{ transfer.transferred_from }}</strong><br>
+                    {% if transfer.transferred_from_email %}
+                        <small style="color:#7f8c8d;">{{ transfer.transferred_from_email }}</small>
+                    {% endif %}
+                </td>
+                <td style="padding:15px;">
+                    <strong style="color:#27ae60;">{{ transfer.transferred_to }}</strong><br>
+                    {% if transfer.transferred_to_email %}
+                        <small style="color:#7f8c8d;">{{ transfer.transferred_to_email }}</small>
+                    {% endif %}
+                </td>
+                <td style="padding:15px;">
+                    {% if transfer.transferred_to_department %}
+                        <span style="background:#ecf0f1; padding:4px 12px; border-radius:20px; font-size:12px;">{{ transfer.transferred_to_department }}</span>
+                    {% else %}
+                        <span style="color:#bdc3c7;">—</span>
+                    {% endif %}
+                </td>
+                <td style="padding:15px;">
+                    {% if transfer.reason %}
+                        <span style="background:#fff3cd; padding:4px 12px; border-radius:4px;">{{ transfer.reason }}</span>
+                    {% else %}
+                        <span style="color:#bdc3c7;">—</span>
+                    {% endif %}
+                </td>
+                <td style="padding:15px;">
+                    <small>
+                        {% if transfer.recorded_by %}
+                            {{ transfer.recorded_by.username }}
+                        {% else %}
+                            <span style="color:#bdc3c7;">System</span>
+                        {% endif %}
+                    </small>
+                </td>
+            </tr>
+            {% if transfer.notes %}
+            <tr style="background:#f9f9f9; border-bottom:1px solid #ecf0f1;">
+                <td colspan="6" style="padding:10px 15px; font-size:13px; color:#555;">
+                    <strong>Notes:</strong> {{ transfer.notes }}
+                </td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Pagination -->
+    {% if transfers.has_other_pages %}
+    <div style="margin-top:20px; text-align:center;">
+        {% if transfers.has_previous %}
+            <a href="?page=1" style="padding:8px 12px; margin:0 2px; background:#3498db; color:white; text-decoration:none; border-radius:4px;">First</a>
+            <a href="?page={{ transfers.previous_page_number }}" style="padding:8px 12px; margin:0 2px; background:#3498db; color:white; text-decoration:none; border-radius:4px;">← Previous</a>
+        {% endif %}
+
+        <span style="margin:0 10px;">Page {{ transfers.number }} of {{ transfers.paginator.num_pages }}</span>
+
+        {% if transfers.has_next %}
+            <a href="?page={{ transfers.next_page_number }}" style="padding:8px 12px; margin:0 2px; background:#3498db; color:white; text-decoration:none; border-radius:4px;">Next →</a>
+            <a href="?page={{ transfers.paginator.num_pages }}" style="padding:8px 12px; margin:0 2px; background:#3498db; color:white; text-decoration:none; border-radius:4px;">Last</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div style="background:#ecf0f1; padding:40px; border-radius:8px; text-align:center;">
+        <h3 style="color:#7f8c8d; margin-top:0;">No Transfer Records</h3>
+        <p style="color:#95a5a6; margin-bottom:20px;">This equipment has not been transferred yet.</p>
+        <a href="{% url 'equipment_transfer' equipment.pk %}" style="display:inline-block; padding:10px 20px; background:#27ae60; color:white; text-decoration:none; border-radius:5px; font-weight:600;">
+            + Record First Transfer
+        </a>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

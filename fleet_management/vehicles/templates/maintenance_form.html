@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ title }} - Telnet Assets Management System{% endblock %}
+
+{% block content %}
+{% include 'partials/back_to_dashboard.html' %}
+<div class="form-card">
+    <!-- Back Button -->
+    <a href="{{ back_url }}" style="display:inline-flex; align-items:center; gap:8px; margin-bottom:20px; padding:8px 16px; background:#6c757d; color:white; text-decoration:none; border-radius:4px; font-weight:600;">
+        <span>←</span> Back
+    </a>
+
+    <h1 style="margin-top:0;">{{ title }} for {{ vehicle.name }}</h1>
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="back_url" value="{{ back_url }}" />
+
+        <div style="display:grid; gap:14px;">
+            {% for field in form %}
+                <div class="form-item">
+                    {{ field.label_tag }}
+                    {{ field }}
+                    {{ field.errors }}
+                </div>
+            {% endfor %}
+        </div>
+
+        <button type="submit" class="button" style="margin-top:12px;">Save</button>
+    </form>
+
+    <p style="margin-top:12px;"><a class="link" href="{{ back_url }}">&larr; Back</a></p>
+</div>
+{% endblock %}

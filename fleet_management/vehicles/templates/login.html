@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+
+{% block title %}Login - Telnet Asset{% endblock %}
+
+{% block extra_head %} 
+<style>
+.login-form-wrapper .form-item input {
+    width: 320px;
+    max-width: 100%;
+}
+
+.login-form-wrapper .checkbox-compact {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+    width: 100%;
+}
+
+.login-form-wrapper .checkbox-compact input {
+    width: auto;
+    min-width: 18px;
+    height: 18px;
+}
+
+.login-form-wrapper .checkbox-compact label {
+    margin: 0;
+    font-size: 0.95rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="login-form-wrapper">
+    <img src="https://telnetng.com/_next/image?url=%2Fimages%2Ftelnet-logo-new.png&w=384&q=75" alt="Telnet Logo" class="logo" />
+    <h2>Welcome back</h2>
+    <p class="subtitle">Sign in to view the Asset Dashboard.</p>
+
+    <form method="POST" novalidate>
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+            <div class="message">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="form-item">
+            <label for="id_username">Username</label>
+            {{ form.username }}
+            {{ form.username.errors }}
+        </div>
+
+        <div class="form-item">
+            <label for="id_password">Password</label>
+            {{ form.password }}
+            {{ form.password.errors }}
+        </div>
+
+        <div class="form-item checkbox-compact">
+            <input type="checkbox" name="remember_me" id="id_remember_me">
+            <label for="id_remember_me">Keep me logged in</label>
+        </div>
+
+        <button type="submit" class="button">Login</button>
+    </form>
+
+    <p style="text-align:center; margin-top:15px;"><a class="link" href="{% url 'password_reset' %}">Forgot password?</a></p>
+    <p class="note">Don’t have access? Contact system administrator.</p>
+</div>
+{% endblock %}

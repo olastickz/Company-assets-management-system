@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+
+{% block title %}Bulk Upload Assets - Telnet Assets Management System{% endblock %}
+
+{% block content %}
+    <div style="max-width:900px; margin:0 auto;">
+        <a href="{% url 'dashboard' %}" style="display:inline-flex; align-items:center; gap:8px; margin-bottom:20px; padding:8px 16px; background:#6c757d; color:white; text-decoration:none; border-radius:4px; font-weight:600;">
+            <span>←</span> Back to Dashboard
+        </a>
+        
+        <h2>Bulk Upload Assets</h2>
+        
+        <div class="form-card">
+            <h3>📤 Import Assets from Multiple Formats</h3>
+            
+            <form method="POST" enctype="multipart/form-data" style="margin-bottom:30px;">
+                {% csrf_token %}
+                
+                <div style="background:#f0f8ff; padding:15px; border-radius:5px; margin-bottom:20px;">
+                    <p style="color:#0066cc; font-weight:600;">Select one file type to upload:</p>
+                </div>
+                
+                <div class="form-item" style="margin-bottom:20px;">
+                    <label>📄 CSV File:</label>
+                    <input type="file" name="csv_file" accept=".csv" style="padding: 10px; cursor: pointer;">
+                </div>
+
+                <div class="form-item" style="margin-bottom:20px;">
+                    <label>📊 Excel File (.xlsx):</label>
+                    <input type="file" name="excel_file" accept=".xlsx" style="padding: 10px; cursor: pointer;">
+                </div>
+
+                <div class="form-item" style="margin-bottom:20px;">
+                    <label>📝 Word Document (.docx) - Asset Document format:</label>
+                    <input type="file" name="docx_file" accept=".docx" style="padding: 10px; cursor: pointer;">
+                </div>
+                
+                <button type="submit" class="button" style="background:#2ecc71; margin-bottom:20px;">✓ Upload Assets</button>
+            </form>
+
+            <hr style="border:none; border-top:2px solid #ddd; margin:30px 0;">
+
+            <h4>📋 CSV Format Requirements:</h4>
+            <p style="font-size:14px; color:#666;">Your CSV file should have the following columns (headers required):</p>
+            
+            <div style="background:#f5f5f5; padding:15px; border-radius:5px; font-family:monospace; font-size:12px;">
+                <strong>Required columns:</strong><br>
+                • <strong>name</strong> - Asset name (e.g., "Toyota Corolla")<br>
+                • <strong>license_plate</strong> - License plate number (e.g., "ABC-123")<br>
+                    • <strong>vin_number</strong> - Asset VIN number<br>
+                    <br>
+                    <strong>Optional columns:</strong><br>
+                    • make - Asset make or brand<br>
+                    • model - Asset model<br>
+                    • vehicle_type - Asset type value or category<br>
+                • hackney_permit - YYYY-MM-DD format<br>
+                <br>
+                <strong>⚠️ Note:</strong> Any dates with 2025 or earlier will be marked as PENDING for you to update later.
+            </div>
+
+            <h4 style="margin-top:30px;">📝 Example CSV:</h4>
+            <div style="background:#f5f5f5; padding:15px; border-radius:5px; font-family:monospace; font-size:12px; overflow-x:auto;">
+name,license_plate,vin_number,make,model,vehicle_type,insurance_expiry,roadworthy_expiry<br>
+Toyota Hiace,ABC-123,1HGBH41JXMN109186,Toyota,Hiace,van,2026-12-31,2026-06-30<br>
+Nissan Urvan,XYZ-789,1N4AL11D75C109151,Nissan,Urvan,van,2027-11-30,2026-12-31<br>
+            </div>
+
+            <h4 style="margin-top:30px;">📊 Excel Format:</h4>
+            <p style="font-size:14px; color:#666;">Your Excel file should include the columns mentioned above. The system will automatically extract the data.</p>
+
+            <h4 style="margin-top:30px;">📝 Word Document Format (Asset Document.docx):</h4>
+            <p style="font-size:14px; color:#666;">The Word document should contain a table with these columns:</p>
+            <div style="background:#f5f5f5; padding:15px; border-radius:5px; font-size:14px;">
+                S/N | Asset Make | Registration No | Road worthiness | Hackney Permit | Asset License | Insurance Status
+            </div>
+
+            <h4 style="margin-top:30px;">✅ Tips:</h4>
+            <ul style="font-size:14px; color:#555;">
+                <li>Use YYYY-MM-DD format for all dates (e.g., 2026-12-31)</li>
+                <li>Leave date fields empty if not available - they'll be marked as pending</li>
+                <li>📌 <strong>Any dates showing 2025 will be automatically marked as PENDING</strong> - you can edit them later</li>
+                <li>License plate should be unique</li>
+                <li>Default asset type is "car" if not specified</li>
+                <li>Duplicates will fail - ensure unique license plates</li>
+                <li>Choose only ONE file type per upload</li>
+            </ul>
+        </div>
+
+        <div style="text-align:center; margin-top:20px;">
+            <a href="{% url 'dashboard' %}" class="button" style="background:#3498db; display:inline-block; width:auto; padding:10px 20px;">← Back to Dashboard</a>
+        </div>
+    </div>
+{% endblock %}

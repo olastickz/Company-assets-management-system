@@ -1,0 +1,457 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ action }} Company Document - Telnet Assets Management System{% endblock %}
+
+{% load static %}
+{% block extra_head %}
+<style>
+    .doc-form-page {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 22px 20px 40px;
+        color: #1f2937;
+    }
+
+    .doc-form-page a.back-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 20px;
+        padding: 10px 18px;
+        background: #64748b;
+        color: white;
+        text-decoration: none;
+        border-radius: 10px;
+        font-weight: 700;
+        transition: background 0.18s ease, transform 0.18s ease;
+    }
+
+    .doc-form-page a.back-btn:hover {
+        background: #475569;
+        transform: translateY(-1px);
+    }
+
+    .doc-form-page h1 {
+        margin: 0 0 10px;
+        font-size: 2rem;
+        letter-spacing: -0.02em;
+    }
+
+    .doc-form-page .subtitle {
+        margin: 0 0 24px;
+        color: #64748b;
+        font-size: 1rem;
+    }
+
+    .doc-form-page .info-banner {
+        background: #ecf0f1;
+        border-left: 4px solid #3b82f6;
+        padding: 18px 20px;
+        border-radius: 10px;
+        margin-bottom: 28px;
+    }
+
+    .doc-form-page .info-banner h4 {
+        margin: 0 0 12px;
+        color: #1e40af;
+        font-size: 1rem;
+    }
+
+    .doc-form-page .info-banner ul {
+        margin: 0;
+        padding: 0 0 0 20px;
+        color: #475569;
+    }
+
+    .doc-form-page .info-banner li {
+        margin-bottom: 6px;
+        line-height: 1.6;
+    }
+
+    .doc-form-page .quick-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 18px;
+    }
+
+    .doc-form-page .quick-actions a {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 16px;
+        border-radius: 10px;
+        text-decoration: none;
+        font-weight: 700;
+        color: #111827;
+        background: #f3f4f6;
+        border: 1px solid #d1d5db;
+        transition: background 0.18s ease, transform 0.18s ease;
+    }
+
+    .doc-form-page .quick-actions a:hover {
+        background: #e2e8f0;
+        transform: translateY(-1px);
+    }
+
+    .doc-form-page .form-card {
+        background: #ffffff;
+        padding: 32px;
+        border-radius: 14px;
+        box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08);
+    }
+
+    .doc-form-page .form-grid {
+        display: grid;
+        gap: 24px;
+        margin-bottom: 32px;
+    }
+
+    .doc-form-page .form-group {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .doc-form-page .form-group label {
+        display: block;
+        font-weight: 700;
+        margin-bottom: 10px;
+        color: #111827;
+        font-size: 0.95rem;
+    }
+
+    .doc-form-page .form-group label .required {
+        color: #ef4444;
+        margin-left: 4px;
+    }
+
+    .doc-form-page input,
+    .doc-form-page select,
+    .doc-form-page textarea {
+        width: 100%;
+        padding: 12px 14px;
+        border: 1px solid #d1d5db;
+        border-radius: 10px;
+        box-sizing: border-box;
+        font-family: inherit;
+        font-size: 0.95rem;
+        line-height: 1.6;
+        color: #111827;
+        background: #ffffff;
+        transition: border-color 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .doc-form-page input:focus,
+    .doc-form-page select:focus,
+    .doc-form-page textarea:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .doc-form-page textarea {
+        resize: vertical;
+        min-height: 100px;
+    }
+
+    .doc-form-page input:disabled,
+    .doc-form-page select:disabled,
+    .doc-form-page textarea:disabled {
+        background: #f3f4f6;
+        color: #9ca3af;
+        cursor: not-allowed;
+    }
+
+    .doc-form-page .help-text {
+        color: #64748b;
+        display: block;
+        margin-top: 8px;
+        font-size: 0.85rem;
+    }
+
+    .doc-form-page .field-errors {
+        color: #b91c1c;
+        font-size: 0.85rem;
+        margin-top: 8px;
+        background: #fee2e2;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border-left: 3px solid #ef4444;
+    }
+
+    .doc-form-page .form-actions {
+        margin-top: 32px;
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .doc-form-page .form-actions button,
+    .doc-form-page .form-actions a {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 12px 28px;
+        border-radius: 10px;
+        font-weight: 700;
+        text-decoration: none;
+        border: none;
+        cursor: pointer;
+        transition: transform 0.18s ease, background 0.18s ease;
+    }
+
+    .doc-form-page .form-actions button:hover,
+    .doc-form-page .form-actions a:hover {
+        transform: translateY(-1px);
+    }
+
+    .doc-form-page .form-actions .btn-submit {
+        background: #22c55e;
+        color: #ffffff;
+    }
+
+    .doc-form-page .form-actions .btn-submit:hover {
+        background: #16a34a;
+    }
+
+    .doc-form-page .form-actions .btn-submit:active,
+    .doc-form-page .form-actions .btn-submit:focus {
+        background: #15803d;
+        outline: none;
+    }
+
+    .doc-form-page .form-actions .btn-cancel {
+        background: #9ca3af;
+        color: #ffffff;
+    }
+
+    .doc-form-page .form-actions .btn-cancel:hover {
+        background: #6b7280;
+    }
+
+    .doc-form-page .form-actions .btn-cancel:active,
+    .doc-form-page .form-actions .btn-cancel:focus {
+        background: #4b5563;
+        outline: none;
+    }
+
+    .doc-form-page .non-field-errors {
+        margin-top: 24px;
+        padding: 18px 20px;
+        background: #fee2e2;
+        border: 1px solid #fecaca;
+        color: #991b1b;
+        border-radius: 10px;
+        font-weight: 600;
+    }
+
+    .asset-scope-toggle {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+
+    .asset-scope-toggle label {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 16px;
+        border-radius: 999px;
+        border: 1px solid #d1d5db;
+        cursor: pointer;
+        background: #f8fafc;
+        color: #111827;
+        transition: background 0.18s ease, border-color 0.18s ease;
+        font-weight: 600;
+    }
+
+    .asset-scope-toggle input[type="radio"] {
+        accent-color: #22c55e;
+    }
+
+    .asset-scope-toggle input[type="radio"]:checked + span {
+        color: #111827;
+    }
+
+    .asset-scope-toggle label.selected {
+        background: #22c55e;
+        border-color: #22c55e;
+        color: white;
+    }
+
+    @media (max-width: 640px) {
+        .doc-form-page .form-card {
+            padding: 20px;
+        }
+        .doc-form-page .form-actions {
+            flex-direction: column;
+        }
+        .doc-form-page .form-actions button,
+        .doc-form-page .form-actions a {
+            width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'partials/back_to_dashboard.html' %}
+<div class="doc-form-page">
+    <a href="{{ back_url }}" class="back-btn">← Back</a>
+
+    <div class="quick-actions">
+        <a href="{% url 'equipment_create' %}">➕ Add Equipment</a>
+        <a href="{% url 'staff_create' %}">➕ Add Staff</a>
+    </div>
+
+    <p style="margin:0 0 18px; color:#475569;">Use the form below to link a document to an existing equipment item and assign a responsible staff member. Staff pickers now include branch and ID context so you can find the right contact faster.</p>
+
+    <div class="info-banner">
+        <h4>📋 Document Details</h4>
+        <ul>
+            <li>All fields are validated for consistency.</li>
+            <li>Date fields show standard date pickers.</li>
+            <li>Errors are shown directly under each field.</li>
+        </ul>
+    </div>
+
+    <div class="form-card">
+        <form method="post" novalidate>
+            {% csrf_token %}
+            <input type="hidden" name="back_url" value="{{ back_url }}" />
+
+            <div class="asset-scope-toggle" role="radiogroup" aria-label="Document scope">
+                <label class="{% if document_scope == 'company' %}selected{% endif %}">
+                    <input type="radio" name="document_scope" value="company" {% if document_scope != 'vehicle' %}checked{% endif %}>
+                    <span>Company Document</span>
+                </label>
+                <label class="{% if document_scope == 'vehicle' %}selected{% endif %}">
+                    <input type="radio" name="document_scope" value="vehicle" {% if document_scope == 'vehicle' %}checked{% endif %}>
+                    <span>Vehicle Asset Document</span>
+                </label>
+                <label class="{% if document_scope == 'equipment' %}selected{% endif %}">
+                    <input type="radio" name="document_scope" value="equipment" {% if document_scope == 'equipment' %}checked{% endif %}>
+                    <span>Equipment Document</span>
+                </label>
+            </div>
+
+            <h1 id="document-scope-title">{{ action }} Company Document</h1>
+            <p id="document-scope-subtitle" class="subtitle">Complete the form below to add or update a company document with expiry tracking.</p>
+
+            <div class="form-grid">
+                {% for field in form %}
+                    {% if field.name == 'related_vehicle' %}
+                        <div class="form-group" data-scope="vehicle">
+                    {% elif field.name == 'related_equipment' %}
+                        <div class="form-group" data-scope="equipment">
+                    {% elif field.name == 'related_asset' %}
+                        <div class="form-group" data-scope="company">
+                    {% else %}
+                        <div class="form-group">
+                    {% endif %}
+                        <label for="{{ field.id_for_label }}">
+                            {{ field.label }}
+                            {% if field.field.required %}<span class="required">*</span>{% endif %}
+                        </label>
+
+                        {{ field }}
+
+                        {% if field.help_text %}
+                            <span class="help-text">ℹ️ {{ field.help_text|safe }}</span>
+                        {% endif %}
+
+                        {% if field.errors %}
+                            <div class="field-errors">
+                                <strong>⚠️ Error:</strong> {{ field.errors }}
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+
+            <script src="{% static 'vehicles/js/staff_autocomplete.js' %}"></script>
+            <script>
+                (function() {
+                    const scopeRadios = document.querySelectorAll('.asset-scope-toggle input[name="document_scope"]');
+                    const scopeFields = Array.from(document.querySelectorAll('[data-scope]'));
+                    const title = document.getElementById('document-scope-title');
+                    const subtitle = document.getElementById('document-scope-subtitle');
+                    const scopeLabels = {
+                        company: '{{ action }} Company Document',
+                        vehicle: '{{ action }} Vehicle Asset Document'
+                    };
+                    const subtitleLabels = {
+                        company: 'Complete the form below to add or update a company document with expiry tracking.',
+                        vehicle: 'Select the related vehicle asset and complete the document details.',
+                        equipment: 'Select the related equipment and complete the document details.'
+                    };
+
+                    function setScope(scope) {
+                        scopeFields.forEach(field => {
+                            const isVisible = field.dataset.scope === scope;
+                            field.style.display = isVisible ? '' : 'none';
+                            const inputs = field.querySelectorAll('input, select, textarea');
+                            inputs.forEach(input => {
+                                input.disabled = !isVisible;
+                            });
+                        });
+
+                        document.querySelectorAll('.asset-scope-toggle label').forEach(label => {
+                            const radio = label.querySelector('input[name="document_scope"]');
+                            label.classList.toggle('selected', radio.checked);
+                        });
+
+                        if (title) {
+                            title.textContent = scopeLabels[scope] || scopeLabels.company;
+                        }
+                        if (subtitle) {
+                            subtitle.textContent = subtitleLabels[scope] || subtitleLabels.company;
+                        }
+                    }
+
+                    scopeRadios.forEach(radio => {
+                        radio.addEventListener('change', function() {
+                            setScope(this.value);
+                        });
+                    });
+
+                    function detectInitialScope() {
+                        const checkedRadio = document.querySelector('.asset-scope-toggle input[name="document_scope"]:checked');
+                        if (checkedRadio) {
+                            return checkedRadio.value;
+                        }
+
+                        const vehicleField = document.querySelector('[data-scope="vehicle"] input, [data-scope="vehicle"] select, [data-scope="vehicle"] textarea');
+                        if (vehicleField && vehicleField.value) {
+                            return 'vehicle';
+                        }
+                        return 'company';
+                    }
+
+                    const initialScope = detectInitialScope();
+                    const initialRadio = document.querySelector('.asset-scope-toggle input[value="' + initialScope + '"]');
+                    if (initialRadio) {
+                        initialRadio.checked = true;
+                    }
+                    setScope(initialScope);
+                })();
+            </script>
+
+            <div class="form-actions">
+                <button type="submit" class="btn-submit">✓ Save Document</button>
+                <a href="{{ back_url }}" class="btn-cancel">✕ Cancel</a>
+            </div>
+
+            {% if form.non_field_errors %}
+                <div class="non-field-errors">
+                    🚫 Form Errors: {{ form.non_field_errors }}
+                </div>
+            {% endif %}
+        </form>
+    </div>
+</div>
+{% endblock %}
+

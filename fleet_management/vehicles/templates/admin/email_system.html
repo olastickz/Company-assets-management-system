@@ -1,0 +1,144 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrastyle %}
+<style>
+.expired { color: #ba2121; font-weight: bold; }
+.warning { color: #f39c12; font-weight: bold; }
+</style>
+{% endblock %}
+
+{% block title %}Email System Management{% endblock %}
+
+{% block content %}
+<div class="module">
+    <h2>Email System Management</h2>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0;">
+
+        <!-- System Status -->
+        <div class="module">
+            <h3>📊 System Status</h3>
+            <table>
+                <tr><td><strong>Scheduler:</strong></td><td>{% if scheduler_running %}✅ Running{% else %}❌ Stopped{% endif %}</td></tr>
+                <tr><td><strong>Schedule:</strong></td><td>{% if schedule %}{{ schedule.schedule_time|date:"h:i A" }} ({{ schedule.get_enabled_badge }}){% else %}Not configured{% endif %}</td></tr>
+                <tr><td><strong>Alert Window:</strong></td><td>{% if schedule %}{{ schedule.alert_days }} days{% else %}N/A{% endif %}</td></tr>
+                <tr><td><strong>Last Sent:</strong></td><td>{% if schedule.last_sent %}{{ schedule.last_sent|date:"Y-m-d H:i" }}{% else %}Never{% endif %}</td></tr>
+                <tr><td><strong>Active Recipients:</strong></td><td>{{ recipients|length }}</td></tr>
+                <tr><td><strong>Expiring Items:</strong></td><td>{{ total_expiring }} ({{ expiring_vehicles|length }} vehicle assets, {{ expiring_equipment|length }} equipment)</td></tr>
+            </table>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="module">
+            <h3>⚡ Quick Actions</h3>
+            <form method="post" style="margin: 0;">
+                {% csrf_token %}
+                <div style="margin-bottom: 10px;">
+                    <button type="submit" name="action" value="trigger" class="button" style="background: #417690; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">
+                        🚀 Send Email Now
+                    </button>
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <button type="submit" name="action" value="restart_scheduler" class="button" style="background: #f39c12; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">
+                        🔄 Restart Scheduler
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Recipients List -->
+    <div class="module">
+        <h3>👥 Active Email Recipients</h3>
+        {% if recipients %}
+        <ul style="margin: 0; padding-left: 20px;">
+            {% for recipient in recipients %}
+            <li>{{ recipient.email }}{% if recipient.full_name %} ({{ recipient.full_name }}){% endif %}</li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p style="color: #ba2121;">No active recipients configured!</p>
+        {% endif %}
+    </div>
+
+    <!-- Expiring Items -->
+    {% if expiring_vehicles or expiring_equipment %}
+    <div class="module">
+        <h3>🚨 Currently Expiring Items</h3>
+
+        {% if expiring_vehicles %}
+        <h4>Vehicle Assets ({{ expiring_vehicles|length }})</h4>
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: #f8f8f8;">
+                    <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Asset</th>
+                    <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">License Plate</th>
+                    <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Item</th>
+                    <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Expiry Date</th>
+                    <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Days Left</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in expiring_vehicles %}
+                <tr>
+                    <td style="border: 1px solid #ddd; padding: 8px;">{{ item.vehicle_name }}</td>
+                    <td style="border: 1px solid #ddd; padding: 8px;"><code>{{ item.license_plate }}</code></td>
+                    <td style="border: 1px solid #ddd; padding: 8px;">{{ item.item_type }}</td>
+                    <td style="border: 1px solid #ddd; padding: 8px;">{{ item.expiry_date|date:"Y-m-d" }}</td>
+                    <td style="border: 1px solid #ddd; padding: 8px;" class="{% if item.days_until_expiry < 0 %}expired{% elif item.days_until_expiry <= 7 %}warning{% endif %}">
+                        {% if item.days_until_expiry < 0 %}EXPIRED{% else %}{{ item.days_until_expiry }} days{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+
+        {% if expiring_equipment %}
+        <h4 style="margin-top: 20px;">Equipment ({{ expiring_equipment|length }})</h4>
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: #f8f8f8;">
+                    <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Equipment</th>
+                    <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Type</th>
+                    <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Subsidiary</th>
+                    <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Expiry Date</th>
+                    <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Days Left</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in expiring_equipment %}
+                <tr>
+                    <td style="border: 1px solid #ddd; padding: 8px;">{{ item.equipment_name }}</td>
+                    <td style="border: 1px solid #ddd; padding: 8px;">{{ item.equipment_type }}</td>
+                    <td style="border: 1px solid #ddd; padding: 8px;">{{ item.subsidiary }}</td>
+                    <td style="border: 1px solid #ddd; padding: 8px;">{{ item.expiry_date|date:"Y-m-d" }}</td>
+                    <td style="border: 1px solid #ddd; padding: 8px;" class="{% if item.days_until_expiry < 0 %}expired{% elif item.days_until_expiry <= 7 %}warning{% endif %}">
+                        {% if item.days_until_expiry < 0 %}EXPIRED{% else %}{{ item.days_until_expiry }} days{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="module">
+        <h3>✅ No Expiring Items</h3>
+        <p>All vehicle assets and equipment are within the safe expiry window.</p>
+    </div>
+    {% endif %}
+
+    <div class="module">
+        <h3>📋 Management Commands</h3>
+        <p>You can also use these Django management commands:</p>
+        <ul>
+            <li><code>python manage.py email_scheduler status</code> - Check system status</li>
+            <li><code>python manage.py email_scheduler trigger</code> - Send emails manually</li>
+            <li><code>python manage.py email_scheduler restart</code> - Restart the scheduler</li>
+            <li><code>python manage.py send_expiry_alerts</code> - Alternative manual trigger</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

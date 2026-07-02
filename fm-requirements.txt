@@ -1,0 +1,13 @@
+APScheduler==3.11.2
+asgiref==3.11.1
+Django==6.0.3
+django-apscheduler==0.7.0
+djangorestframework==3.17.1
+et_xmlfile==2.0.0
+lxml==6.1.0
+openpyxl==3.1.5
+python-docx==1.2.0
+sqlparse==0.5.5
+typing_extensions==4.15.0
+tzdata==2026.1
+tzlocal==5.3.1

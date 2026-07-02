@@ -1,0 +1,4 @@
+name,license_plate,vehicle_type,manufacturer,model,year,mileage,insurance_expiry,roadworthy_expiry,license_expiry,hackney_permit,notes
+Toyota Hiace Van,ABC-123,van,Toyota,Hiace,2020,45000,2025-12-31,2025-06-30,2025-10-15,2025-09-20,Company vehicle
+Nissan Urvan,XYZ-789,van,Nissan,Urvan,2019,52000,2025-11-30,2024-12-31,2025-08-10,,
+Mercedes Sprinter,DEF-456,van,Mercedes,Sprinter,2021,30000,2026-03-15,2025-09-20,2026-01-30,2026-02-28,Premium transport

@@ -1,0 +1,6 @@
+name,equipment_type,location,status,description,purchase_date,warranty_expiry,cost,notes
+Dell Desktop Computer,computer,Office 1,active,Dell OptiPlex 7090,2022-01-15,2025-01-15,45000.00,
+HP LaserJet Printer,printer,Office 1,active,HP Laserjet E80530,2021-06-20,2024-06-20,25000.00,Needs toner
+LG Air Conditioner,ac,Office 2,active,LG 2 Ton Split AC,2020-03-10,2026-03-10,80000.00,
+Epson Scanner,scanner,Office 1,inactive,Epson DS-570W,2019-11-05,,8500.00,Needs repair
+Office Table Set,furniture,Office 2,active,Wooden office tables and chairs,2021-01-01,,35000.00,Bulk purchase

@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+
+{% block title %}Staff Members{% endblock %}
+
+{% block content %}
+{% include 'partials/back_to_dashboard.html' %}
+<div style="max-width:980px; margin:0 auto; padding:18px;">
+    <h1>Staff Members</h1>
+    <div style="margin-bottom:12px; display:flex; gap:8px; align-items:center;">
+        <form method="get" style="flex:1;">
+            <input type="search" name="q" value="{{ query }}" placeholder="Search by name, staff ID, or branch" class="form-control" style="width:320px; display:inline-block;">
+            <button class="btn btn-primary" type="submit">Search</button>
+        </form>
+        <a class="btn btn-success" href="{% url 'staff_create' %}">+ Add Staff</a>
+    </div>
+
+    {% if legacy_names and request.user.is_superuser %}
+    <div style="margin-bottom:18px; padding:16px; background:#f8fafc; border:1px solid #cbd5e1; border-radius:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+            <div>
+                <h2 style="margin:0 0 8px; font-size:1rem;">Legacy assigned user names</h2>
+                <p style="margin:0; color:#475569;">These are names currently used in equipment/document assignment fields but not yet registered as staff.</p>
+            </div>
+            <form method="post" action="{% url 'staff_import_legacy' %}">
+                {% csrf_token %}
+                <label style="margin-right:8px; font-size:0.95rem; color:#0f172a;">
+                    <input type="checkbox" name="auto_assign" value="1"> Auto-assign to matching equipment/documents
+                </label>
+                <button type="submit" class="btn btn-info">Import them as staff</button>
+            </form>
+        </div>
+        <div style="margin-top:12px; display:flex; flex-wrap:wrap; gap:8px;">
+            {% for name in legacy_names %}
+                <span style="background:#eef2ff; color:#1d4ed8; padding:6px 10px; border-radius:999px; font-size:0.9rem;">{{ name }}</span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Staff ID</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Department</th>
+                <th>Branch</th>
+                <th>Active</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for staff in staff_members %}
+            <tr>
+                <td>{{ staff.staff_id }}</td>
+                <td>{{ staff.full_name }}</td>
+                <td>{{ staff.email|default:'-' }}</td>
+                <td>{{ staff.department|default:'-' }}</td>
+                <td>{{ staff.branch|default:'-' }}</td>
+                <td>{% if staff.is_active %}Yes{% else %}No{% endif %}</td>
+                <td>
+                    <a class="btn btn-sm btn-outline-primary" href="{% url 'staff_edit' staff.pk %}">Edit</a>
+                    <a class="btn btn-sm btn-outline-danger" href="{% url 'staff_delete' staff.pk %}">Delete</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="7">No staff members found.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="pagination">
+        {% if staff_members.has_previous %}
+            <a href="?page={{ staff_members.previous_page_number }}{% if query %}&q={{ query }}{% endif %}">&laquo; Prev</a>
+        {% endif %}
+        <span>Page {{ staff_members.number }} of {{ staff_members.paginator.num_pages }}</span>
+        {% if staff_members.has_next %}
+            <a href="?page={{ staff_members.next_page_number }}{% if query %}&q={{ query }}{% endif %}">Next &raquo;</a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

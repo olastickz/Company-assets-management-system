@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+
+{% block title %}Confirm Delete{% endblock %}
+
+{% block content %}
+{% include 'partials/back_to_dashboard.html' %}
+<div style="max-width:640px; margin:0 auto; padding:18px;">
+    <h1>Delete Staff Member</h1>
+    <p>Are you sure you want to delete <strong>{{ staff.full_name }}</strong> ({{ staff.staff_id }})?</p>
+    <form method="post">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Yes, delete</button>
+        <a class="btn btn-secondary" href="{% url 'staff_list' %}">Cancel</a>
+    </form>
+</div>
+{% endblock %}

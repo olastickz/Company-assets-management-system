@@ -1,0 +1,10 @@
+<div class="action-dropdown" style="position:relative; display:inline-block;">
+    <button id="documentCreateDropdownBtn" type="button" class="action-btn" aria-haspopup="true" aria-expanded="false">➕ Add Document ▾</button>
+    <div id="documentCreateDropdownMenu" role="menu" aria-label="Document create menu" style="position:absolute; z-index:40; margin-top:8px; background:#ffffff; border:1px solid #e5e7eb; border-radius:8px; box-shadow:0 12px 30px rgba(15,23,42,0.08); min-width:220px; display:none;">
+        <a href="{% url 'company_document_create' %}?document_scope=company{% if back_url %}&back_url={{ back_url|urlencode }}{% endif %}" role="menuitem" tabindex="0" style="display:block; padding:10px 14px; color:#0f172a; text-decoration:none; font-weight:600;">➕ Company Document</a>
+        <a href="{% url 'company_document_create' %}?document_scope=vehicle{% if back_url %}&back_url={{ back_url|urlencode }}{% endif %}" role="menuitem" tabindex="0" style="display:block; padding:10px 14px; color:#0f172a; text-decoration:none; font-weight:600;">🚗 Vehicle Asset Document</a>
+        <a href="{% url 'company_document_create' %}?document_scope=equipment{% if back_url %}&back_url={{ back_url|urlencode }}{% endif %}" role="menuitem" tabindex="0" style="display:block; padding:10px 14px; color:#0f172a; text-decoration:none; font-weight:600;">🛠️ Equipment Document</a>
+        <div style="height:1px; background:#e5e7eb; margin:6px 0;"></div>
+        <a href="{% url 'company_document_create' %}{% if back_url %}?back_url={{ back_url|urlencode }}{% endif %}" role="menuitem" tabindex="0" style="display:block; padding:10px 14px; color:#0f172a; text-decoration:none; font-weight:600;">📄 Quick Add</a>
+    </div>
+</div>

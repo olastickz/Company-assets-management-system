@@ -1,0 +1,30 @@
+# Python environment
+.venv/
+fleet_management/.venv/
+
+# Database files
+fleet_management/db.sqlite3
+fleet_management/db.sqlite3-shm
+fleet_management/db.sqlite3-wal
+
+# VS Code local settings
+.vscode/
+fleet_management/.vscode/
+
+# REST Client duplicate config
+fleet_management/http-client.env.json
+
+# Node/TypeScript sample project
+fleet_management/my-new-project/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyc
+
+# Static files
+staticfiles/
+fleet_management/staticfiles/
+
+# Environment variables
+.env

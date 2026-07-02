@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            background-color: #e67e22;
+            color: white;
+            padding: 20px;
+            border-radius: 8px 8px 0 0;
+            margin: -20px -20px 20px -20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 22px;
+        }
+        .content {
+            margin: 20px 0;
+        }
+        .detail-box {
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-left: 4px solid #e67e22;
+            border-radius: 4px;
+            margin: 15px 0;
+        }
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #ececec;
+        }
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+        .detail-label {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .detail-value {
+            color: #555;
+        }
+        .status-expired {
+            color: #e74c3c;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .status-expiring {
+            color: #f39c12;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .footer {
+            margin-top: 30px;
+            padding: 15px;
+            background-color: #ecf0f1;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #7f8c8d;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚠️ Asset Expiry Alert</h1>
+        </div>
+
+        <div class="content">
+            <p>Dear Administrator,</p>
+            <p>The asset <strong>{{ vehicle.name }}</strong> has one or more items expiring or already expired.</p>
+
+            <div class="detail-box">
+                <h3 style="margin-top: 0; color: #2c3e50;">Asset Information</h3>
+                <div class="detail-row">
+                    <span class="detail-label">Asset Name:</span>
+                    <span class="detail-value">{{ vehicle.name }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">License Plate:</span>
+                    <span class="detail-value"><code>{{ vehicle.license_plate }}</code></span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Asset Type:</span>
+                    <span class="detail-value">{{ vehicle.get_vehicle_type_display }}</span>
+                </div>
+            </div>
+
+            <h3 style="color: #2c3e50;">Expiring Items</h3>
+            {% for alert in alerts %}
+            <div class="detail-box">
+                <div class="detail-row">
+                    <span class="detail-label">{{ alert.item_type }}:</span>
+                    {% if alert.days_until_expiry < 0 %}
+                        <span class="status-expired">EXPIRED ({{ alert.days_until_expiry|abs }} days ago)</span>
+                    {% else %}
+                        <span class="status-expiring">EXPIRING IN {{ alert.days_until_expiry }} DAYS</span>
+                    {% endif %}
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Expiry Date:</span>
+                    <span class="detail-value">{{ alert.expiry_date|date:"Y-m-d" }}</span>
+                </div>
+            </div>
+            {% endfor %}
+
+            <div class="detail-box" style="border-left-color: #27ae60; background-color: #f0f8f5;">
+                <h4 style="margin-top: 0; color: #27ae60;">✓ Recommended Actions:</h4>
+                <ul style="margin: 10px 0;">
+                    <li>Review the expiry date of the affected item(s)</li>
+                    <li>Arrange for renewal or replacement as needed</li>
+                    <li>Update the asset details in the system once completed</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>This is an automated message from Assets Management System</p>
+            <p>Sent on: {{ today|date:"Y-m-d H:i" }}</p>
+            <p>Do not reply to this email. Please contact your administrator for support.</p>
+        </div>
+    </div>
+</body>
+</html>

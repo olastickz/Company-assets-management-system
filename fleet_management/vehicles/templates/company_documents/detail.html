@@ -1,0 +1,315 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ document.name }} - Company Documents{% endblock %}
+
+{% block extra_head %}
+<style>
+    .doc-detail-page {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 22px 20px 40px;
+        color: #1f2937;
+    }
+
+    .doc-detail-page a.button,
+    .doc-detail-page a.small-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 16px;
+        border-radius: 10px;
+        text-decoration: none;
+        font-weight: 700;
+        transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease;
+    }
+
+    .doc-detail-page a.button:hover,
+    .doc-detail-page a.small-button:hover {
+        transform: translateY(-1px);
+    }
+
+    .doc-detail-page a.button.primary { background: #3b82f6; color: #ffffff; }
+    .doc-detail-page a.button.warning { background: #f59e0b; color: #0f172a; }
+    .doc-detail-page a.button.danger { background: #ef4444; color: #ffffff; }
+    .doc-detail-page a.button.secondary { background: #64748b; color: #ffffff; }
+
+    .doc-detail-page a.button:active,
+    .doc-detail-page a.button:focus {
+        outline: none;
+        opacity: 0.9;
+    }
+
+    .doc-detail-page .page-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        margin-bottom: 24px;
+    }
+
+    .doc-detail-page .status-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-radius: 999px;
+        font-weight: 700;
+        font-size: 0.95rem;
+    }
+
+    .doc-detail-page .status-expired { background: #fee2e2; color: #991b1b; }
+    .doc-detail-page .status-expiring { background: #fef3c7; color: #92400e; }
+    .doc-detail-page .status-valid { background: #dcfce7; color: #166534; }
+
+    .doc-detail-page .card-panel {
+        background: #ffffff;
+        border-radius: 14px;
+        box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08);
+        overflow: hidden;
+        margin-bottom: 24px;
+    }
+
+    .doc-detail-page .section-block {
+        padding: 28px;
+    }
+
+    .doc-detail-page .section-block + .section-block {
+        border-top: 1px solid #e5e7eb;
+    }
+
+    .doc-detail-page h2.section-title {
+        margin: 0 0 18px;
+        color: #111827;
+        font-size: 1.25rem;
+        letter-spacing: -0.02em;
+    }
+
+    .doc-detail-page .grid-two {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 20px;
+    }
+
+    .doc-detail-page .grid-sidebar {
+        display: grid;
+        gap: 20px;
+    }
+
+    .doc-detail-page .field-label {
+        display: block;
+        margin-bottom: 6px;
+        color: #475569;
+        font-weight: 700;
+    }
+
+    .doc-detail-page .field-value {
+        margin: 0;
+        color: #111827;
+        font-size: 1rem;
+        line-height: 1.7;
+    }
+
+    .doc-detail-page .expiry-date {
+        font-weight: 700;
+    }
+
+    .doc-detail-page .expiry-expired {
+        color: #b91c1c;
+    }
+
+    .doc-detail-page .info-box {
+        padding: 18px 20px;
+        background: #f8fafc;
+        border-radius: 12px;
+    }
+
+    .doc-detail-page .info-box strong {
+        display: block;
+        margin-bottom: 8px;
+        color: #0f172a;
+    }
+
+    .doc-detail-page .badge-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: #e0f2fe;
+        color: #0369a1;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+    }
+
+    .doc-detail-page .muted-text {
+        color: #64748b;
+    }
+
+    .doc-detail-page .sidebar-card {
+        background: #ffffff;
+        border-radius: 14px;
+        box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
+        padding: 22px;
+    }
+
+    .doc-detail-page .sidebar-card + .sidebar-card {
+        margin-top: 20px;
+    }
+
+    .doc-detail-page .sidebar-card p {
+        margin: 0;
+        color: #334155;
+        line-height: 1.7;
+    }
+
+    .doc-detail-page .sidebar-card small {
+        color: #64748b;
+    }
+
+    @media (max-width: 820px) {
+        .doc-detail-page .page-header { flex-direction: column; align-items: stretch; }
+        .doc-detail-page .grid-two { grid-template-columns: 1fr; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'partials/back_to_dashboard.html' %}
+<div class="doc-detail-page">
+    <div style="margin-bottom: 20px;">
+        <a href="{{ back_url }}" class="button secondary" style="padding: 10px 18px; display:inline-flex; align-items:center;">← Back</a>
+    </div>
+
+    <div class="page-header">
+        <div>
+            <h1 style="margin:0 0 8px; font-size:2rem;">{{ document.name }}</h1>
+            <p class="muted-text" style="margin:0; max-width: 760px;">A complete summary of this document, including expiry tracking and notification settings.</p>
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; align-items:center;">
+            <a href="{% url 'company_document_edit' document.pk %}?back_url={{ back_url|urlencode }}" class="button warning">✏️ Edit</a>
+            <a href="{% url 'company_document_delete' document.pk %}?back_url={{ back_url|urlencode }}" class="button danger">🗑️ Delete</a>
+        </div>
+    </div>
+
+    <div class="card-panel">
+        <div class="section-block">
+            <h2 class="section-title">📄 Document Information</h2>
+            <div class="grid-two">
+                <div>
+                    <span class="field-label">Document Type</span>
+                    <p class="field-value"><span class="badge-pill">{{ document.get_document_type_display }}</span></p>
+                </div>
+                <div>
+                    <span class="field-label">Document Number</span>
+                    <p class="field-value">{{ document.document_number|default:'-' }}</p>
+                </div>
+                <div>
+                    <span class="field-label">Issuing Authority</span>
+                    <p class="field-value">{{ document.issuing_authority|default:'-' }}</p>
+                </div>
+                <div>
+                    <span class="field-label">Status</span>
+                    <p class="field-value">
+                        {% if document.get_status == 'expired' %}
+                            <span class="status-chip status-expired">❌ Expired</span>
+                        {% elif document.get_status == 'expiring' %}
+                            <span class="status-chip status-expiring">⚠️ Expiring Soon</span>
+                        {% else %}
+                            <span class="status-chip status-valid">✅ Valid</span>
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+            {% if document.description %}
+            <div style="margin-top: 24px;">
+                <span class="field-label">Description</span>
+                <p class="field-value" style="margin-top: 8px;">{{ document.description }}</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="section-block">
+            <h2 class="section-title">📅 Dates & Timeline</h2>
+            <div class="grid-two">
+                <div>
+                    <span class="field-label">Issue Date</span>
+                    <p class="field-value">{{ document.issue_date|date:"M d, Y" }}</p>
+                </div>
+                <div>
+                    <span class="field-label">Expiry Date</span>
+                    <p class="field-value expiry-date {% if document.status == 'expired' %}expiry-expired{% endif %}">{{ document.expiry_date|date:"M d, Y" }}</p>
+                </div>
+                {% if document.renewal_date %}
+                <div>
+                    <span class="field-label">Renewal Date</span>
+                    <p class="field-value">{{ document.renewal_date|date:"M d, Y" }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="section-block">
+            <h2 class="section-title">ℹ️ Additional Information</h2>
+            <div class="grid-two">
+                <div>
+                    <span class="field-label">Responsible Person</span>
+                    <p class="field-value">{{ document.responsible_display }}</p>
+                </div>
+                <div>
+                    <span class="field-label">Asset</span>
+                    <p class="field-value">{{ document.asset_display }}</p>
+                </div>
+                <div>
+                    <span class="field-label">Location</span>
+                    <p class="field-value">{{ document.location|default:'-' }}</p>
+                </div>
+            </div>
+            {% if document.notes %}
+            <div style="margin-top: 24px;">
+                <span class="field-label">Notes</span>
+                <p class="field-value" style="margin-top: 8px;">{{ document.notes }}</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="grid-two" style="gap: 24px; margin-top: 16px;">
+        <div class="sidebar-card">
+            <h2 class="section-title" style="margin-bottom:16px;">⏱️ Status Overview</h2>
+            <div class="info-box" style="margin-bottom:18px;">
+                {% if document.get_status == 'expired' %}
+                    <strong>This document has expired</strong>
+                    <p>Renewal is required immediately.</p>
+                {% elif document.get_status == 'expiring' %}
+                    <strong>This document is expiring soon</strong>
+                    <p>Action is required before the expiry date.</p>
+                {% else %}
+                    <strong>This document is valid</strong>
+                    <p>No immediate action required.</p>
+                {% endif %}
+            </div>
+            <p class="muted-text" style="margin:0;">
+                {% if document.get_status == 'expired' %}
+                    Expired {{ document.days_until_expiry|abs }} days ago.
+                {% else %}
+                    {{ document.days_until_expiry }} days until expiry.
+                {% endif %}
+            </p>
+        </div>
+
+        <div class="sidebar-card">
+            <h2 class="section-title" style="margin-bottom:16px;">🔔 Notifications</h2>
+            <p><strong>Notify Before:</strong> {{ document.notify_days_before }} days</p>
+            <small class="muted-text">You will receive alerts {{ document.notify_days_before }} days before expiry.</small>
+        </div>
+    </div>
+
+    <div class="sidebar-card" style="margin-top: 24px;">
+        <h2 class="section-title" style="margin-bottom:16px;">📝 Metadata</h2>
+        <p><strong>Created:</strong> {{ document.created_at|date:"M d, Y H:i" }}</p>
+        <p><strong>Last Updated:</strong> {{ document.updated_at|date:"M d, Y H:i" }}</p>
+        <p><strong>Created By:</strong> {{ document.created_by.get_full_name|default:document.created_by.username }}</p>
+    </div>
+</div>
+{% endblock %}

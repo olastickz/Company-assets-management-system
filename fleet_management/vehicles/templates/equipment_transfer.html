@@ -1,0 +1,142 @@
+{% extends 'base.html' %}
+
+{% block title %}Transfer Equipment - Assets Management System{% endblock %}
+
+{% block content %}
+{% include 'partials/back_to_dashboard.html' %}
+<div style="max-width:800px; margin:0 auto; padding:20px;">
+
+    <!-- Back Button -->
+    <a href="{{ back_url }}" style="display:inline-flex; align-items:center; gap:8px; margin-bottom:20px; padding:8px 16px; background:#6c757d; color:white; text-decoration:none; border-radius:4px; font-weight:600; transition:background 0.3s;">
+        <span>←</span> Back
+    </a>
+
+    <h1>Transfer Equipment</h1>
+
+    <div style="background:#f0f4f8; padding:20px; border-radius:8px; margin-bottom:30px; border-left:4px solid #3498db;">
+        <h3 style="margin-top:0; color:#2c3e50;">Equipment Details</h3>
+        <p><strong>Equipment Name:</strong> {{ equipment.name }}</p>
+        <p><strong>Type:</strong> {{ equipment.get_equipment_type_display }}</p>
+        <p><strong>Serial Number:</strong> {{ equipment.serial_number|default:"Not provided" }}</p>
+        <p><strong>Current User:</strong> <span style="background:#e8f4f8; padding:4px 12px; border-radius:20px;">{{ current_user }}</span></p>
+        <p><strong>Subsidiary/Company:</strong> {{ equipment.subsidiary }}</p>
+    </div>
+
+    <form method="POST" style="background:white; padding:25px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
+        {% csrf_token %}
+        <input type="hidden" name="back_url" value="{{ back_url }}" />
+
+        <h3 style="color:#2c3e50; margin-bottom:20px; border-bottom:2px solid #3498db; padding-bottom:10px;">New User Information</h3>
+
+        <!-- Staff Member Name -->
+        <div style="margin-bottom:20px;">
+            <label for="{{ form.transferred_to.id_for_label }}" style="display:block; font-weight:600; margin-bottom:8px; color:#2c3e50;">
+                {{ form.transferred_to.label }} <span style="color:#e74c3c;">*</span>
+            </label>
+            {{ form.transferred_to }}
+            {% if form.transferred_to.errors %}
+                <div style="color:#e74c3c; margin-top:5px; font-size:14px;">{{ form.transferred_to.errors }}</div>
+            {% endif %}
+        </div>
+
+        <!-- Department -->
+        <div style="margin-bottom:20px;">
+            <label for="{{ form.transferred_to_department.id_for_label }}" style="display:block; font-weight:600; margin-bottom:8px; color:#2c3e50;">
+                {{ form.transferred_to_department.label }}
+            </label>
+            {{ form.transferred_to_department }}
+            {% if form.transferred_to_department.errors %}
+                <div style="color:#e74c3c; margin-top:5px; font-size:14px;">{{ form.transferred_to_department.errors }}</div>
+            {% endif %}
+        </div>
+
+        <!-- Email Address -->
+        <div style="margin-bottom:20px;">
+            <label for="{{ form.transferred_to_email.id_for_label }}" style="display:block; font-weight:600; margin-bottom:8px; color:#2c3e50;">
+                {{ form.transferred_to_email.label }}
+            </label>
+            {{ form.transferred_to_email }}
+            {% if form.transferred_to_email.errors %}
+                <div style="color:#e74c3c; margin-top:5px; font-size:14px;">{{ form.transferred_to_email.errors }}</div>
+            {% endif %}
+        </div>
+
+        <!-- Reason for Transfer -->
+        <div style="margin-bottom:20px;">
+            <label for="{{ form.reason.id_for_label }}" style="display:block; font-weight:600; margin-bottom:8px; color:#2c3e50;">
+                {{ form.reason.label }}
+            </label>
+            {{ form.reason }}
+            {% if form.reason.errors %}
+                <div style="color:#e74c3c; margin-top:5px; font-size:14px;">{{ form.reason.errors }}</div>
+            {% endif %}
+        </div>
+
+        <!-- Additional Notes -->
+        <div style="margin-bottom:25px;">
+            <label for="{{ form.notes.id_for_label }}" style="display:block; font-weight:600; margin-bottom:8px; color:#2c3e50;">
+                {{ form.notes.label }}
+            </label>
+            {{ form.notes }}
+            {% if form.notes.errors %}
+                <div style="color:#e74c3c; margin-top:5px; font-size:14px;">{{ form.notes.errors }}</div>
+            {% endif %}
+        </div>
+
+        <!-- Submit Buttons -->
+        <div style="display:flex; gap:10px; margin-top:30px;">
+            <button type="submit" style="padding:12px 30px; background:#27ae60; color:white; border:none; border-radius:5px; cursor:pointer; font-weight:600; font-size:16px; hover:background:#229954;">
+                ✅ Confirm Transfer
+            </button>
+            <a href="{{ back_url }}" style="padding:12px 30px; background:#95a5a6; color:white; text-decoration:none; border-radius:5px; text-align:center; font-weight:600; font-size:16px;">
+                ❌ Cancel
+            </a>
+        </div>
+    </form>
+
+    <!-- Recent Transfers -->
+    {% if equipment.transfers.all %}
+    <div style="margin-top:40px; background:#ecf0f1; padding:20px; border-radius:8px;">
+        <h3 style="margin-top:0; color:#2c3e50;">Recent Transfers</h3>
+        <ul style="list-style:none; padding:0; margin:0;">
+            {% for transfer in equipment.transfers.all|slice:":3" %}
+            <li style="padding:10px 0; border-bottom:1px solid #bdc3c7;">
+                <strong>{{ transfer.transferred_to }}</strong> ({{ transfer.transfer_date|date:"M d, Y" }})
+            </li>
+            {% endfor %}
+        </ul>
+        <a href="{% url 'equipment_transfer_history' equipment.pk %}" style="display:inline-block; margin-top:10px; color:#3498db; text-decoration:none; font-weight:600;">View Full Transfer History →</a>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    input[type="text"],
+    input[type="email"],
+    textarea,
+    select {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #bdc3c7;
+        border-radius: 4px;
+        font-size: 14px;
+        font-family: inherit;
+        box-sizing: border-box;
+    }
+    input[type="text"]:focus,
+    input[type="email"]:focus,
+    textarea:focus,
+    select:focus {
+        outline: none;
+        border-color: #3498db;
+        box-shadow: 0 0 5px rgba(52, 152, 219, 0.3);
+    }
+    textarea {
+        resize: vertical;
+        min-height: 100px;
+    }
+</style>
+{% endblock %}

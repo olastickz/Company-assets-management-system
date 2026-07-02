@@ -1,0 +1,754 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dashboard | Asset Management{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* ========================================
+       DASHBOARD LAYOUT & GENERAL STYLES
+       ======================================== */
+    body {
+        background: #f8faff;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        color: #0F172A;
+        margin: 0;
+    }
+
+    .dashboard-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 28px 20px 40px;
+    }
+
+    /* ========================================
+       HEADER SECTION
+       ======================================== */
+    .dashboard-header {
+        display: grid;
+        grid-template-columns: 1fr 360px;
+        gap: 24px;
+        align-items: center;
+        margin-bottom: 32px;
+        padding: 28px;
+        background: #ffffff;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        border-radius: 20px;
+        box-shadow: 0 4px 6px rgba(15, 23, 42, 0.05);
+    }
+
+    .dashboard-header h1 {
+        margin: 0 0 8px;
+        font-size: 2.2rem;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
+    .dashboard-header p {
+        margin: 0;
+        color: #64748B;
+        font-size: 0.95rem;
+        line-height: 1.6;
+    }
+
+    .dashboard-search {
+        display: flex;
+        gap: 10px;
+    }
+
+    .dashboard-search input {
+        flex: 1;
+        padding: 12px 14px;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        border-radius: 12px;
+        background: #f8faff;
+        font-size: 0.95rem;
+        color: #0F172A;
+    }
+
+    .dashboard-search button {
+        padding: 12px 24px;
+        background: #2B6EF0;
+        color: white;
+        border: none;
+        border-radius: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s ease;
+    }
+
+    .dashboard-search button:hover {
+        background: #1e56c3;
+    }
+
+    /* ========================================
+       ACTION BUTTONS
+       ======================================== */
+    .dashboard-topbar {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 14px;
+        align-items: center;
+        margin-bottom: 32px;
+    }
+
+    .dashboard-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+    }
+
+    .action-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 12px 20px;
+        background: #2B6EF0;
+        color: white;
+        text-decoration: none;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 0.95rem;
+        transition: all 0.2s ease;
+        border: none;
+        cursor: pointer;
+    }
+
+    .action-btn:hover {
+        background: #1e56c3;
+        transform: translateY(-1px);
+    }
+
+    .action-btn.secondary {
+        background: #10b981;
+    }
+
+    .action-btn.secondary:hover {
+        background: #059669;
+    }
+
+    .action-dropdown.more {
+        position: relative;
+    }
+
+    .action-dropdown.more .more-menu {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        margin-top: 8px;
+        min-width: 220px;
+        background: #ffffff;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        border-radius: 14px;
+        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+        padding: 8px 0;
+        z-index: 40;
+        display: none;
+    }
+
+    .action-dropdown.more[open] .more-menu {
+        display: block;
+    }
+
+    .more-menu a {
+        display: block;
+        padding: 10px 16px;
+        color: #0f172a;
+        text-decoration: none;
+        font-weight: 600;
+    }
+
+    .more-menu a:hover,
+    .more-menu a:focus {
+        background: #f8faff;
+    }
+
+    .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 20px;
+        margin-bottom: 24px;
+    }
+
+    .status-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+        margin-bottom: 32px;
+    }
+
+    .dashboard-status-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+        margin-bottom: 28px;
+    }
+
+    .status-card {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        min-height: 110px;
+        padding: 18px 20px;
+        border-radius: 16px;
+        color: white;
+        background: #334155;
+        border: 1px solid rgba(51, 65, 85, 0.16);
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+    }
+
+    .status-card strong {
+        display: block;
+        font-size: 1.15rem;
+        margin-bottom: 6px;
+    }
+
+    .status-card small {
+        display: block;
+        color: rgba(255, 255, 255, 0.78);
+        font-size: 0.88rem;
+    }
+
+    .status-card.success {
+        background: linear-gradient(135deg, #10b981 0%, #0f766e 100%);
+    }
+
+    .status-card.info {
+        background: linear-gradient(135deg, #2b6ef0 0%, #1d4ed8 100%);
+    }
+
+    .status-card.available {
+        background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
+    }
+
+    .status-card.secondary {
+        background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+    }
+
+    .status-card.warning {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    }
+
+    .status-card a {
+        color: inherit;
+        text-decoration: none;
+    }
+
+    .metric-card {
+        padding: 24px;
+        background: white;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        border-radius: 16px;
+        box-shadow: 0 2px 4px rgba(15, 23, 42, 0.05);
+        transition: all 0.2s ease;
+        text-decoration: none;
+        color: inherit;
+    }
+
+    .metric-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(15, 23, 42, 0.1);
+    }
+
+    .metric-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 16px;
+    }
+
+    .metric-card-title {
+        font-size: 0.85rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #64748B;
+        margin: 0;
+    }
+
+    .metric-card-icon {
+        font-size: 1.8rem;
+    }
+
+    .metric-value {
+        font-size: 2.4rem;
+        font-weight: 700;
+        color: #0F172A;
+        margin: 0 0 8px;
+    }
+
+    .metric-label {
+        font-size: 0.9rem;
+        color: #64748B;
+        margin: 0;
+    }
+
+    /* ========================================
+       ASSET TABLE SECTION
+       ======================================== */
+    .asset-section {
+        background: white;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        border-radius: 16px;
+        padding: 28px;
+        box-shadow: 0 2px 4px rgba(15, 23, 42, 0.05);
+    }
+
+    .empty-state-card {
+        padding: 22px;
+        border: 1px dashed rgba(99, 102, 241, 0.12);
+        border-radius: 12px;
+        background: #ffffff;
+        text-align: center;
+        margin-bottom: 18px;
+    }
+
+    .empty-state-card h3 {
+        margin: 0 0 8px;
+        font-size: 1.15rem;
+        color: #0F172A;
+    }
+
+    .empty-state-card p {
+        margin: 0 0 12px;
+        color: #64748B;
+    }
+
+    .empty-actions {
+        display: flex;
+        justify-content: center;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .asset-section h2 {
+        margin: 0 0 24px;
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: #0F172A;
+    }
+
+    /* ========================================
+       FILTERS
+       ======================================== */
+    .filters {
+        margin-bottom: 24px;
+    }
+
+    .filters-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+
+    .filters-row input,
+    .filters-row select,
+    .filters-row button {
+        padding: 12px 14px;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        border-radius: 10px;
+        background: #f8faff;
+        color: #0F172A;
+        font-size: 0.95rem;
+        font-family: inherit;
+    }
+
+    .filters-row button {
+        background: #2B6EF0;
+        color: white;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s ease;
+    }
+
+    .filters-row button:hover {
+        background: #1e56c3;
+    }
+
+    .asset-table-wrapper {
+        overflow-x: auto;
+        margin-bottom: 16px;
+        border-radius: 16px;
+    }
+
+    /* ========================================
+       ASSET TABLE
+       ======================================== */
+    .asset-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+    }
+
+    .asset-table th,
+    .asset-table td {
+        padding: 14px 16px;
+        text-align: left;
+        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+        color: #334155;
+        font-size: 0.95rem;
+    }
+
+    .asset-table th {
+        background: #f8faff;
+        color: #475569;
+        font-weight: 700;
+        font-size: 0.9rem;
+    }
+
+    .asset-table tbody tr:hover {
+        background: #f8faff;
+    }
+
+    .asset-table a {
+        color: #2B6EF0;
+        text-decoration: none;
+        font-weight: 600;
+    }
+
+    .asset-table a:hover {
+        text-decoration: underline;
+    }
+
+    .asset-subtitle,
+    .asset-details {
+        display: block;
+        color: #64748B;
+        font-size: 0.82rem;
+        margin-top: 4px;
+        line-height: 1.4;
+    }
+
+    .status-badge {
+        display: inline-block;
+        padding: 6px 12px;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    .status-active {
+        background: #d4edda;
+        color: #155724;
+    }
+
+    .status-expiring {
+        background: #fff3cd;
+        color: #856404;
+    }
+
+    .status-expired {
+        background: #f8d7da;
+        color: #721c24;
+    }
+
+    /* ========================================
+       PAGINATION
+       ======================================== */
+    .pagination-row {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 1px solid rgba(15, 23, 42, 0.08);
+        color: #64748B;
+        font-size: 0.95rem;
+    }
+
+    .pagination-links {
+        display: flex;
+        gap: 8px;
+    }
+
+    .pagination-links a {
+        padding: 10px 14px;
+        background: #f8faff;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        border-radius: 10px;
+        color: #2B6EF0;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 0.9rem;
+        transition: all 0.2s ease;
+    }
+
+    .pagination-links a:hover {
+        background: #2B6EF0;
+        color: white;
+    }
+
+    /* ========================================
+       RESPONSIVE
+       ======================================== */
+    @media (max-width: 1024px) {
+        .dashboard-header {
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        .metrics-grid {
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        }
+    }
+
+    @media (max-width: 640px) {
+        .dashboard-container {
+            padding: 16px 12px 28px;
+        }
+
+        .dashboard-header {
+            padding: 20px;
+        }
+
+        .dashboard-header h1 {
+            font-size: 1.8rem;
+        }
+
+        .dashboard-search {
+            flex-direction: column;
+        }
+
+        .metrics-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .filters-row {
+            grid-template-columns: 1fr;
+        }
+
+        .asset-section {
+            padding: 16px;
+        }
+
+        .asset-table {
+            font-size: 0.85rem;
+        }
+
+        .asset-table th,
+        .asset-table td {
+            padding: 10px 8px;
+        }
+    }
+</style>
+{% endblock %}
+
+    <link rel="stylesheet" href="{% static 'vehicles/css/dashboard_dropdown.css' %}?v=20260701">
+{% block content %}
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <div>
+            <h1>Assets Dashboard</h1>
+            <p>Manage and track all company assets, equipment, and documents in one place.</p>
+        </div>
+        <form method="get" class="dashboard-search">
+            <input name="search" type="search" value="{{ search_query }}" placeholder="Search name, VIN, make, model, or plate...">
+            <input type="hidden" name="asset_type" value="{{ asset_type }}">
+            <input type="hidden" name="sort_by" value="{{ sort_by }}">
+            <input type="hidden" name="sort_dir" value="{{ sort_dir }}">
+            <input type="hidden" name="page_size" value="{{ page_size }}">
+            <button type="submit">Search</button>
+        </form>
+    </div>
+
+    <div class="dashboard-topbar">
+        <div class="dashboard-actions">
+            {% include 'partials/create_dropdown.html' %}
+            <a href="{% url 'dashboard' %}?asset_type=vehicles" class="action-btn secondary">🚗 View Vehicle Assets</a>
+            <a href="{% url 'dashboard' %}?asset_type=equipment" class="action-btn secondary">🛠️ View Equipment</a>
+            <a href="{% url 'company_documents_list' %}" class="action-btn">📁 Documents</a>
+        </div>
+
+        <details class="action-dropdown more">
+            <summary class="action-btn secondary">More actions ▾</summary>
+            <div class="more-menu">
+                <a href="{% url 'bulk_upload_assets' %}">📥 Bulk Import Assets</a>
+                <a href="{% url 'bulk_upload_equipment' %}">📥 Bulk Import Equipment</a>
+                <a href="{% url 'export_vehicles_csv' %}">⬇️ Export Vehicle Assets CSV</a>
+                <a href="{% url 'export_equipment_csv' %}">⬇️ Export Equipment CSV</a>
+                <a href="{% url 'staff_list' %}">👥 View All Staff</a>
+            </div>
+        </details>
+    </div>
+
+    <div class="kpi-grid">
+        <div class="metric-card">
+            <div class="metric-card-header">
+                <h3 class="metric-card-title">Total Assets</h3>
+                <span class="metric-card-icon">📦</span>
+            </div>
+            <p class="metric-value">{{ total_assets }}</p>
+            <p class="metric-label">{{ inventory_breakdown }}</p>
+        </div>
+
+        <a href="{% url 'dashboard' %}?asset_type=vehicles" class="metric-card">
+            <div class="metric-card-header">
+                <h3 class="metric-card-title">Vehicle Assets</h3>
+                <span class="metric-card-icon">🚗</span>
+            </div>
+            <p class="metric-value">{{ vehicle_count }}</p>
+            <p class="metric-label">Active vehicle assets</p>
+        </a>
+
+        <a href="{% url 'company_documents_list' %}" class="metric-card">
+            <div class="metric-card-header">
+                <h3 class="metric-card-title">Documents</h3>
+                <span class="metric-card-icon">📁</span>
+            </div>
+            <p class="metric-value">{{ document_count }}</p>
+            <p class="metric-label">Tracked documents & certificates</p>
+        </a>
+
+    </div>
+
+    <div class="status-grid">
+        <a href="{% url 'company_documents_list' %}" class="status-card secondary">
+            <strong>{{ expiring_documents_count|default:'0' }} docs expiring soon</strong>
+            <small>{{ recent_documents_count|default:'0' }} new documents in the last 30 days</small>
+        </a>
+
+        <a href="{{ maintenance_list_url }}" class="status-card warning">
+            <strong>{{ pending_maintenance_count|default:'0' }} items due soon</strong>
+            <small>Review upcoming maintenance tasks before downtime.</small>
+        </a>
+
+        <a href="{{ assigned_assets_url }}" class="status-card success">
+            <strong>{{ assigned_count|default:'0' }} assets assigned</strong>
+            <small>{{ assigned_percent_all }}% of total assets</small>
+        </a>
+
+        <a href="{{ available_assets_url }}" class="status-card available">
+            <strong>{{ available_count|default:'0' }} assets available</strong>
+            <small>Ready to deploy or assign immediately.</small>
+        </a>
+    </div>
+
+    <section class="asset-section">
+
+
+    <section class="asset-section">
+        <h2>Asset Inventory</h2>
+        {% if total_assets_all == 0 %}
+        <div class="empty-state-card">
+            <svg width="72" height="72" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-bottom:12px;">
+                <path d="M12 21V13" stroke="#2B6EF0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M12 13C14.7614 13 17 10.7614 17 8C17 5.23858 14.7614 3 12 3C9.23858 3 7 5.23858 7 8C7 10.7614 9.23858 13 12 13Z" stroke="#10B981" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M8 21C8 18 10 16 12 16C14 16 16 18 16 21" stroke="#64748B" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <h3>No assets yet</h3>
+            <p>This workspace has no assets or documents yet. Get started by adding vehicle assets, equipment, or documents.</p>
+            <div class="empty-actions">
+                <a href="{% url 'asset_create' %}" class="action-btn">➕ Add Vehicle Asset</a>
+                <a href="{% url 'equipment_create' %}" class="action-btn">➕ Add Equipment</a>
+                <a href="{% url 'company_document_create' %}" class="action-btn">📄 Add Document</a>
+                <a href="{% url 'staff_create' %}" class="action-btn">➕ Add Staff</a>
+                <a href="{% url 'staff_list' %}" class="action-btn secondary">👥 View All Staff</a>
+                <a href="{% url 'bulk_upload_assets' %}" class="action-btn">📥 Import Assets</a>
+            </div>
+        </div>
+        {% elif total_assets == 0 %}
+        <div class="empty-state-card">
+            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-bottom:10px;">
+                <path d="M21 21L3 3" stroke="#64748B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M21 3L3 21" stroke="#E2E8F0" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <h3>No results</h3>
+            <p>Your filters returned no assets. Try clearing or relaxing filters.</p>
+            <div class="empty-actions">
+                <a href="{% url 'dashboard' %}" class="action-btn">Clear filters</a>
+                <a href="{% url 'equipment_create' %}" class="action-btn">➕ Add Equipment</a>
+            </div>
+        </div>
+        {% endif %}
+
+        <form method="get" class="filters">
+            <div class="filters-row">
+                <input name="search" value="{{ search_query }}" placeholder="Search name, VIN, make, model, plate...">
+                <select name="asset_type">
+                    <option value="all"{% if asset_type == 'all' %} selected{% endif %}>All assets</option>
+                    <option value="vehicles"{% if asset_type == 'vehicles' %} selected{% endif %}>Vehicle Assets</option>
+                    <option value="equipment"{% if asset_type == 'equipment' %} selected{% endif %}>Equipment</option>
+                    <option value="documents"{% if asset_type == 'documents' %} selected{% endif %}>Documents</option>
+                </select>
+                <select name="sort_by">
+                    <option value="expiry"{% if sort_by == 'expiry' %} selected{% endif %}>Sort by expiry</option>
+                    <option value="status"{% if sort_by == 'status' %} selected{% endif %}>Sort by status</option>
+                    <option value="created"{% if sort_by == 'created' %} selected{% endif %}>Sort by created</option>
+                </select>
+                <select name="sort_dir">
+                    <option value="asc"{% if sort_dir == 'asc' %} selected{% endif %}>Ascending</option>
+                    <option value="desc"{% if sort_dir == 'desc' %} selected{% endif %}>Descending</option>
+                </select>
+            </div>
+            <div class="filters-row">
+                <select name="page_size">
+                    <option value="10"{% if page_size == 10 %} selected{% endif %}>10 rows</option>
+                    <option value="25"{% if page_size == 25 %} selected{% endif %}>25 rows</option>
+                    <option value="50"{% if page_size == 50 %} selected{% endif %}>50 rows</option>
+                </select>
+                <button type="submit">Apply Filters</button>
+            </div>
+        </form>
+
+        <div class="asset-table-wrapper">
+            <table class="asset-table">
+                <thead>
+                    <tr>
+                                <th>Type</th>
+                        <th>Name</th>
+                        <th>Details</th>
+                        <th>Assigned To</th>
+                        <th>Expiry</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for asset in page_obj %}
+                    <tr>
+                        <td>{{ asset.type }}</td>
+                        <td>
+                            <a href="{{ asset.detail_url }}">{{ asset.name }}</a>
+                            <span class="asset-subtitle">{{ asset.type_label }}</span>
+                        </td>
+                        <td class="asset-details">{{ asset.identifier }}</td>
+                        <td>{{ asset.assigned_to }}</td>
+                        <td>{% if asset.expiry %}{{ asset.expiry|date:"M j, Y" }}{% else %}—{% endif %}</td>
+                        <td><span class="status-badge {% if asset.status == 'expired' %}status-expired{% elif asset.status == 'expiring' %}status-expiring{% else %}status-active{% endif %}">{{ asset.status_label }}</span></td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" style="text-align: center; color: #64748B; padding: 28px;">No assets found. Try adjusting your filters.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if page_obj.paginator.num_pages > 1 %}
+        <div class="pagination-row">
+            <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+            <div class="pagination-links">
+                {% if page_obj.has_previous %}
+                    <a href="{% if pagination_query_string %}?{{ pagination_query_string }}&page=1{% else %}?page=1{% endif %}">First</a>
+                    <a href="{% if pagination_query_string %}?{{ pagination_query_string }}&page={{ page_obj.previous_page_number }}{% else %}?page={{ page_obj.previous_page_number }}{% endif %}">← Previous</a>
+                {% endif %}
+                {% if page_obj.has_next %}
+                    <a href="{% if pagination_query_string %}?{{ pagination_query_string }}&page={{ page_obj.next_page_number }}{% else %}?page={{ page_obj.next_page_number }}{% endif %}">Next →</a>
+                    <a href="{% if pagination_query_string %}?{{ pagination_query_string }}&page={{ page_obj.paginator.num_pages }}{% else %}?page={{ page_obj.paginator.num_pages }}{% endif %}">Last</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </section>
+</div>
+
+{% endblock %}
+
+{% comment %} Confirmation handled by base.html modal when `data-confirm` is present {% endcomment %}
+

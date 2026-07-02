@@ -1,0 +1,143 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ title }} - Assets Management System{% endblock %}
+
+{% block content %}
+{% include 'partials/back_to_dashboard.html' %}
+<div style="max-width:800px; margin:0 auto; padding:20px;">
+    
+    <!-- Back Button -->
+    <a href="{{ back_url }}" style="display:inline-flex; align-items:center; gap:8px; margin-bottom:20px; padding:8px 16px; background:#6c757d; color:white; text-decoration:none; border-radius:4px; font-weight:600; transition:background 0.3s;">
+        <span>←</span> Back
+    </a>
+
+    <h1>{{ title }}</h1>
+
+    <!-- Validation Guide -->
+    <div style="background:#e8f4f8; border-left:4px solid #3498db; padding:15px; border-radius:4px; margin-bottom:20px;">
+        <h4 style="margin-top:0; color:#2980b9;">📋 Field Guide:</h4>
+        <ul style="margin:10px 0; font-size:13px; line-height:1.8;">
+            <li><strong>Equipment Name:</strong> Name of the equipment (e.g., "Dell Laptop", "HP Printer")</li>
+            <li><strong>Equipment Type:</strong> Select from dropdown (Computer, Laptop, Printer, etc.)</li>
+            <li><strong>Assigned Staff:</strong> Select an active staff member from the dropdown - showing Staff ID, Name, and Branch</li>
+            <li><strong>Serial Number:</strong> Alphanumeric only (letters, numbers, hyphens) - Max 100 characters</li>
+            <li><strong>Tag Number:</strong> Alphanumeric only (letters, numbers, hyphens) - Max 100 characters</li>
+            <li><strong>Quantity:</strong> Numeric only (positive integers) - Min 1</li>
+            <li><strong>Location:</strong> Specific office/building/room location</li>
+            <li><strong>Purchase Date:</strong> Use the date picker (YYYY-MM-DD format)</li>
+        </ul>
+    </div>
+
+    <div style="background:white; padding:30px; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+        <form method="post" novalidate>
+            {% csrf_token %}
+            <input type="hidden" name="back_url" value="{{ back_url }}" />
+            
+            <div style="display:grid; gap:20px;">
+                {% for field in form %}
+                    <div>
+                        <label for="{{ field.id_for_label }}" style="display:block; font-weight:600; margin-bottom:8px; color:#2c3e50;">
+                            {{ field.label }}
+                            {% if field.field.required %}<span style="color:red;">*</span>{% endif %}
+                        </label>
+                        {{ field }}
+                        {% if field.help_text %}
+                            <small style="color:#7f8c8d; display:block; margin-top:5px;">ℹ️ {{ field.help_text|safe }}</small>
+                        {% endif %}
+                        {% if field.errors %}
+                            <div style="color:#e74c3c; font-size:12px; margin-top:5px; background:#fadbd8; padding:8px; border-radius:4px;">
+                                <strong>⚠️ Error:</strong> {{ field.errors }}
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+
+                <!-- Year of Purchase field removed; use `purchase_date` field instead -->
+            </div>
+
+            <div style="margin-top:30px; display:flex; gap:10px; justify-content:center;">
+                <button type="submit" style="padding:12px 30px; background:#27ae60; color:white; border:none; border-radius:5px; cursor:pointer; font-weight:600; font-size:16px;">
+                    ✓ Save Equipment
+                </button>
+                <a href="{{ back_url }}" style="padding:12px 30px; background:#95a5a6; color:white; text-decoration:none; border-radius:5px; text-align:center; font-weight:600; font-size:16px;">
+                    ✕ Cancel
+                </a>
+            </div>
+
+            {% if form.non_field_errors %}
+                <div style="margin-top:20px; background:#f8d7da; color:#721c24; padding:15px; border-radius:5px;">
+                    <strong>🚫 Form Errors:</strong>
+                    {{ form.non_field_errors }}
+                </div>
+            {% endif %}
+        </form>
+    </div>
+
+</div>
+
+<style>
+    input, select, textarea {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #bdc3c7;
+        border-radius: 4px;
+        box-sizing: border-box;
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        background-color: #fff;
+    }
+    
+    select {
+        appearance: none;
+        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="none" stroke="currentColor"><path d="M7 7l6 6 6-6"/></svg>');
+        background-repeat: no-repeat;
+        background-position: right 8px center;
+        background-size: 20px;
+        padding-right: 30px;
+        cursor: pointer;
+    }
+    
+    select:focus {
+        outline: none;
+        border-color: #3498db;
+        box-shadow: 0 0 5px rgba(52, 152, 219, 0.3);
+        background-color: #f8fbff;
+    }
+    
+    input:focus, textarea:focus {
+        outline: none;
+        border-color: #3498db;
+        box-shadow: 0 0 5px rgba(52, 152, 219, 0.3);
+        background-color: #f8fbff;
+    }
+    
+    input:invalid {
+        border-color: #e74c3c;
+        background-color: #fadbd8;
+    }
+    
+    input:valid {
+        border-color: #27ae60;
+    }
+    
+    select option {
+        padding: 10px;
+        background-color: #fff;
+        color: #2c3e50;
+        line-height: 1.5;
+    }
+    
+    select option:hover {
+        background-color: #ecf0f1;
+        color: #000;
+    }
+    
+    select option:checked {
+        background: linear-gradient(#3498db, #3498db);
+        color: white;
+    }
+</style>
+
+<script src="{% static 'vehicles/js/staff_autocomplete.js' %}"></script>
+{% endblock %}
