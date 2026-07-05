@@ -1,5 +1,6 @@
 from django.contrib import admin
 from .models import Asset, AssetAssignmentHistory, AssetRelationship, CompanyAsset, MaintenanceItem, OfficeEquipment, OfficeEquipmentMaintenance, UserRole, StaffMember, AuditLog, EmailRecipient, EmailDeliveryLog, EmailSchedule, EquipmentTransfer, CompanyDocument
+from .permissions import is_admin
 from django import forms
 from django.utils.safestring import mark_safe
 from django.utils.html import format_html
@@ -239,18 +240,18 @@ class EmailScheduleAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         """Only allow adding if there are no existing schedules (should only be one)"""
         # Check if an EmailSchedule already exists
-        if EmailSchedule.objects.exists() and not request.user.is_superuser:
+        if EmailSchedule.objects.exists() and not is_admin(request.user):
             return False
-        # Limit to one record for superusers too
+        # Limit to one record for admins too
         return True
     
     def has_delete_permission(self, request, obj=None):
-        """Only superusers can delete the schedule"""
-        return request.user.is_superuser
+        """Only admins can delete the schedule"""
+        return is_admin(request.user)
     
     def has_change_permission(self, request, obj=None):
-        """Only superusers can modify schedule"""
-        return request.user.is_superuser
+        """Only admins can modify schedule"""
+        return is_admin(request.user)
     
     def has_view_permission(self, request, obj=None):
         """All users can view schedule"""

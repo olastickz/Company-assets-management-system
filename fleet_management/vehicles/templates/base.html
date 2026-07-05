@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+{% load static %}
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -18,81 +19,94 @@
             --table-hover: #f7f9fc;
             --card-shadow: rgba(0,0,0,.08);
         }
-
-        html.dark-mode {
-            --bg-primary: #1a1a1a;
-            --bg-secondary: #2d2d2d;
-            --text-primary: #e0e0e0;
-            --text-secondary: #b0b0b0;
-            --border-color: #404040;
-            --input-border: #505050;
-            --header-bg: #0d1b3f;
-            --header-text: #ffffff;
-            --table-hover: #3a3a3a;
-            --card-shadow: rgba(0,0,0,.3);
+        .message { 
+            margin:15px 0; 
+            padding:12px 14px; 
+            border-radius:8px; 
+            background:#e9f7ec; 
+            border:1px solid #b9e6c3; 
+            color:#1f6c2b; 
         }
 
-        * { transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease; }
-
-        body { 
-            font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            background: var(--bg-primary); 
-            color: var(--text-primary);
-            margin:0; 
+        .dark-mode .message {
+            background: #1a3a1a;
+            border-color: #4a6a4a;
+            color: #90ee90;
         }
 
-        main { 
-            max-width:1100px; 
-            margin:0 auto; 
-            padding:18px; 
-        }
-
-        .top-bar { 
+        .card-container { 
             display:flex; 
-            justify-content:space-between; 
+            gap:20px; 
+            margin-bottom:30px;
+            flex-wrap: wrap;
+        }
+
+        .card { 
+            flex:1; 
+            min-width: 200px;
+            padding:22px; 
+            border-radius:12px; 
+            color:white; 
+            text-align:center; 
+            font-size:18px; 
+            text-decoration:none; 
+            display:inline-flex; 
             align-items:center; 
-            background: var(--header-bg); 
-            color: var(--header-text); 
-            padding:12px 18px; 
+            justify-content:center; 
+            border:3px solid transparent; 
+            transition:all .2s ease; 
         }
 
-        .top-bar .brand { 
-            display:flex; 
-            align-items:center; 
-            gap:10px; 
-        }
+        .card:hover { transform: translateY(-6px); box-shadow: 0 8px 20px var(--card-shadow);} 
 
-        .top-bar .brand img { 
-            width:44px; 
-            height:auto; 
-        }
+        .card .value { font-size:28px; font-weight:700; margin-top:6px; }
 
-        .main-nav {
+        .table-card { padding:18px; border-radius:10px; background:var(--bg-secondary); box-shadow:0 8px 18px var(--card-shadow); }
+
+        .link { color: #2B6EF0; text-decoration:none; font-weight:600; }
+
+        /* release styles moved to static file */
+
+        .top-bar {
             display: flex;
-            gap: 20px;
-            margin-left: 30px;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 18px 24px;
+            background: var(--header-bg);
+            color: var(--header-text);
+            border-bottom: 1px solid rgba(255,255,255,0.12);
         }
 
-        .main-nav a {
+        .top-bar .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .top-bar .brand img {
+            width: 90px;
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .top-bar .brand strong {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--header-text);
+        }
+
+        .top-bar .main-nav {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .top-bar .main-nav a {
             color: var(--header-text);
             text-decoration: none;
             font-weight: 600;
-            padding: 8px 12px;
-            border-radius: 5px;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            transition: all 0.3s ease;
-        }
-
-        .main-nav a:hover {
-            background: rgba(255, 255, 255, 0.1);
-            border-color: rgba(255, 255, 255, 0.6);
-        }
-
-        .top-bar a, .theme-toggle { 
-            color: var(--header-text); 
-            text-decoration:none; 
-            margin-left:14px; 
-            font-weight:600; 
         }
 
         .top-bar-right {
@@ -130,6 +144,8 @@
             border:1px solid #b9e6c3; 
             color:#1f6c2b; 
         }
+
+        /* release styles moved to static file */
 
         .dark-mode .message {
             background: #1a3a1a;
@@ -597,6 +613,7 @@
     </style>
     {% load static %}
     <link rel="stylesheet" href="{% static 'vehicles/css/dashboard_dropdown.css' %}?v=20260701">
+    <link rel="stylesheet" href="{% static 'vehicles/css/release_notice.css' %}">
     {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -618,7 +635,7 @@
             </button>
             {% if request.user.is_authenticated %}
             <span>Hi {{ request.user.username }}</span>
-            {% if request.user.is_superuser %}
+            {% if is_admin %}
             <a href="{% url 'admin:index' %}" style="color: var(--header-text); text-decoration:none; margin-left:14px; font-weight:600;">🔧 Admin</a>
             <span style="color: var(--header-text); margin-left:8px; margin-right:8px;">/</span>
             {% endif %}

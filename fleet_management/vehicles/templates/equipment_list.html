@@ -293,7 +293,7 @@
     </div>
 
     <div style="text-align:center; margin-bottom:20px; display:flex; flex-wrap:wrap; justify-content:center; gap:10px;">
-        {% if is_superuser %}
+        {% if is_admin %}
             <a href="{% url 'equipment_create' %}" style="padding:10px 20px; background:#9b59b6; color:white; text-decoration:none; border-radius:5px; display:inline-block;">+ Add New Equipment</a>
             <a href="{% url 'bulk_upload_equipment' %}" style="padding:10px 20px; background:#8e44ad; color:white; text-decoration:none; border-radius:5px; display:inline-block;">📤 Bulk Upload Equipment</a>
         {% endif %}
@@ -395,7 +395,7 @@
                     
                     <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
                         <a href="{% url 'equipment_detail' equipment.pk %}" style="padding:6px 12px; background:#3498db; color:white; text-decoration:none; border-radius:4px; font-size:12px; font-weight:600;">👁️ View</a>
-                        {% if is_superuser %}
+                        {% if is_admin %}
                         <a href="{% url 'equipment_update' equipment.pk %}" style="padding:6px 12px; background:#f39c12; color:white; text-decoration:none; border-radius:4px; font-size:12px; font-weight:600;">✏️ Edit</a>
                         {% endif %}
                     </div>
@@ -511,7 +511,7 @@
                 <td style="padding:12px; text-align:center;">
                     <div style="display:flex; gap:4px; justify-content:center; flex-wrap:wrap;">
                         <a href="{% url 'equipment_detail' equipment.pk %}" style="color:#3498db; text-decoration:none; font-weight:600; padding:4px 8px; background:#ecf0f1; border-radius:3px; display:inline-block; font-size:11px;">👁️ View</a>
-                        {% if is_superuser %}
+                        {% if is_admin %}
                         <a href="{% url 'equipment_update' equipment.pk %}" style="color:#f39c12; text-decoration:none; font-weight:600; padding:4px 8px; background:#fff3cd; border-radius:3px; display:inline-block; font-size:11px;">✏️ Edit</a>
                         {% endif %}
                     </div>

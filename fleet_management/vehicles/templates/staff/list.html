@@ -14,7 +14,7 @@
         <a class="btn btn-success" href="{% url 'staff_create' %}">+ Add Staff</a>
     </div>
 
-    {% if legacy_names and request.user.is_superuser %}
+    {% if legacy_names and is_admin %}
     <div style="margin-bottom:18px; padding:16px; background:#f8fafc; border:1px solid #cbd5e1; border-radius:12px;">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
             <div>

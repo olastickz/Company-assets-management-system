@@ -7,6 +7,7 @@ urlpatterns = [
 
     # Asset detail view
     path('asset/<int:pk>/', views.vehicle_detail, name='asset_detail'),
+    path('asset/<int:pk>/release/', views.release_vehicle_assignment, name='asset_release'),
 
     # Asset CRUD
     path('asset/add/', views.vehicle_create, name='asset_create'),
@@ -26,6 +27,7 @@ urlpatterns = [
     path('equipment/iteco/', views.equipment_iteco, name='equipment_iteco'),
     path('equipment/softworks/', views.equipment_softworks, name='equipment_softworks'),
     path('equipment/<int:pk>/', views.equipment_detail, name='equipment_detail'),
+    path('equipment/<int:pk>/release/', views.release_equipment_assignment, name='equipment_release'),
     path('equipment/add/', views.equipment_create, name='equipment_create'),
     path('equipment/<int:pk>/edit/', views.equipment_update, name='equipment_update'),
     path('equipment/<int:pk>/delete/', views.equipment_delete, name='equipment_delete'),

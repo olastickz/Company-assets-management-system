@@ -6,6 +6,7 @@ from django.contrib.auth import logout
 from django.contrib import messages
 from django.http import HttpResponse, HttpResponseForbidden
 from django.http import JsonResponse
+from django.views.decorators.http import require_POST
 from django.db import models, transaction
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -219,10 +220,23 @@ def dashboard(request):
     documents = CompanyDocument.objects.all().order_by('-updated_at')
     staff_members = StaffMember.objects.filter(is_active=True).order_by('staff_id')
     assigned_staff_id = request.GET.get('assigned_staff', '')
+    department_filter = request.GET.get('department', '')
+    branch_filter = request.GET.get('branch', '')
 
     if assigned_staff_id:
+        vehicles = vehicles.filter(assigned_staff_id=assigned_staff_id)
         equipments = equipments.filter(assigned_staff_id=assigned_staff_id)
         documents = documents.filter(responsible_staff_id=assigned_staff_id)
+
+    if department_filter:
+        vehicles = vehicles.filter(assigned_staff__department=department_filter)
+        equipments = equipments.filter(assigned_staff__department=department_filter)
+        documents = documents.filter(responsible_staff__department=department_filter)
+
+    if branch_filter:
+        vehicles = vehicles.filter(assigned_staff__branch=branch_filter)
+        equipments = equipments.filter(assigned_staff__branch=branch_filter)
+        documents = documents.filter(responsible_staff__branch=branch_filter)
 
     if search_query:
         vehicles = vehicles.filter(
@@ -462,7 +476,6 @@ def dashboard(request):
     utilization_percent = int((assigned_count / total_assets) * 100) if total_assets else 0
     utilization_dashoffset = 402 - int(402 * utilization_percent / 100)
 
-    is_superuser = request.user.is_authenticated and request.user.is_superuser
     dashboard_query = request.GET.copy()
     dashboard_query.pop('page', None)
     dashboard_query['assigned_filter'] = 'assigned'
@@ -483,6 +496,15 @@ def dashboard(request):
         {'value': 'expiring', 'label': 'Expiring Soon'},
         {'value': 'safe', 'label': 'Safe'},
         {'value': 'unknown', 'label': 'No expiry'},
+    ]
+
+    department_options = [
+        {'value': value, 'label': label}
+        for value, label in StaffMember.DEPARTMENT_CHOICES
+    ]
+    branch_options = [
+        {'value': value, 'label': label}
+        for value, label in StaffMember.BRANCH_CHOICES
     ]
 
     return render(request, 'dashboard.html', {
@@ -544,16 +566,19 @@ def dashboard(request):
         'chart_status_data': chart_status_data,
         'category_options': category_options,
         'status_options': status_options,
+        'department_options': department_options,
+        'branch_options': branch_options,
         'page_size_options': [10, 25, 50],
         'query_string': query_string,
         'pagination_query_string': pagination_query_string,
         'today': today,
         'expiring_threshold': expiring_threshold,
-        'is_superuser': is_superuser,
         'paginator': paginator,
         'page_obj': page_obj,
         'staff_members': staff_members,
         'assigned_staff_id': assigned_staff_id,
+        'department_filter': department_filter,
+        'branch_filter': branch_filter,
     'active_staff_count': staff_members.count(),
     })
 
@@ -767,7 +792,6 @@ def vehicle_detail(request, pk):
         related_documents = CompanyDocument.objects.filter(
             related_vehicle=vehicle
         ).order_by('-expiry_date')
-    is_superuser = request.user.is_superuser
     return render(request, 'asset_detail.html', {
         'vehicle': vehicle,
         'maintenance_items': maintenance_items,
@@ -776,10 +800,27 @@ def vehicle_detail(request, pk):
         'assignment_history': assignment_history,
         'related_assets': related_assets,
         'related_documents': related_documents,
-        'is_superuser': is_superuser,
         'vehicle_type_choices': Vehicle.VEHICLE_TYPE_CHOICES,
         'back_url': get_back_url(request, django_reverse('dashboard')),
     })
+
+
+@require_POST
+@require_admin
+def release_vehicle_assignment(request, pk):
+    vehicle = get_object_or_404(Vehicle, pk=pk)
+    back_url = request.POST.get('back_url') or get_back_url(request, django_reverse('asset_detail', args=[pk]))
+
+    if vehicle.asset:
+        vehicle.asset.assigned_staff = None
+        vehicle.asset.save()
+
+    if vehicle.assigned_staff:
+        vehicle.assigned_staff = None
+        vehicle.save(update_fields=['assigned_staff'])
+
+    messages.success(request, 'Vehicle assignment released successfully.')
+    return redirect(back_url)
 
 
 # ----------------------------
@@ -1861,7 +1902,6 @@ def equipment_list(request):
         'damaged_count': damaged_count,
         'unassigned_count': unassigned_count,
         'equipment_type_counts': equipment_type_counts,
-        'is_superuser': request.user.is_authenticated and request.user.is_superuser,
         # Advanced filter parameters
         'date_from': date_from,
         'date_to': date_to,
@@ -2021,7 +2061,6 @@ def equipment_list_filtered(request, **filters):
         'damaged_count': damaged_count,
         'unassigned_count': unassigned_count,
         'is_filtered_view': True,
-        'is_superuser': request.user.is_authenticated and request.user.is_superuser,
     })
 
 
@@ -2041,17 +2080,32 @@ def equipment_detail(request, pk):
         related_documents = CompanyDocument.objects.filter(
             related_equipment=equipment
         ).order_by('-expiry_date')
-    is_superuser = request.user.is_superuser
-
     return render(request, 'equipment_detail.html', {
         'equipment': equipment,
         'maintenance_records': maintenance_records,
         'assignment_history': assignment_history,
         'related_assets': related_assets,
         'related_documents': related_documents,
-        'is_superuser': is_superuser,
         'back_url': get_back_url(request, django_reverse('equipment_list'))
     })
+
+
+@require_POST
+@require_admin
+def release_equipment_assignment(request, pk):
+    equipment = get_object_or_404(OfficeEquipment, pk=pk)
+    back_url = request.POST.get('back_url') or get_back_url(request, django_reverse('equipment_detail', args=[pk]))
+
+    if equipment.asset:
+        equipment.asset.assigned_staff = None
+        equipment.asset.save()
+
+    if equipment.assigned_staff:
+        equipment.assigned_staff = None
+        equipment.save(update_fields=['assigned_staff'])
+
+    messages.success(request, 'Equipment assignment released successfully.')
+    return redirect(back_url)
 
 
 # ===== Company Documents Views =====

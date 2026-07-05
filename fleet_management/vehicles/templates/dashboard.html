@@ -687,6 +687,24 @@
                 </select>
             </div>
             <div class="filters-row">
+                <select name="assigned_staff">
+                    <option value="">All staff</option>
+                    {% for staff in staff_members %}
+                    <option value="{{ staff.id }}"{% if assigned_staff_id == staff.id|stringformat:"s" %} selected{% endif %}>{{ staff.staff_id }} — {{ staff.full_name }}{% if staff.branch %} ({{ staff.branch }}){% endif %}</option>
+                    {% endfor %}
+                </select>
+                <select name="department">
+                    <option value="">All departments</option>
+                    {% for option in department_options %}
+                    <option value="{{ option.value }}"{% if department_filter == option.value %} selected{% endif %}>{{ option.label }}</option>
+                    {% endfor %}
+                </select>
+                <select name="branch">
+                    <option value="">All branches</option>
+                    {% for option in branch_options %}
+                    <option value="{{ option.value }}"{% if branch_filter == option.value %} selected{% endif %}>{{ option.label }}</option>
+                    {% endfor %}
+                </select>
                 <select name="page_size">
                     <option value="10"{% if page_size == 10 %} selected{% endif %}>10 rows</option>
                     <option value="25"{% if page_size == 25 %} selected{% endif %}>25 rows</option>

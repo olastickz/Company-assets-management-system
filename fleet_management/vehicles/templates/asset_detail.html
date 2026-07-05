@@ -45,6 +45,14 @@
                 <label>Assigned Staff</label>
                 <p>{{ vehicle.assigned_to_display }}</p>
             </div>
+            <div class="detail-item">
+                <label>Assigned Department</label>
+                <p>{{ vehicle.assigned_staff.department|default:'Unassigned' }}</p>
+            </div>
+            <div class="detail-item">
+                <label>Assigned Branch</label>
+                <p>{{ vehicle.assigned_staff.branch|default:'Unassigned' }}</p>
+            </div>
         </div>
         <div class="detail-card">
             <h2>Documentation Status</h2>
@@ -75,7 +83,7 @@
             <p style="margin:6px 0 0; color:#64748B; line-height:1.6;">Review recent maintenance items for this asset.</p>
         </div>
         <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
-            {% if is_superuser %}
+            {% if is_admin %}
             <a href="{% url 'company_document_create' %}?related_vehicle={{ vehicle.pk }}" class="button-inline">📄 Create Asset Document</a>
             <a href="{% url 'maintenance_create' vehicle.pk %}" class="button-inline">+ Add Maintenance Record</a>
             {% endif %}
@@ -88,7 +96,7 @@
                     <th>Description</th>
                     <th>Date Performed</th>
                     <th>Cost</th>
-                    {% if is_superuser %}<th style="text-align:center;">Actions</th>{% endif %}
+                    {% if is_admin %}<th style="text-align:center;">Actions</th>{% endif %}
                 </tr>
             </thead>
             <tbody>
@@ -97,7 +105,7 @@
                     <td>{{ item.description }}</td>
                     <td>{{ item.date_performed|date:"M d, Y"|default:"N/A" }}</td>
                     <td>{{ item.cost|floatformat:2|default:"N/A" }}</td>
-                    {% if is_superuser %}
+                    {% if is_admin %}
                     <td style="text-align:center;">
                         <a href="{% url 'maintenance_update' item.pk %}?back_url={{ request.get_full_path|urlencode }}" class="link">Edit</a>
                         <a href="{% url 'maintenance_delete' item.pk %}?back_url={{ request.get_full_path|urlencode }}" class="link" style="margin-left:12px; color:#e74c3c;">Delete</a>
@@ -106,15 +114,25 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="{% if is_superuser %}4{% else %}3{% endif %}" style="text-align:center; color:#64748B; padding:24px;">No maintenance records found</td>
+                    <td colspan="{% if is_admin %}4{% else %}3{% endif %}" style="text-align:center; color:#64748B; padding:24px;">No maintenance records found</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 
-    {% if is_superuser %}
+    {% if is_admin %}
     <div class="action-row">
+            <div style="display:inline-block; vertical-align:middle; margin-right:12px;">
+                <div class="release-warning">
+                        <strong>Warning:</strong> Releasing will unassign the current staff and close the active assignment.
+                    </div>
+                    <form method="post" action="{% url 'asset_release' vehicle.pk %}" style="display:inline; margin-right:12px;">
+                    {% csrf_token %}
+                    <input type="hidden" name="back_url" value="{{ request.get_full_path }}">
+                    <button type="submit" class="button-inline warning" onclick="return confirm('Release this vehicle assignment? This will unassign the current staff.');">Release Assignment</button>
+                    </form>
+            </div>
         <a href="{% url 'asset_update' vehicle.pk %}?back_url={{ back_url|urlencode }}" class="button-inline">Edit Asset</a>
         <a href="{% url 'asset_delete' vehicle.pk %}?back_url={{ back_url|urlencode }}" class="button-inline" style="background:#e74c3c;">Delete Asset</a>
     </div>
@@ -163,7 +181,7 @@
         <div class="detail-card">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
                 <h2 style="margin:0;">Linked Documents</h2>
-                {% if is_superuser %}
+                {% if is_admin %}
                 <a href="{% url 'company_document_create' %}?related_vehicle={{ vehicle.pk }}&back_url={{ request.get_full_path|urlencode }}" class="button-inline" style="white-space:nowrap;">📄 Create Document</a>
                 {% endif %}
             </div>
