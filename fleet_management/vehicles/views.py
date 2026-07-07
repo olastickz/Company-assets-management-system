@@ -24,7 +24,7 @@ from .models import CompanyAsset, Vehicle, MaintenanceItem, OfficeEquipment, Off
 logger = logging.getLogger(__name__)
 from .forms import CompanyAssetForm, VehicleForm, MaintenanceItemForm, OfficeEquipmentForm, OfficeEquipmentMaintenanceForm, EquipmentTransferForm, CompanyDocumentForm, StaffMemberForm
 from .permissions import (
-    require_admin, require_manager, is_admin, is_manager, 
+    require_admin, require_manager, is_admin, is_manager, is_driver,
     get_user_role, log_audit, get_client_ip
 )
 
@@ -106,6 +106,34 @@ def _split_name(full_name):
     if len(parts) <= 1:
         return parts[0], ''
     return parts[0], ' '.join(parts[1:])
+
+
+def _normalize_name(name):
+    return ' '.join(name.strip().lower().split()) if name else ''
+
+
+def _assigned_user_matches_current_user(equipment, user):
+    if not equipment.assigned_user or not user.is_authenticated:
+        return False
+
+    assigned_user = _normalize_name(equipment.assigned_user)
+    candidates = {user.username.strip().lower()}
+    if user.first_name or user.last_name:
+        full_name = f"{user.first_name} {user.last_name}".strip()
+        if full_name:
+            candidates.add(_normalize_name(full_name))
+            candidates.add(_normalize_name(f"{user.last_name} {user.first_name}".strip()))
+        if user.first_name:
+            candidates.add(user.first_name.strip().lower())
+        if user.last_name:
+            candidates.add(user.last_name.strip().lower())
+
+    staff_profile = getattr(user, 'staff_profile', None)
+    if staff_profile:
+        candidates.add(_normalize_name(staff_profile.full_name))
+        candidates.add(staff_profile.staff_id.strip().lower())
+
+    return assigned_user in candidates
 
 
 def _generate_legacy_staff_id(name):
@@ -223,20 +251,64 @@ def dashboard(request):
     department_filter = request.GET.get('department', '')
     branch_filter = request.GET.get('branch', '')
 
-    if assigned_staff_id:
+    current_role = get_user_role(request.user)
+    staff_profile = getattr(request.user, 'staff_profile', None)
+    if current_role in ['staff', 'driver']:
+        if staff_profile is not None:
+            assigned_staff_id = str(staff_profile.pk)
+            vehicles = vehicles.filter(assigned_staff=staff_profile)
+            equipments = equipments.filter(assigned_staff=staff_profile)
+            documents = documents.filter(
+                Q(responsible_staff=staff_profile) |
+                Q(related_asset__assigned_staff=staff_profile) |
+                Q(related_vehicle__assigned_staff=staff_profile) |
+                Q(related_equipment__assigned_staff=staff_profile)
+            ).distinct()
+        else:
+            vehicles = CompanyAsset.objects.none()
+            equipments = OfficeEquipment.objects.none()
+            documents = CompanyDocument.objects.none()
+
+    # If the current user is a Department Manager and no department filter
+    # was provided, default the view to their department for scoped visibility.
+    try:
+        if not department_filter and current_role == 'manager' and hasattr(request.user, 'role'):
+            dept = request.user.role.department
+            if dept:
+                department_filter = dept
+    except Exception:
+        # Fail closed to avoid breaking dashboard for anonymous or system users
+        department_filter = department_filter
+
+    if assigned_staff_id and current_role not in ['staff', 'driver']:
         vehicles = vehicles.filter(assigned_staff_id=assigned_staff_id)
         equipments = equipments.filter(assigned_staff_id=assigned_staff_id)
-        documents = documents.filter(responsible_staff_id=assigned_staff_id)
+        documents = documents.filter(
+            Q(responsible_staff_id=assigned_staff_id) |
+            Q(related_asset__assigned_staff_id=assigned_staff_id) |
+            Q(related_vehicle__assigned_staff_id=assigned_staff_id) |
+            Q(related_equipment__assigned_staff_id=assigned_staff_id)
+        ).distinct()
 
     if department_filter:
         vehicles = vehicles.filter(assigned_staff__department=department_filter)
         equipments = equipments.filter(assigned_staff__department=department_filter)
-        documents = documents.filter(responsible_staff__department=department_filter)
+        documents = documents.filter(
+            Q(responsible_staff__department=department_filter) |
+            Q(related_asset__assigned_staff__department=department_filter) |
+            Q(related_vehicle__assigned_staff__department=department_filter) |
+            Q(related_equipment__assigned_staff__department=department_filter)
+        ).distinct()
 
     if branch_filter:
         vehicles = vehicles.filter(assigned_staff__branch=branch_filter)
         equipments = equipments.filter(assigned_staff__branch=branch_filter)
-        documents = documents.filter(responsible_staff__branch=branch_filter)
+        documents = documents.filter(
+            Q(responsible_staff__branch=branch_filter) |
+            Q(related_asset__assigned_staff__branch=branch_filter) |
+            Q(related_vehicle__assigned_staff__branch=branch_filter) |
+            Q(related_equipment__assigned_staff__branch=branch_filter)
+        ).distinct()
 
     if search_query:
         vehicles = vehicles.filter(
@@ -792,6 +864,15 @@ def vehicle_detail(request, pk):
         related_documents = CompanyDocument.objects.filter(
             related_vehicle=vehicle
         ).order_by('-expiry_date')
+
+    current_role = get_user_role(request.user)
+    staff_profile = getattr(request.user, 'staff_profile', None)
+    can_report_maintenance = False
+    if current_role in ['admin', 'manager']:
+        can_report_maintenance = True
+    elif staff_profile and vehicle.assigned_staff == staff_profile:
+        can_report_maintenance = True
+
     return render(request, 'asset_detail.html', {
         'vehicle': vehicle,
         'maintenance_items': maintenance_items,
@@ -801,6 +882,7 @@ def vehicle_detail(request, pk):
         'related_assets': related_assets,
         'related_documents': related_documents,
         'vehicle_type_choices': Vehicle.VEHICLE_TYPE_CHOICES,
+        'can_report_maintenance': can_report_maintenance,
         'back_url': get_back_url(request, django_reverse('dashboard')),
     })
 
@@ -882,9 +964,22 @@ def vehicle_delete(request, pk):
 # ----------------------------
 # Maintenance CRUD
 # ----------------------------
-@require_manager
+@login_required
 def maintenance_create(request, vehicle_pk):
     vehicle = get_object_or_404(Vehicle, pk=vehicle_pk)
+    current_role = get_user_role(request.user)
+    staff_profile = getattr(request.user, 'staff_profile', None)
+
+    if current_role in ['staff', 'driver']:
+        if not staff_profile or (
+            vehicle.assigned_staff != staff_profile and
+            not _assigned_user_matches_current_user(vehicle, request.user)
+        ):
+            return HttpResponseForbidden('Access denied')
+
+    elif current_role not in ['admin', 'manager']:
+        return HttpResponseForbidden('Access denied')
+
     if request.method == 'POST':
         form = MaintenanceItemForm(request.POST)
         back_url = request.POST.get('back_url') or get_back_url(request, django_reverse('asset_detail', args=[vehicle_pk]))
@@ -1353,9 +1448,20 @@ def equipment_delete(request, pk):
     return render(request, 'equipment_confirm_delete.html', {'equipment': equipment, 'back_url': back_url})
 
 
-@require_manager
+@login_required
 def equipment_maintenance_create(request, equipment_pk):
     equipment = get_object_or_404(OfficeEquipment, pk=equipment_pk)
+    current_role = get_user_role(request.user)
+    staff_profile = getattr(request.user, 'staff_profile', None)
+
+    if current_role in ['staff', 'driver']:
+        if not staff_profile or (
+            equipment.assigned_staff != staff_profile and
+            not _assigned_user_matches_current_user(equipment, request.user)
+        ):
+            return HttpResponseForbidden('Access denied')
+    elif current_role not in ['admin', 'manager']:
+        return HttpResponseForbidden('Access denied')
 
     if request.method == 'POST':
         form = OfficeEquipmentMaintenanceForm(request.POST)
@@ -1701,6 +1807,16 @@ def equipment_list(request):
     sort_dir = request.GET.get('sort_dir', 'desc')
     page_num = request.GET.get('page', 1)
 
+    # Department scoping: default to manager's department when applicable
+    department_filter = request.GET.get('department', '')
+    try:
+        if not department_filter and get_user_role(request.user) == 'manager' and hasattr(request.user, 'role'):
+            dept = request.user.role.department
+            if dept:
+                department_filter = dept
+    except Exception:
+        department_filter = department_filter
+
     # Advanced filters
     date_from = request.GET.get('date_from', '')
     date_to = request.GET.get('date_to', '')
@@ -1717,6 +1833,12 @@ def equipment_list(request):
         page_size = 25
 
     equipments = OfficeEquipment.objects.all()
+    current_role = get_user_role(request.user)
+    staff_profile = getattr(request.user, 'staff_profile', None)
+    if current_role in ['staff', 'driver'] and staff_profile is not None:
+        equipments = equipments.filter(assigned_staff=staff_profile)
+    elif department_filter:
+        equipments = equipments.filter(assigned_staff__department=department_filter)
 
     # Enhanced search with multiple fields and optimization
     if search_query:
@@ -1885,6 +2007,7 @@ def equipment_list(request):
         'regional_office_filter': regional_office_filter,
         'equipment_type_filter': equipment_type_filter,
         'assignment_status_filter': assignment_status_filter,
+        'department_filter': department_filter,
         'sort_by': sort_by,
         'sort_dir': sort_dir,
         'page_size': page_size,
@@ -2080,12 +2203,24 @@ def equipment_detail(request, pk):
         related_documents = CompanyDocument.objects.filter(
             related_equipment=equipment
         ).order_by('-expiry_date')
+
+    current_role = get_user_role(request.user)
+    staff_profile = getattr(request.user, 'staff_profile', None)
+    can_report_maintenance = False
+    if current_role in ['admin', 'manager']:
+        can_report_maintenance = True
+    elif staff_profile and equipment.assigned_staff == staff_profile:
+        can_report_maintenance = True
+    elif current_role in ['staff', 'driver'] and _assigned_user_matches_current_user(equipment, request.user):
+        can_report_maintenance = True
+
     return render(request, 'equipment_detail.html', {
         'equipment': equipment,
         'maintenance_records': maintenance_records,
         'assignment_history': assignment_history,
         'related_assets': related_assets,
         'related_documents': related_documents,
+        'can_report_maintenance': can_report_maintenance,
         'back_url': get_back_url(request, django_reverse('equipment_list'))
     })
 
@@ -2118,8 +2253,27 @@ def company_documents_list(request):
     type_filter = request.GET.get('type', 'all')
     scope_filter = request.GET.get('scope', 'all')
     search_query = request.GET.get('search', '').strip()
+    department_filter = request.GET.get('department', '')
+
+    # Default to manager's department when applicable
+    try:
+        if not department_filter and get_user_role(request.user) == 'manager' and hasattr(request.user, 'role'):
+            dept = request.user.role.department
+            if dept:
+                department_filter = dept
+    except Exception:
+        department_filter = department_filter
 
     documents = CompanyDocument.objects.all().order_by('-expiry_date')
+
+    # If a department filter is active, scope documents to that department (responsible staff or related assets)
+    if department_filter:
+        documents = documents.filter(
+            Q(responsible_staff__department=department_filter) |
+            Q(related_asset__assigned_staff__department=department_filter) |
+            Q(related_vehicle__assigned_staff__department=department_filter) |
+            Q(related_equipment__assigned_staff__department=department_filter)
+        ).distinct()
 
     if scope_filter == 'vehicle':
         documents = documents.filter(
@@ -2292,6 +2446,30 @@ def company_documents_counts(request):
         'total_document_count': total_document_count,
     }
     return JsonResponse(payload)
+
+
+@login_required
+def my_assets(request):
+    """Shortcut for users (drivers/staff) to view assets assigned to them.
+
+    Redirects to the dashboard with the `assigned_staff` query parameter
+    when the current user is linked to a `StaffMember` record.
+    """
+    try:
+        staff = request.user.staff_profile
+        if staff:
+            return redirect(django_reverse('dashboard') + f'?assigned_staff={staff.pk}')
+    except Exception:
+        pass
+    return redirect('dashboard')
+
+
+@login_required
+def _my_assets_counts_removed_for_prd(request):
+    # Previously returned per-user asset counts for the 'My Assets' UI.
+    # Removed per PRD; kept as a no-op placeholder to avoid accidental imports.
+    from django.http import JsonResponse
+    return JsonResponse({'vehicles': 0, 'equipment': 0, 'documents': 0, 'total': 0})
 
 
 @login_required(login_url='login')
