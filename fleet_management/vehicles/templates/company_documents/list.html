@@ -293,6 +293,7 @@
 {% block content %}
 {% include 'partials/back_to_dashboard.html' %}
 <div style="max-width:1200px; margin:0 auto; padding:20px;">
+    {% if is_manager %}
     <div style="display:flex; flex-direction:column; gap:16px; margin-bottom:24px;">
         <div style="display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px;">
             <div>
@@ -325,6 +326,15 @@
         </div>
     </div>
 
+    {% else %}
+    <div style="max-width:800px; margin:40px auto; padding:24px; background:#fff; border-radius:12px; box-shadow:0 8px 30px rgba(2,6,23,0.06); text-align:center;">
+        <h2 style="margin-bottom:12px;">Access restricted</h2>
+        <p style="color:#6b7280; margin-bottom:18px;">Company Documents are managed by users with Manager or Admin roles. If you believe you should have access, contact your manager or administrator.</p>
+        <a href="{% url 'dashboard' %}" class="btn btn-primary">Return to Dashboard</a>
+    </div>
+    {% endif %}
+
+    {% if is_manager %}
     {% comment %}Vehicle documents summary card (quick access) — shows vehicle document count{% endcomment %}
     <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:12px;">
         {% include 'partials/vehicle_documents_card.html' %}
@@ -500,7 +510,8 @@
         </ul>
     </nav>
     {% endif %}
-</div>
+    </div>
+    {% endif %}
 {% endblock %}
 
 {% block extra_scripts %}

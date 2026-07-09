@@ -74,6 +74,16 @@
                 <label>Assigned User</label>
                 <p>{{ equipment.assigned_to_display }}</p>
             </div>
+            {% if equipment.assigned_staff %}
+            <div class="detail-item">
+                <label>Assigned Department</label>
+                <p>{{ equipment.assigned_staff.department|default:'Unassigned' }}</p>
+            </div>
+            <div class="detail-item">
+                <label>Assigned Branch</label>
+                <p>{{ equipment.assigned_staff.branch|default:'Unassigned' }}</p>
+            </div>
+            {% endif %}
             {% endif %}
             {% if equipment.remarks %}
             <div class="detail-item">
@@ -149,7 +159,7 @@
 <div class="card-panel">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
         <h2 style="margin:0; color:#0F172A;">Linked Documents</h2>
-        {% if is_superuser %}
+        {% if is_admin %}
         <a href="{% url 'company_document_create' %}?related_equipment={{ equipment.pk }}&back_url={{ request.get_full_path|urlencode }}" class="button-inline" style="white-space:nowrap;">📄 Create Equipment Document</a>
         {% endif %}
     </div>
@@ -226,8 +236,12 @@
             <h2 style="margin:0; color:#0F172A;">Maintenance Records</h2>
             <p style="margin:8px 0 0; color:#64748B;">Track equipment maintenance, due dates, and costs.</p>
         </div>
-        {% if is_superuser %}
+        {% if is_admin %}
         <a href="{% url 'equipment_maintenance_create' equipment.pk %}" class="button-inline">+ Add Maintenance Record</a>
+        {% elif can_report_maintenance %}
+        <a href="{% url 'equipment_maintenance_create' equipment.pk %}" class="button-inline">🚨 Report Fault / Request Maintenance</a>
+        {% elif user_role == 'staff' or user_role == 'driver' %}
+        <p style="margin:0; color:#475569; font-size:0.95rem;">This equipment is not assigned to you, so escalation/reporting is unavailable here. Contact your manager to request access or assignment.</p>
         {% endif %}
     </div>
     <div class="table-card">
@@ -238,7 +252,7 @@
                     <th>Maintenance Date</th>
                     <th>Due Date</th>
                     <th>Cost</th>
-                    {% if is_superuser %}<th style="text-align:center;">Actions</th>{% endif %}
+                    {% if is_admin %}<th style="text-align:center;">Actions</th>{% endif %}
                 </tr>
             </thead>
             <tbody>
@@ -248,7 +262,7 @@
                     <td>{{ record.maintenance_date|date:"M d, Y" }}</td>
                     <td>{{ record.due_date|date:"M d, Y"|default:"N/A" }}</td>
                     <td>{{ record.cost|floatformat:2|default:"N/A" }}</td>
-                    {% if is_superuser %}
+                    {% if is_admin %}
                     <td style="text-align:center;">
                         <a href="{% url 'equipment_maintenance_update' record.pk %}" class="link">Edit</a>
                         <a href="{% url 'equipment_maintenance_delete' record.pk %}" class="link" style="margin-left:12px; color:#e74c3c;">Delete</a>
@@ -257,7 +271,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="{% if is_superuser %}5{% else %}4{% endif %}" style="text-align:center; color:#64748B; padding:24px;">No maintenance records found.</td>
+                    <td colspan="{% if is_admin %}5{% else %}4{% endif %}" style="text-align:center; color:#64748B; padding:24px;">No maintenance records found.</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -273,7 +287,17 @@
 <div class="actions-block">
     <a href="{% url 'equipment_transfer' equipment.pk %}" class="button-inline" style="background:#27ae60;">🔄 New Transfer</a>
     <a href="{% url 'equipment_transfer_history' equipment.pk %}" class="button-inline">📋 View Transfer History</a>
-    {% if is_superuser %}
+    {% if is_admin %}
+    <div style="display:inline-block; vertical-align:middle; margin-right:12px;">
+        <div class="release-warning">
+            <strong>Warning:</strong> Releasing will unassign the current staff and close the active assignment.
+        </div>
+        <form method="post" action="{% url 'equipment_release' equipment.pk %}" style="display:inline; margin-right:12px;">
+        {% csrf_token %}
+        <input type="hidden" name="back_url" value="{{ request.get_full_path }}">
+        <button type="submit" class="button-inline warning" onclick="return confirm('Release this equipment assignment? This will unassign the current staff.');">Release Assignment</button>
+    </form>
+    </div>
     <a href="{% url 'equipment_update' equipment.pk %}?back_url={{ request.get_full_path|urlencode }}" class="button-inline">Edit Equipment</a>
     <a href="{% url 'equipment_delete' equipment.pk %}?back_url={{ request.get_full_path|urlencode }}" class="button-inline" style="background:#e74c3c;">Delete Equipment</a>
     {% endif %}

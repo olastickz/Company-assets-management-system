@@ -559,12 +559,17 @@
 
     <div class="dashboard-topbar">
         <div class="dashboard-actions">
-            {% include 'partials/create_dropdown.html' %}
+            {% if is_admin %}
+                {% include 'partials/create_dropdown.html' %}
+            {% endif %}
             <a href="{% url 'dashboard' %}?asset_type=vehicles" class="action-btn secondary">🚗 View Vehicle Assets</a>
             <a href="{% url 'dashboard' %}?asset_type=equipment" class="action-btn secondary">🛠️ View Equipment</a>
-            <a href="{% url 'company_documents_list' %}" class="action-btn">📁 Documents</a>
+            {% if is_manager %}
+                <a href="{% url 'company_documents_list' %}" class="action-btn">📁 Documents</a>
+            {% endif %}
         </div>
 
+        {% if is_admin %}
         <details class="action-dropdown more">
             <summary class="action-btn secondary">More actions ▾</summary>
             <div class="more-menu">
@@ -575,6 +580,7 @@
                 <a href="{% url 'staff_list' %}">👥 View All Staff</a>
             </div>
         </details>
+        {% endif %}
     </div>
 
     <div class="kpi-grid">
@@ -596,6 +602,7 @@
             <p class="metric-label">Active vehicle assets</p>
         </a>
 
+        {% if is_manager %}
         <a href="{% url 'company_documents_list' %}" class="metric-card">
             <div class="metric-card-header">
                 <h3 class="metric-card-title">Documents</h3>
@@ -604,14 +611,17 @@
             <p class="metric-value">{{ document_count }}</p>
             <p class="metric-label">Tracked documents & certificates</p>
         </a>
+        {% endif %}
 
     </div>
 
     <div class="status-grid">
+        {% if is_manager %}
         <a href="{% url 'company_documents_list' %}" class="status-card secondary">
             <strong>{{ expiring_documents_count|default:'0' }} docs expiring soon</strong>
             <small>{{ recent_documents_count|default:'0' }} new documents in the last 30 days</small>
         </a>
+        {% endif %}
 
         <a href="{{ maintenance_list_url }}" class="status-card warning">
             <strong>{{ pending_maintenance_count|default:'0' }} items due soon</strong>
@@ -642,7 +652,8 @@
                 <path d="M8 21C8 18 10 16 12 16C14 16 16 18 16 21" stroke="#64748B" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
             <h3>No assets yet</h3>
-            <p>This workspace has no assets or documents yet. Get started by adding vehicle assets, equipment, or documents.</p>
+            <p>This workspace has no assets or documents yet. Contact your manager or administrator to add assets and documents.</p>
+            {% if is_admin %}
             <div class="empty-actions">
                 <a href="{% url 'asset_create' %}" class="action-btn">➕ Add Vehicle Asset</a>
                 <a href="{% url 'equipment_create' %}" class="action-btn">➕ Add Equipment</a>
@@ -651,6 +662,7 @@
                 <a href="{% url 'staff_list' %}" class="action-btn secondary">👥 View All Staff</a>
                 <a href="{% url 'bulk_upload_assets' %}" class="action-btn">📥 Import Assets</a>
             </div>
+            {% endif %}
         </div>
         {% elif total_assets == 0 %}
         <div class="empty-state-card">
@@ -662,7 +674,9 @@
             <p>Your filters returned no assets. Try clearing or relaxing filters.</p>
             <div class="empty-actions">
                 <a href="{% url 'dashboard' %}" class="action-btn">Clear filters</a>
+                {% if is_admin %}
                 <a href="{% url 'equipment_create' %}" class="action-btn">➕ Add Equipment</a>
+                {% endif %}
             </div>
         </div>
         {% endif %}
@@ -674,7 +688,9 @@
                     <option value="all"{% if asset_type == 'all' %} selected{% endif %}>All assets</option>
                     <option value="vehicles"{% if asset_type == 'vehicles' %} selected{% endif %}>Vehicle Assets</option>
                     <option value="equipment"{% if asset_type == 'equipment' %} selected{% endif %}>Equipment</option>
-                    <option value="documents"{% if asset_type == 'documents' %} selected{% endif %}>Documents</option>
+                    {% if is_manager %}
+                        <option value="documents"{% if asset_type == 'documents' %} selected{% endif %}>Documents</option>
+                    {% endif %}
                 </select>
                 <select name="sort_by">
                     <option value="expiry"{% if sort_by == 'expiry' %} selected{% endif %}>Sort by expiry</option>
@@ -687,6 +703,24 @@
                 </select>
             </div>
             <div class="filters-row">
+                <select name="assigned_staff">
+                    <option value="">All staff</option>
+                    {% for staff in staff_members %}
+                    <option value="{{ staff.id }}"{% if assigned_staff_id == staff.id|stringformat:"s" %} selected{% endif %}>{{ staff.staff_id }} — {{ staff.full_name }}{% if staff.branch %} ({{ staff.branch }}){% endif %}</option>
+                    {% endfor %}
+                </select>
+                <select name="department">
+                    <option value="">All departments</option>
+                    {% for option in department_options %}
+                    <option value="{{ option.value }}"{% if department_filter == option.value %} selected{% endif %}>{{ option.label }}</option>
+                    {% endfor %}
+                </select>
+                <select name="branch">
+                    <option value="">All branches</option>
+                    {% for option in branch_options %}
+                    <option value="{{ option.value }}"{% if branch_filter == option.value %} selected{% endif %}>{{ option.label }}</option>
+                    {% endfor %}
+                </select>
                 <select name="page_size">
                     <option value="10"{% if page_size == 10 %} selected{% endif %}>10 rows</option>
                     <option value="25"{% if page_size == 25 %} selected{% endif %}>25 rows</option>
