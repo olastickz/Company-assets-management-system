@@ -109,6 +109,274 @@ class ViewsTests(TestCase):
         self.assertContains(response, 'HR')
         self.assertContains(response, 'ABUJA')
 
+    def test_assigned_staff_can_report_equipment_maintenance(self):
+        driver = User.objects.create_user(username='driver4', password='dpass4')
+        staff = StaffMember.objects.create(
+            user=driver,
+            staff_id='DRV04',
+            first_name='Dan',
+            last_name='Miller',
+            department='FIELD',
+            branch='LAGOS',
+            is_active=True
+        )
+        UserRole.objects.create(user=driver, role='driver')
+        equipment = OfficeEquipment.objects.create(name='Assigned Projector', serial_number='PRJ001', assigned_staff=staff)
+
+        self.client.login(username='driver4', password='dpass4')
+        response = self.client.get(reverse('equipment_detail', args=[equipment.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Report Fault / Request Maintenance')
+        self.assertNotContains(response, '+ Add Maintenance Record')
+
+    def test_assigned_user_can_report_equipment_maintenance_via_username(self):
+        driver = User.objects.create_user(username='driver5', password='dpass5', first_name='Sam', last_name='Adams')
+        UserRole.objects.create(user=driver, role='driver')
+        equipment = OfficeEquipment.objects.create(
+            name='Assigned Projector',
+            serial_number='PRJ002',
+            assigned_user='driver5'
+        )
+
+        self.client.login(username='driver5', password='dpass5')
+        response = self.client.get(reverse('equipment_detail', args=[equipment.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Report Fault / Request Maintenance')
+        self.assertNotContains(response, '+ Add Maintenance Record')
+
+    def test_assigned_user_can_report_equipment_maintenance_via_full_name(self):
+        driver = User.objects.create_user(username='driver6', password='dpass6', first_name='Lina', last_name='Hart')
+        UserRole.objects.create(user=driver, role='driver')
+        equipment = OfficeEquipment.objects.create(
+            name='Assigned Mouse',
+            serial_number='MSH001',
+            assigned_user='Lina Hart'
+        )
+
+        self.client.login(username='driver6', password='dpass6')
+        response = self.client.get(reverse('equipment_detail', args=[equipment.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Report Fault / Request Maintenance')
+        self.assertNotContains(response, '+ Add Maintenance Record')
+
+    def test_non_admin_document_form_hides_quick_actions(self):
+        user = User.objects.create_user(username='staff2', password='spass2')
+        staff = StaffMember.objects.create(
+            user=user,
+            staff_id='STF008',
+            first_name='Jan',
+            last_name='Smith',
+            department='FIELD',
+            branch='ABUJA',
+            is_active=True
+        )
+        UserRole.objects.create(user=user, role='staff')
+
+        self.client.login(username='staff2', password='spass2')
+        response = self.client.get(reverse('company_document_create'))
+        self.assertEqual(response.status_code, 403)
+
+    def test_non_admin_staff_list_hides_add_staff_button(self):
+        user = User.objects.create_user(username='staff3', password='spass3')
+        staff = StaffMember.objects.create(
+            user=user,
+            staff_id='STF009',
+            first_name='Mia',
+            last_name='Jones',
+            department='FIELD',
+            branch='LAGOS',
+            is_active=True
+        )
+        UserRole.objects.create(user=user, role='staff')
+
+        self.client.login(username='staff3', password='spass3')
+        response = self.client.get(reverse('staff_list'))
+        self.assertEqual(response.status_code, 403)
+
+    def test_staff_dashboard_hides_admin_create_actions(self):
+        staff_user = User.objects.create_user(username='staff1', password='spass1')
+        staff = StaffMember.objects.create(
+            user=staff_user,
+            staff_id='STF007',
+            first_name='Sam',
+            last_name='Worker',
+            department='FIELD',
+            branch='LAGOS',
+            is_active=True
+        )
+        UserRole.objects.create(user=staff_user, role='staff')
+
+        self.client.login(username='staff1', password='spass1')
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Create New')
+        self.assertNotContains(response, 'Bulk Import Assets')
+        self.assertNotContains(response, 'Bulk Import Equipment')
+        self.assertNotContains(response, 'View All Staff')
+        self.assertNotContains(response, '➕ Add Vehicle Asset')
+        self.assertNotContains(response, '➕ Add Equipment')
+        self.assertNotContains(response, '📄 Add Document')
+        self.assertNotContains(response, '📥 Import Assets')
+        self.assertNotContains(response, 'My Assets')
+
+    def test_staff_dashboard_hides_document_navigation(self):
+        staff_user = User.objects.create_user(username='staff4', password='spass4')
+        StaffMember.objects.create(
+            user=staff_user,
+            staff_id='STF010',
+            first_name='Nina',
+            last_name='Lee',
+            department='FIELD',
+            branch='LAGOS',
+            is_active=True
+        )
+        UserRole.objects.create(user=staff_user, role='staff')
+
+        self.client.login(username='staff4', password='spass4')
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, '📁 Documents')
+        self.assertNotContains(response, reverse('company_documents_list'))
+
+    def test_staff_base_navigation_hides_documents_link(self):
+        staff_user = User.objects.create_user(username='staff5', password='spass5')
+        StaffMember.objects.create(
+            user=staff_user,
+            staff_id='STF011',
+            first_name='Nora',
+            last_name='Park',
+            department='FIELD',
+            branch='LAGOS',
+            is_active=True
+        )
+        UserRole.objects.create(user=staff_user, role='staff')
+
+        self.client.login(username='staff5', password='spass5')
+        response = self.client.get(reverse('equipment_list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Documents')
+        self.assertNotContains(response, reverse('company_documents_list'))
+
+    def test_staff_cannot_access_company_documents_list(self):
+        staff_user = User.objects.create_user(username='staff6', password='spass6')
+        StaffMember.objects.create(
+            user=staff_user,
+            staff_id='STF012',
+            first_name='Matt',
+            last_name='Green',
+            department='FIELD',
+            branch='LAGOS',
+            is_active=True
+        )
+        UserRole.objects.create(user=staff_user, role='staff')
+
+        self.client.login(username='staff6', password='spass6')
+        response = self.client.get(reverse('company_documents_list'))
+        self.assertEqual(response.status_code, 403)
+
+    def test_staff_cannot_access_company_documents_data(self):
+        staff_user = User.objects.create_user(username='staff7', password='spass7')
+        StaffMember.objects.create(
+            user=staff_user,
+            staff_id='STF013',
+            first_name='Ike',
+            last_name='Thomas',
+            department='FIELD',
+            branch='LAGOS',
+            is_active=True
+        )
+        UserRole.objects.create(user=staff_user, role='staff')
+
+        self.client.login(username='staff7', password='spass7')
+        response = self.client.get(reverse('company_documents_data'))
+        self.assertEqual(response.status_code, 403)
+
+    def test_staff_cannot_access_company_documents_counts(self):
+        staff_user = User.objects.create_user(username='staff8', password='spass8')
+        StaffMember.objects.create(
+            user=staff_user,
+            staff_id='STF014',
+            first_name='Zoe',
+            last_name='Wong',
+            department='FIELD',
+            branch='LAGOS',
+            is_active=True
+        )
+        UserRole.objects.create(user=staff_user, role='staff')
+
+        self.client.login(username='staff8', password='spass8')
+        response = self.client.get(reverse('company_documents_counts'))
+        self.assertEqual(response.status_code, 403)
+
+    def test_staff_cannot_create_company_document(self):
+        staff_user = User.objects.create_user(username='staff9', password='spass9')
+        StaffMember.objects.create(
+            user=staff_user,
+            staff_id='STF015',
+            first_name='Sam',
+            last_name='Taylor',
+            department='FIELD',
+            branch='LAGOS',
+            is_active=True
+        )
+        UserRole.objects.create(user=staff_user, role='staff')
+
+        self.client.login(username='staff9', password='spass9')
+        response = self.client.get(reverse('company_document_create'))
+        self.assertEqual(response.status_code, 403)
+
+        response = self.client.post(reverse('company_document_create'), {
+            'name': 'Staff Doc',
+            'document_type': 'policy',
+        })
+        self.assertEqual(response.status_code, 403)
+
+    def test_manager_cannot_create_company_document(self):
+        manager_user = User.objects.create_user(username='mgr2', password='mgrpass2')
+        StaffMember.objects.create(
+            user=manager_user,
+            staff_id='MGR002',
+            first_name='Mona',
+            last_name='Green',
+            department='FIELD',
+            branch='LAGOS',
+            is_active=True
+        )
+        UserRole.objects.create(user=manager_user, role='manager')
+
+        self.client.login(username='mgr2', password='mgrpass2')
+        response = self.client.get(reverse('company_document_create'))
+        self.assertEqual(response.status_code, 403)
+
+        response = self.client.post(reverse('company_document_create'), {
+            'name': 'Manager Doc',
+            'document_type': 'policy',
+        })
+        self.assertEqual(response.status_code, 403)
+
+    def test_staff_cannot_delete_company_document(self):
+        staff_user = User.objects.create_user(username='staff7', password='spass7')
+        StaffMember.objects.create(
+            user=staff_user,
+            staff_id='STF013',
+            first_name='Ike',
+            last_name='Thomas',
+            department='FIELD',
+            branch='LAGOS',
+            is_active=True
+        )
+        UserRole.objects.create(user=staff_user, role='staff')
+        document = CompanyDocument.objects.create(
+            name='Test Doc',
+            document_type='policy',
+            expiry_date=timezone.now().date() + timezone.timedelta(days=30),
+            created_by=self.user
+        )
+
+        self.client.login(username='staff7', password='spass7')
+        response = self.client.post(reverse('company_document_delete', args=[document.pk]))
+        self.assertEqual(response.status_code, 403)
+
     def test_dashboard_filters_by_assigned_staff_branch_and_department(self):
         staff1 = StaffMember.objects.create(
             staff_id='S001',
@@ -207,6 +475,90 @@ class ViewsTests(TestCase):
         equipment.refresh_from_db()
         self.assertIsNone(equipment.assigned_staff)
         self.assertIsNone(equipment.asset.assigned_staff)
+
+    def test_manager_dashboard_scoped_to_department(self):
+        # Create a manager with a department and two staff members in different depts
+        manager = User.objects.create_user(username='mgr', password='mgrpass')
+        UserRole.objects.create(user=manager, role='manager', department='HR')
+
+        staff_hr = StaffMember.objects.create(
+            staff_id='HR001', first_name='Helen', last_name='Ray', department='HR', branch='LAGOS', is_active=True
+        )
+        staff_it = StaffMember.objects.create(
+            staff_id='IT001', first_name='Ian', last_name='Curtis', department='ITECO', branch='ABUJA', is_active=True
+        )
+
+        Vehicle.objects.create(name='HR Car', license_plate='HRC01', assigned_staff=staff_hr)
+        Vehicle.objects.create(name='Other Car', license_plate='OTC01', assigned_staff=staff_it)
+
+        self.client.login(username='mgr', password='mgrpass')
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'HR Car')
+        self.assertNotContains(response, 'Other Car')
+
+    def test_driver_my_assets_redirects_to_dashboard(self):
+        driver = User.objects.create_user(username='driver1', password='dpass')
+        staff = StaffMember.objects.create(
+            user=driver, staff_id='DRV01', first_name='Dave', last_name='Driver', department='DRIVE', branch='LAGOS', is_active=True
+        )
+        UserRole.objects.create(user=driver, role='driver')
+        Vehicle.objects.create(name='Driver Car', license_plate='DRVC01', assigned_staff=staff)
+
+        self.client.login(username='driver1', password='dpass')
+        response = self.client.get(reverse('my_assets'), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Driver Car')
+
+    def test_driver_equipment_list_scopes_to_assigned_equipment(self):
+        driver = User.objects.create_user(username='driver3', password='dpass3')
+        staff = StaffMember.objects.create(
+            user=driver, staff_id='DRV03', first_name='Dana', last_name='Driver', department='DRIVE', branch='LAGOS', is_active=True
+        )
+        other_staff = StaffMember.objects.create(
+            staff_id='OTH02', first_name='Other', last_name='Member', department='HR', branch='ABUJA', is_active=True
+        )
+        UserRole.objects.create(user=driver, role='driver')
+        OfficeEquipment.objects.create(name='Assigned Tablet', serial_number='TAB001', assigned_staff=staff)
+        OfficeEquipment.objects.create(name='Other Printer', serial_number='PRT002', assigned_staff=other_staff)
+
+        self.client.login(username='driver3', password='dpass3')
+        response = self.client.get(reverse('equipment_list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Assigned Tablet')
+        self.assertNotContains(response, 'Other Printer')
+
+    def test_driver_dashboard_scopes_to_assigned_assets_and_documents(self):
+        driver = User.objects.create_user(username='driver2', password='dpass2')
+        staff = StaffMember.objects.create(
+            user=driver, staff_id='DRV02', first_name='Dora', last_name='Driver', department='DRIVE', branch='LAGOS', is_active=True
+        )
+        other_staff = StaffMember.objects.create(
+            staff_id='OTH01', first_name='Other', last_name='Staff', department='HR', branch='ABUJA', is_active=True
+        )
+        UserRole.objects.create(user=driver, role='driver')
+        Vehicle.objects.create(name='Assigned Car', license_plate='ASGD01', assigned_staff=staff)
+        OfficeEquipment.objects.create(name='Assigned Laptop', serial_number='LPT001', assigned_staff=staff)
+        CompanyDocument.objects.create(
+            name='Assigned Doc', document_type='contract', issue_date=timezone.now().date(), expiry_date=timezone.now().date() + timezone.timedelta(days=30), notify_days_before=15,
+            responsible_staff=staff
+        )
+        Vehicle.objects.create(name='Other Car', license_plate='OTHR01', assigned_staff=other_staff)
+        OfficeEquipment.objects.create(name='Other Equipment', serial_number='OTH002', assigned_staff=other_staff)
+        CompanyDocument.objects.create(
+            name='Other Doc', document_type='insurance', issue_date=timezone.now().date(), expiry_date=timezone.now().date() + timezone.timedelta(days=30), notify_days_before=15,
+            responsible_staff=other_staff
+        )
+
+        self.client.login(username='driver2', password='dpass2')
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Assigned Car')
+        self.assertContains(response, 'Assigned Laptop')
+        self.assertContains(response, 'Assigned Doc')
+        self.assertNotContains(response, 'Other Car')
+        self.assertNotContains(response, 'Other Equipment')
+        self.assertNotContains(response, 'Other Doc')
 
 
 class CompanyDocumentTests(TestCase):

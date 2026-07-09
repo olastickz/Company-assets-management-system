@@ -48,6 +48,7 @@ urlpatterns = [
     path('bulk-delete-assets/', views.bulk_delete_assets, name='bulk_delete_assets'),
     path('export-selected-assets/csv/', views.export_selected_assets_csv, name='export_selected_assets_csv'),
     path('activity/', views.activity_dashboard, name='activity_dashboard'),
+    path('my-assets/', views.my_assets, name='my_assets'),
     path('export/vehicles/csv/', views.export_vehicles_csv, name='export_vehicles_csv'),
     path('export/vehicles/xlsx/', views.export_vehicles_excel, name='export_vehicles_excel'),
     path('export/equipment/csv/', views.export_equipment_csv, name='export_equipment_csv'),

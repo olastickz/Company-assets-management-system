@@ -2400,7 +2400,7 @@ def company_documents_list(request):
     return render(request, 'company_documents/list.html', context)
 
 
-@login_required(login_url='login')
+@require_manager
 def company_documents_counts(request):
     """Return JSON payload of document counts used by frontend to refresh counts via AJAX."""
     from .models import Asset, AssetRelationship
@@ -2472,7 +2472,7 @@ def _my_assets_counts_removed_for_prd(request):
     return JsonResponse({'vehicles': 0, 'equipment': 0, 'documents': 0, 'total': 0})
 
 
-@login_required(login_url='login')
+@require_manager
 def company_documents_data(request):
     """Return JSON list of documents for current filters/pagination for frontend updates."""
     # Build queryset using similar filters as company_documents_list

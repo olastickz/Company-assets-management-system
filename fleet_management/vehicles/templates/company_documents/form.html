@@ -302,10 +302,12 @@
 <div class="doc-form-page">
     <a href="{{ back_url }}" class="back-btn">← Back</a>
 
+    {% if is_admin %}
     <div class="quick-actions">
         <a href="{% url 'equipment_create' %}">➕ Add Equipment</a>
         <a href="{% url 'staff_create' %}">➕ Add Staff</a>
     </div>
+    {% endif %}
 
     <p style="margin:0 0 18px; color:#475569;">Use the form below to link a document to an existing equipment item and assign a responsible staff member. Staff pickers now include branch and ID context so you can find the right contact faster.</p>
 

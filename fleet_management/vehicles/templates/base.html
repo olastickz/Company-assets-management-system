@@ -612,7 +612,7 @@
         }
     </style>
     {% load static %}
-    <link rel="stylesheet" href="{% static 'vehicles/css/dashboard_dropdown.css' %}?v=20260701">
+    <link rel="stylesheet" href="{% static 'vehicles/css/dashboard_dropdown.css' %}?v=20260705">
     <link rel="stylesheet" href="{% static 'vehicles/css/release_notice.css' %}">
     {% block extra_head %}{% endblock %}
 </head>
@@ -626,7 +626,9 @@
         <nav class="main-nav">
             <a href="{% url 'dashboard' %}">Dashboard</a>
             <a href="{% url 'equipment_list' %}">Equipment</a>
-            <a href="{% url 'company_documents_list' %}">Documents</a>
+            {% if is_manager %}
+                <a href="{% url 'company_documents_list' %}">Documents</a>
+            {% endif %}
         </nav>
         {% endif %}
         <div class="top-bar-right">

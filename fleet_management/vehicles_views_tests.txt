@@ -1,0 +1,107 @@
+C:\Users\USER\OneDrive\Desktop\Project for telnet\fleet_management\asset_management\settings.py:42: UserWarning: DEBUG is set to True. This should be False in production.
+  warnings.warn(
+Creating test database for alias 'default'...
+
+Found 30 test(s).
+Traceback (most recent call last):
+  File "C:\Users\USER\OneDrive\Desktop\Project for telnet\fleet_management\vehicles\apps.py", line 64, in setup_scheduler
+    print("\U0001f4c5 Scheduler using default time 10:00")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USER\AppData\Local\Python\pythoncore-3.14-64\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f4c5' in position 0: character maps to <undefined>
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\USER\OneDrive\Desktop\Project for telnet\fleet_management\manage.py", line 22, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\USER\OneDrive\Desktop\Project for telnet\fleet_management\manage.py", line 18, in main
+    execute_from_command_line(sys.argv)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\USER\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\core\management\__init__.py", line 443, in execute_from_command_line
+    utility.execute()
+    ~~~~~~~~~~~~~~~^^
+  File "C:\Users\USER\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\core\management\__init__.py", line 437, in execute
+    self.fetch_command(subcommand).run_from_argv(self.argv)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\USER\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\core\management\commands\test.py", line 24, in run_from_argv
+    super().run_from_argv(argv)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\USER\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\core\management\base.py", line 420, in run_from_argv
+    self.execute(*args, **cmd_options)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USER\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\core\management\base.py", line 464, in execute
+    output = self.handle(*args, **options)
+  File "C:\Users\USER\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\core\management\commands\test.py", line 63, in handle
+    failures = test_runner.run_tests(test_labels)
+  File "C:\Users\USER\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\test\runner.py", line 1127, in run_tests
+    old_config = self.setup_databases(
+        aliases=databases,
+        serialized_aliases=suite.serialized_aliases,
+    )
+  File "C:\Users\USER\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\test\runner.py", line 1026, in setup_databases
+    return _setup_databases(
+        self.verbosity,
+    ...<5 lines>...
+        **kwargs,
+    )
+  File "C:\Users\USER\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\test\utils.py", line 207, in setup_databases
+    connection.creation.create_test_db(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        verbosity=verbosity,
+        ^^^^^^^^^^^^^^^^^^^^
+        autoclobber=not interactive,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        keepdb=keepdb,
+        ^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\USER\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\db\backends\base\creation.py", line 85, in create_test_db
+    call_command(
+    ~~~~~~~~~~~~^
+        "migrate",
+        ^^^^^^^^^^
+    ...<3 lines>...
+        run_syncdb=True,
+        ^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\USER\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\core\management\__init__.py", line 195, in call_command
+    return command.execute(*args, **defaults)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USER\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\core\management\base.py", line 464, in execute
+    output = self.handle(*args, **options)
+  File "C:\Users\USER\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\core\management\base.py", line 111, in wrapper
+    res = handle_func(*args, **kwargs)
+  File "C:\Users\USER\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\core\management\commands\migrate.py", line 381, in handle
+    emit_post_migrate_signal(
+    ~~~~~~~~~~~~~~~~~~~~~~~~^
+        self.verbosity,
+        ^^^^^^^^^^^^^^^
+    ...<4 lines>...
+        plan=plan,
+        ^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\USER\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\core\management\sql.py", line 52, in emit_post_migrate_signal
+    models.signals.post_migrate.send(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        sender=app_config,
+        ^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    )
+    ^
+  File "C:\Users\USER\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\django\dispatch\dispatcher.py", line 209, in send
+    response = receiver(signal=self, sender=sender, **named)
+  File "C:\Users\USER\OneDrive\Desktop\Project for telnet\fleet_management\vehicles\apps.py", line 69, in setup_scheduler
+    print(f"\U0001f4c5 Scheduler fallback to 10:00 due to: {e}")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USER\AppData\Local\Python\pythoncore-3.14-64\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f4c5' in position 0: character maps to <undefined>

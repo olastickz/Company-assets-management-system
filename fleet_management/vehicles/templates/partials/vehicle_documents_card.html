@@ -1,4 +1,5 @@
 {% comment %}Summary card showing total vehicle asset documents and a quick link to vehicle scope{% endcomment %}
+{% if is_admin or is_manager or can_create_company_document %}
 <a href="{% url 'company_documents_list' %}?scope=vehicle{% if scope_query_string %}&{{ scope_query_string }}{% endif %}" class="doc-stat-card total" style="text-decoration:none; display:inline-flex; align-items:center; gap:12px;" title="View Vehicle Asset Documents">
     <div>
         <h4 style="color:white;">Vehicle Asset Documents</h4>
@@ -6,3 +7,4 @@
     </div>
     <span class="card-icon">🚗</span>
 </a>
+{% endif %}
