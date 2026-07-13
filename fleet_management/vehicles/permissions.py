@@ -38,6 +38,61 @@ def is_driver(user):
     return get_user_role(user) == 'driver'
 
 
+def can_view_company_documents(user):
+    """Managers and admins can view the company documents workspace."""
+    return is_manager(user)
+
+
+def can_create_company_documents(user):
+    """Only administrators can create company documents."""
+    return is_admin(user)
+
+
+def can_edit_company_documents(user):
+    """Managers and admins can update company document metadata."""
+    return is_manager(user)
+
+
+def can_delete_company_documents(user):
+    """Managers and admins can delete company documents through the existing management flow."""
+    return is_manager(user)
+
+
+def can_access_admin_tools(user):
+    """Admin-only tools such as staff management, bulk imports, and exports."""
+    return is_admin(user)
+
+
+def can_manage_staff(user):
+    """Staff directory and staff-management surfaces are restricted to administrators."""
+    return is_admin(user)
+
+
+def can_create_assets(user):
+    """Asset creation is an administrator-only workflow."""
+    return is_admin(user)
+
+
+def can_create_equipment(user):
+    """Equipment creation is an administrator-only workflow."""
+    return is_admin(user)
+
+
+def can_bulk_import_assets(user):
+    """Bulk asset import remains an administrator-only capability."""
+    return is_admin(user)
+
+
+def can_bulk_import_equipment(user):
+    """Bulk equipment import remains an administrator-only capability."""
+    return is_admin(user)
+
+
+def can_export_assets(user):
+    """CSV and Excel exports are administrator-only operational tools."""
+    return is_admin(user)
+
+
 def is_staff(user):
     """Check if user is staff or higher"""
     role = get_user_role(user)

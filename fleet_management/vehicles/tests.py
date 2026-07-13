@@ -238,6 +238,44 @@ class ViewsTests(TestCase):
         self.assertNotContains(response, '📁 Documents')
         self.assertNotContains(response, reverse('company_documents_list'))
 
+    def test_staff_dashboard_uses_assigned_work_queue_heading(self):
+        staff_user = User.objects.create_user(username='staff_heading', password='spass_heading')
+        StaffMember.objects.create(
+            user=staff_user,
+            staff_id='STF011',
+            first_name='Laura',
+            last_name='Miles',
+            department='FIELD',
+            branch='LAGOS',
+            is_active=True
+        )
+        UserRole.objects.create(user=staff_user, role='staff')
+
+        self.client.login(username='staff_heading', password='spass_heading')
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Assigned Work Queue')
+        self.assertContains(response, 'View only the assets assigned to you')
+
+    def test_driver_dashboard_uses_assigned_work_queue_heading(self):
+        driver = User.objects.create_user(username='driver_heading', password='dpass_heading')
+        StaffMember.objects.create(
+            user=driver,
+            staff_id='DRV05',
+            first_name='James',
+            last_name='Ford',
+            department='FIELD',
+            branch='ABUJA',
+            is_active=True
+        )
+        UserRole.objects.create(user=driver, role='driver')
+
+        self.client.login(username='driver_heading', password='dpass_heading')
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Assigned Work Queue')
+        self.assertContains(response, 'View only the assets assigned to you')
+
     def test_staff_base_navigation_hides_documents_link(self):
         staff_user = User.objects.create_user(username='staff5', password='spass5')
         StaffMember.objects.create(
@@ -353,6 +391,26 @@ class ViewsTests(TestCase):
             'document_type': 'policy',
         })
         self.assertEqual(response.status_code, 403)
+
+    def test_company_document_capability_flags_are_exposed_in_context(self):
+        manager_user = User.objects.create_user(username='mgr3', password='mgrpass3')
+        StaffMember.objects.create(
+            user=manager_user,
+            staff_id='MGR003',
+            first_name='Mina',
+            last_name='Stone',
+            department='FIELD',
+            branch='LAGOS',
+            is_active=True
+        )
+        UserRole.objects.create(user=manager_user, role='manager')
+
+        self.client.login(username='mgr3', password='mgrpass3')
+        response = self.client.get(reverse('company_documents_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context['can_view_company_documents'])
+        self.assertFalse(response.context['can_create_company_documents'])
 
     def test_staff_cannot_delete_company_document(self):
         staff_user = User.objects.create_user(username='staff7', password='spass7')
@@ -527,6 +585,19 @@ class ViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Assigned Tablet')
         self.assertNotContains(response, 'Other Printer')
+
+    def test_driver_without_staff_profile_sees_no_unscoped_equipment(self):
+        driver = User.objects.create_user(username='driver_no_profile', password='dpass_np')
+        UserRole.objects.create(user=driver, role='driver')
+        OfficeEquipment.objects.create(name='Company Printer', serial_number='CPR001', assigned_user='someone_else', equipment_type='printer', regional_office='Lagos')
+
+        self.client.login(username='driver_no_profile', password='dpass_np')
+        response = self.client.get(reverse('equipment_list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Company Printer')
+        self.assertEqual(response.context['total_equipment'], 0)
+        self.assertEqual(response.context['regional_office_counts']['Lagos'], 0)
+        self.assertEqual(response.context['equipment_type_counts']['printer'], 0)
 
     def test_driver_dashboard_scopes_to_assigned_assets_and_documents(self):
         driver = User.objects.create_user(username='driver2', password='dpass2')

@@ -25,7 +25,9 @@ logger = logging.getLogger(__name__)
 from .forms import CompanyAssetForm, VehicleForm, MaintenanceItemForm, OfficeEquipmentForm, OfficeEquipmentMaintenanceForm, EquipmentTransferForm, CompanyDocumentForm, StaffMemberForm
 from .permissions import (
     require_admin, require_manager, is_admin, is_manager, is_driver,
-    get_user_role, log_audit, get_client_ip
+    get_user_role, log_audit, get_client_ip,
+    can_view_company_documents, can_create_company_documents,
+    can_edit_company_documents, can_delete_company_documents,
 )
 
 
@@ -1835,8 +1837,11 @@ def equipment_list(request):
     equipments = OfficeEquipment.objects.all()
     current_role = get_user_role(request.user)
     staff_profile = getattr(request.user, 'staff_profile', None)
-    if current_role in ['staff', 'driver'] and staff_profile is not None:
-        equipments = equipments.filter(assigned_staff=staff_profile)
+    if current_role in ['staff', 'driver']:
+        if staff_profile is not None:
+            equipments = equipments.filter(assigned_staff=staff_profile)
+        else:
+            equipments = OfficeEquipment.objects.none()
     elif department_filter:
         equipments = equipments.filter(assigned_staff__department=department_filter)
 
@@ -1964,7 +1969,7 @@ def equipment_list(request):
     damaged_count = equipments.filter(status='damaged').count()
     unassigned_count = equipments.filter(Q(assigned_user__isnull=True) | Q(assigned_user='')).count()
     regional_offices = [choice[0] for choice in OfficeEquipment.REGIONAL_OFFICE_CHOICES]
-    regional_office_counts = {office: OfficeEquipment.objects.filter(regional_office=office).count() for office in regional_offices}
+    regional_office_counts = {office: equipments.filter(regional_office=office).count() for office in regional_offices}
     equipment_types = OfficeEquipment.EQUIPMENT_TYPE_CHOICES
     subsidiaries = [choice[0] for choice in OfficeEquipment.SUBSIDIARY_CHOICES if choice[0]]
 
@@ -1981,9 +1986,9 @@ def equipment_list(request):
         for choice in OfficeEquipment.EQUIPMENT_TYPE_CHOICES
     ]
 
-    # Equipment type counts for cards (always show total counts, not filtered counts)
+    # Equipment-type counts for the visible scoped inventory.
     equipment_type_counts = {
-        choice[0]: OfficeEquipment.objects.filter(equipment_type=choice[0]).count()
+        choice[0]: equipments.filter(equipment_type=choice[0]).count()
         for choice in OfficeEquipment.EQUIPMENT_TYPE_CHOICES
     }
 
@@ -2092,6 +2097,14 @@ def equipment_list_filtered(request, **filters):
         page_size = 25
 
     equipments = OfficeEquipment.objects.filter(**filters)
+    current_role = get_user_role(request.user)
+    staff_profile = getattr(request.user, 'staff_profile', None)
+
+    if current_role in ['staff', 'driver']:
+        if staff_profile is not None:
+            equipments = equipments.filter(assigned_staff=staff_profile)
+        else:
+            equipments = OfficeEquipment.objects.none()
 
     # Apply additional filters
     if search_query:
@@ -2140,7 +2153,7 @@ def equipment_list_filtered(request, **filters):
     damaged_count = equipments.filter(status='damaged').count()
     unassigned_count = equipments.filter(Q(assigned_user__isnull=True) | Q(assigned_user='')).count()
     regional_offices = [choice[0] for choice in OfficeEquipment.REGIONAL_OFFICE_CHOICES]
-    regional_office_counts = {office: OfficeEquipment.objects.filter(regional_office=office).count() for office in regional_offices}
+    regional_office_counts = {office: equipments.filter(regional_office=office).count() for office in regional_offices}
     equipment_types = OfficeEquipment.EQUIPMENT_TYPE_CHOICES
     subsidiaries = [choice[0] for choice in OfficeEquipment.SUBSIDIARY_CHOICES if choice[0]]
 
@@ -2390,7 +2403,11 @@ def company_documents_list(request):
         'expiring_count': expiring_count,
         'safe_count': safe_count,
         'document_type_choices': CompanyDocument.DOCUMENT_TYPE_CHOICES,
-        'can_create_company_document': is_admin(request.user),
+        'can_view_company_documents': can_view_company_documents(request.user),
+        'can_create_company_documents': can_create_company_documents(request.user),
+        'can_edit_company_documents': can_edit_company_documents(request.user),
+        'can_delete_company_documents': can_delete_company_documents(request.user),
+        'can_create_company_document': can_create_company_documents(request.user),
         'preserved_query_string': preserved_query_string,
         'status_query_string': status_query_string,
         'scope_query_string': scope_query_string,

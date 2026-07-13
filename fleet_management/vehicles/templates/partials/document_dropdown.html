@@ -1,4 +1,4 @@
-{% if is_admin %}
+{% if can_create_company_documents %}
 <div class="action-dropdown" style="position:relative; display:inline-block;">
     <button id="documentCreateDropdownBtn" type="button" class="action-btn" aria-haspopup="true" aria-expanded="false">➕ Add Document ▾</button>
     <div id="documentCreateDropdownMenu" role="menu" aria-label="Document create menu" style="position:absolute; z-index:40; margin-top:8px; background:#ffffff; border:1px solid #e5e7eb; border-radius:8px; box-shadow:0 12px 30px rgba(15,23,42,0.08); min-width:220px; display:none;">

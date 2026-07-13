@@ -1,3 +1,4 @@
+{% if can_create_assets %}
 <div class="action-dropdown" style="position:relative; display:inline-block;">
     <button id="dashboardCreateDropdownBtn" type="button" class="action-btn" aria-haspopup="true" aria-expanded="false">➕ Create New ▾</button>
     <div id="dashboardCreateDropdownMenu" role="menu" aria-label="Create new menu" style="position:absolute; z-index:40; margin-top:8px; background:#ffffff; border:1px solid #e5e7eb; border-radius:8px; box-shadow:0 12px 30px rgba(15,23,42,0.08); min-width:220px; display:none;">
@@ -7,7 +8,7 @@
         <div class="submenu-wrapper" style="padding:6px 8px;">
             <button id="dashboardDocSubmenuBtn" type="button" style="display:flex; align-items:center; justify-content:space-between; width:100%; padding:8px 10px; background:transparent; border:none; cursor:pointer; font-weight:700; color:#0f172a;" aria-expanded="false">📄 New Document ▸</button>
             <div id="dashboardDocSubmenu" role="menu" aria-label="Document submenu" style="padding-left:8px; display:none;">
-                {% if is_admin %}
+                {% if can_create_company_documents %}
                 <a href="{% url 'company_document_create' %}?document_scope=vehicle" role="menuitem" tabindex="0" style="display:block; padding:8px 12px; color:#0f172a; text-decoration:none;">Vehicle Asset Document</a>
                 <a href="{% url 'company_document_create' %}?document_scope=company" role="menuitem" tabindex="0" style="display:block; padding:8px 12px; color:#0f172a; text-decoration:none;">Company Document</a>
                 {% endif %}
@@ -15,3 +16,4 @@
         </div>
     </div>
 </div>
+{% endif %}

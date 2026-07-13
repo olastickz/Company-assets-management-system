@@ -544,8 +544,13 @@
 <div class="dashboard-container">
     <div class="dashboard-header">
         <div>
-            <h1>Assets Dashboard</h1>
-            <p>Manage and track all company assets, equipment, and documents in one place.</p>
+            {% if user_role == 'staff' or user_role == 'driver' %}
+                <h1>Assigned Work Queue</h1>
+                <p>View only the assets assigned to you. This workspace is scoped for day-to-day task visibility and maintenance escalation.</p>
+            {% else %}
+                <h1>Assets Dashboard</h1>
+                <p>Manage and track all company assets, equipment, and documents in one place.</p>
+            {% endif %}
         </div>
         <form method="get" class="dashboard-search">
             <input name="search" type="search" value="{{ search_query }}" placeholder="Search name, VIN, make, model, or plate...">
@@ -559,25 +564,25 @@
 
     <div class="dashboard-topbar">
         <div class="dashboard-actions">
-            {% if is_admin %}
+            {% if can_create_assets %}
                 {% include 'partials/create_dropdown.html' %}
             {% endif %}
             <a href="{% url 'dashboard' %}?asset_type=vehicles" class="action-btn secondary">🚗 View Vehicle Assets</a>
             <a href="{% url 'dashboard' %}?asset_type=equipment" class="action-btn secondary">🛠️ View Equipment</a>
-            {% if is_manager %}
+            {% if can_view_company_documents %}
                 <a href="{% url 'company_documents_list' %}" class="action-btn">📁 Documents</a>
             {% endif %}
         </div>
 
-        {% if is_admin %}
+        {% if can_access_admin_tools %}
         <details class="action-dropdown more">
             <summary class="action-btn secondary">More actions ▾</summary>
             <div class="more-menu">
-                <a href="{% url 'bulk_upload_assets' %}">📥 Bulk Import Assets</a>
-                <a href="{% url 'bulk_upload_equipment' %}">📥 Bulk Import Equipment</a>
-                <a href="{% url 'export_vehicles_csv' %}">⬇️ Export Vehicle Assets CSV</a>
-                <a href="{% url 'export_equipment_csv' %}">⬇️ Export Equipment CSV</a>
-                <a href="{% url 'staff_list' %}">👥 View All Staff</a>
+                {% if can_bulk_import_assets %}<a href="{% url 'bulk_upload_assets' %}">📥 Bulk Import Assets</a>{% endif %}
+                {% if can_bulk_import_equipment %}<a href="{% url 'bulk_upload_equipment' %}">📥 Bulk Import Equipment</a>{% endif %}
+                {% if can_export_assets %}<a href="{% url 'export_vehicles_csv' %}">⬇️ Export Vehicle Assets CSV</a>{% endif %}
+                {% if can_export_assets %}<a href="{% url 'export_equipment_csv' %}">⬇️ Export Equipment CSV</a>{% endif %}
+                {% if can_manage_staff %}<a href="{% url 'staff_list' %}">👥 View All Staff</a>{% endif %}
             </div>
         </details>
         {% endif %}
@@ -602,7 +607,7 @@
             <p class="metric-label">Active vehicle assets</p>
         </a>
 
-        {% if is_manager %}
+        {% if can_view_company_documents %}
         <a href="{% url 'company_documents_list' %}" class="metric-card">
             <div class="metric-card-header">
                 <h3 class="metric-card-title">Documents</h3>
@@ -616,7 +621,7 @@
     </div>
 
     <div class="status-grid">
-        {% if is_manager %}
+        {% if can_view_company_documents %}
         <a href="{% url 'company_documents_list' %}" class="status-card secondary">
             <strong>{{ expiring_documents_count|default:'0' }} docs expiring soon</strong>
             <small>{{ recent_documents_count|default:'0' }} new documents in the last 30 days</small>
@@ -653,14 +658,14 @@
             </svg>
             <h3>No assets yet</h3>
             <p>This workspace has no assets or documents yet. Contact your manager or administrator to add assets and documents.</p>
-            {% if is_admin %}
+            {% if can_access_admin_tools %}
             <div class="empty-actions">
-                <a href="{% url 'asset_create' %}" class="action-btn">➕ Add Vehicle Asset</a>
-                <a href="{% url 'equipment_create' %}" class="action-btn">➕ Add Equipment</a>
-                <a href="{% url 'company_document_create' %}" class="action-btn">📄 Add Document</a>
-                <a href="{% url 'staff_create' %}" class="action-btn">➕ Add Staff</a>
-                <a href="{% url 'staff_list' %}" class="action-btn secondary">👥 View All Staff</a>
-                <a href="{% url 'bulk_upload_assets' %}" class="action-btn">📥 Import Assets</a>
+                {% if can_create_assets %}<a href="{% url 'asset_create' %}" class="action-btn">➕ Add Vehicle Asset</a>{% endif %}
+                {% if can_create_equipment %}<a href="{% url 'equipment_create' %}" class="action-btn">➕ Add Equipment</a>{% endif %}
+                {% if can_create_company_documents %}<a href="{% url 'company_document_create' %}" class="action-btn">📄 Add Document</a>{% endif %}
+                {% if can_manage_staff %}<a href="{% url 'staff_create' %}" class="action-btn">➕ Add Staff</a>{% endif %}
+                {% if can_manage_staff %}<a href="{% url 'staff_list' %}" class="action-btn secondary">👥 View All Staff</a>{% endif %}
+                {% if can_bulk_import_assets %}<a href="{% url 'bulk_upload_assets' %}" class="action-btn">📥 Import Assets</a>{% endif %}
             </div>
             {% endif %}
         </div>
@@ -674,7 +679,7 @@
             <p>Your filters returned no assets. Try clearing or relaxing filters.</p>
             <div class="empty-actions">
                 <a href="{% url 'dashboard' %}" class="action-btn">Clear filters</a>
-                {% if is_admin %}
+                {% if can_create_equipment %}
                 <a href="{% url 'equipment_create' %}" class="action-btn">➕ Add Equipment</a>
                 {% endif %}
             </div>
@@ -688,7 +693,7 @@
                     <option value="all"{% if asset_type == 'all' %} selected{% endif %}>All assets</option>
                     <option value="vehicles"{% if asset_type == 'vehicles' %} selected{% endif %}>Vehicle Assets</option>
                     <option value="equipment"{% if asset_type == 'equipment' %} selected{% endif %}>Equipment</option>
-                    {% if is_manager %}
+                    {% if can_view_company_documents %}
                         <option value="documents"{% if asset_type == 'documents' %} selected{% endif %}>Documents</option>
                     {% endif %}
                 </select>
