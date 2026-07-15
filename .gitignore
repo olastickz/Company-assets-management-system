@@ -21,6 +21,8 @@ fleet_management/my-new-project/
 __pycache__/
 *.py[cod]
 *.pyc
+*.pyo
+*.pyd
 
 # Static files
 staticfiles/
