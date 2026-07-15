@@ -24,11 +24,42 @@ SECRET_KEY = os.getenv('SECRET_KEY') or os.getenv('DJANGO_SECRET_KEY') or 'CHANG
 
 default_debug = 'False' if os.getenv('RENDER') else 'True'
 DEBUG = os.getenv('DEBUG', os.getenv('DJANGO_DEBUG', default_debug)).lower() in ('true', '1', 'yes', 'on')
+
+
+def _normalize_host(host):
+    host = host.strip()
+    if not host:
+        return ''
+    return host.replace('https://', '').replace('http://', '')
+
+
+def _normalize_origin(origin):
+    origin = origin.strip()
+    if not origin:
+        return ''
+    if origin.startswith('http://') or origin.startswith('https://'):
+        return origin
+    return f'https://{origin}'
+
+
 allowed_hosts = os.getenv('ALLOWED_HOSTS') or os.getenv('DJANGO_ALLOWED_HOSTS')
-if allowed_hosts:
-    ALLOWED_HOSTS = [host.strip() for host in allowed_hosts.split(',') if host.strip()]
+render_hostname = os.getenv('RENDER_EXTERNAL_HOSTNAME') or os.getenv('RENDER_HOSTNAME')
+default_hosts = ['localhost', '127.0.0.1']
+if render_hostname:
+    default_hosts.append(render_hostname)
 else:
-    ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'https://company-assets-management-system.onrender.com']
+    default_hosts.append('company-assets-management-system.onrender.com')
+
+if allowed_hosts:
+    ALLOWED_HOSTS = [_normalize_host(host) for host in allowed_hosts.split(',') if host.strip()]
+else:
+    ALLOWED_HOSTS = default_hosts
+
+CSRF_TRUSTED_ORIGINS = [_normalize_origin(origin) for origin in os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',') if origin.strip()]
+if render_hostname:
+    csrf_origin = f'https://{render_hostname}'
+    if csrf_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(csrf_origin)
 
 # ========================
 # Installed apps
