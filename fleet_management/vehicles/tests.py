@@ -2,7 +2,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.utils import timezone
-from .models import Asset, Vehicle, CompanyDocument, UserRole, StaffMember, OfficeEquipment
+from .models import Asset, Vehicle, CompanyDocument, UserRole, StaffMember, OfficeEquipment, DriverRequest
 
 
 class VehicleModelTests(TestCase):
@@ -238,6 +238,241 @@ class ViewsTests(TestCase):
         self.assertNotContains(response, '📁 Documents')
         self.assertNotContains(response, reverse('company_documents_list'))
 
+    def test_staff_dashboard_uses_assigned_work_queue_heading(self):
+        staff_user = User.objects.create_user(username='staff_heading', password='spass_heading')
+        StaffMember.objects.create(
+            user=staff_user,
+            staff_id='STF011',
+            first_name='Laura',
+            last_name='Miles',
+            department='FIELD',
+            branch='LAGOS',
+            is_active=True
+        )
+        UserRole.objects.create(user=staff_user, role='staff')
+
+        self.client.login(username='staff_heading', password='spass_heading')
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Assigned Work Queue')
+        self.assertContains(response, 'View only the assets assigned to you')
+
+    def test_driver_dashboard_uses_assigned_work_queue_heading(self):
+        driver = User.objects.create_user(username='driver_heading', password='dpass_heading')
+        StaffMember.objects.create(
+            user=driver,
+            staff_id='DRV05',
+            first_name='James',
+            last_name='Ford',
+            department='FIELD',
+            branch='ABUJA',
+            is_active=True
+        )
+        UserRole.objects.create(user=driver, role='driver')
+
+        self.client.login(username='driver_heading', password='dpass_heading')
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Assigned Work Queue')
+        self.assertContains(response, 'View only the assets assigned to you')
+
+    def test_staff_can_submit_driver_request(self):
+        staff_user = User.objects.create_user(username='staff_driver', password='spass_driver')
+        staff = StaffMember.objects.create(
+            user=staff_user,
+            staff_id='STF020',
+            first_name='Clara',
+            last_name='Oswald',
+            department='FIELD',
+            branch='LAGOS',
+            is_active=True
+        )
+        UserRole.objects.create(user=staff_user, role='staff')
+
+        self.client.login(username='staff_driver', password='spass_driver')
+        response = self.client.get(reverse('driver_request_create'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Request Driver Support')
+
+        response = self.client.post(reverse('driver_request_create'), {
+            'details': 'Need a driver for offsite inspection',
+            'preferred_date': timezone.now().date().isoformat(),
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(DriverRequest.objects.count(), 1)
+        request_obj = DriverRequest.objects.first()
+        self.assertEqual(request_obj.requested_by, staff)
+        self.assertEqual(request_obj.status, 'requested')
+
+    def test_manager_can_assign_driver_to_request(self):
+        manager_user = User.objects.create_user(username='manager_assign', password='mgrpass_assign')
+        manager_staff = StaffMember.objects.create(
+            user=manager_user,
+            staff_id='MGR010',
+            first_name='Peter',
+            last_name='Quill',
+            department='MANAGEMENT',
+            branch='ABUJA',
+            is_active=True
+        )
+        UserRole.objects.create(user=manager_user, role='manager')
+
+        driver_user = User.objects.create_user(username='driver_assign', password='dpass_assign')
+        driver_staff = StaffMember.objects.create(
+            user=driver_user,
+            staff_id='DRV07',
+            first_name='Maya',
+            last_name='Rossi',
+            department='FIELD',
+            branch='LAGOS',
+            driver_status='available',
+            is_active=True
+        )
+        UserRole.objects.create(user=driver_user, role='driver')
+
+        request_user = User.objects.create_user(username='staff_request', password='spass_request')
+        staff_request = StaffMember.objects.create(
+            user=request_user,
+            staff_id='STF021',
+            first_name='Hannah',
+            last_name='Baker',
+            department='FIELD',
+            branch='LAGOS',
+            is_active=True
+        )
+        UserRole.objects.create(user=request_user, role='staff')
+
+        driver_request = DriverRequest.objects.create(
+            requested_by=staff_request,
+            requester_user=request_user,
+            details='Transfer support needed',
+            status='requested'
+        )
+
+        self.client.login(username='manager_assign', password='mgrpass_assign')
+        response = self.client.post(reverse('driver_request_assign', args=[driver_request.pk]), {
+            'assigned_driver': driver_staff.pk,
+            'notes': 'Please arrive by 10 AM',
+        })
+        self.assertEqual(response.status_code, 302)
+
+        driver_request.refresh_from_db()
+        driver_staff.refresh_from_db()
+        self.assertEqual(driver_request.status, 'assigned')
+        self.assertEqual(driver_request.assigned_driver, driver_staff)
+        self.assertEqual(driver_staff.driver_status, 'unavailable')
+
+    def test_manager_can_reassign_driver_and_restore_previous_driver(self):
+        manager_user = User.objects.create_user(username='manager_reassign', password='mgrpass_reassign')
+        manager_staff = StaffMember.objects.create(
+            user=manager_user,
+            staff_id='MGR011',
+            first_name='Carol',
+            last_name='Marcus',
+            department='MANAGEMENT',
+            branch='ABUJA',
+            is_active=True
+        )
+        UserRole.objects.create(user=manager_user, role='manager')
+
+        original_driver_user = User.objects.create_user(username='driver_orig', password='dpass_orig')
+        original_driver = StaffMember.objects.create(
+            user=original_driver_user,
+            staff_id='DRV08',
+            first_name='Rory',
+            last_name='Williams',
+            department='FIELD',
+            branch='LAGOS',
+            driver_status='unavailable',
+            is_active=True
+        )
+        UserRole.objects.create(user=original_driver_user, role='driver')
+
+        new_driver_user = User.objects.create_user(username='driver_new', password='dpass_new')
+        new_driver = StaffMember.objects.create(
+            user=new_driver_user,
+            staff_id='DRV09',
+            first_name='Clara',
+            last_name='Oswald',
+            department='FIELD',
+            branch='LAGOS',
+            driver_status='available',
+            is_active=True
+        )
+        UserRole.objects.create(user=new_driver_user, role='driver')
+
+        request_user = User.objects.create_user(username='staff_reassign', password='spass_reassign')
+        staff_request = StaffMember.objects.create(
+            user=request_user,
+            staff_id='STF024',
+            first_name='Amy',
+            last_name='Pond',
+            department='FIELD',
+            branch='LAGOS',
+            is_active=True
+        )
+        UserRole.objects.create(user=request_user, role='staff')
+
+        driver_request = DriverRequest.objects.create(
+            requested_by=staff_request,
+            requester_user=request_user,
+            details='Urgent route support',
+            status='assigned',
+            assigned_driver=original_driver,
+            assigned_by=manager_user,
+            assigned_at=timezone.now(),
+        )
+
+        self.client.login(username='manager_reassign', password='mgrpass_reassign')
+        response = self.client.post(reverse('driver_request_assign', args=[driver_request.pk]), {
+            'assigned_driver': new_driver.pk,
+            'notes': 'Switching to a closer driver',
+        })
+        self.assertEqual(response.status_code, 302)
+
+        driver_request.refresh_from_db()
+        original_driver.refresh_from_db()
+        new_driver.refresh_from_db()
+        self.assertEqual(driver_request.assigned_driver, new_driver)
+        self.assertEqual(new_driver.driver_status, 'unavailable')
+        self.assertEqual(original_driver.driver_status, 'available')
+
+    def test_driver_request_detail_restricts_access_for_other_staff(self):
+        staff_request = User.objects.create_user(username='staff_owner', password='spass_owner')
+        staff_owner = StaffMember.objects.create(
+            user=staff_request,
+            staff_id='STF022',
+            first_name='Rita',
+            last_name='Hayworth',
+            department='FIELD',
+            branch='LAGOS',
+            is_active=True
+        )
+        UserRole.objects.create(user=staff_request, role='staff')
+
+        other_staff_user = User.objects.create_user(username='other_staff', password='spass_other')
+        StaffMember.objects.create(
+            user=other_staff_user,
+            staff_id='STF023',
+            first_name='Jack',
+            last_name='Shephard',
+            department='FIELD',
+            branch='LAGOS',
+            is_active=True
+        )
+        UserRole.objects.create(user=other_staff_user, role='staff')
+
+        driver_request = DriverRequest.objects.create(
+            requested_by=staff_owner,
+            requester_user=staff_request,
+            details='Need route support',
+            status='requested'
+        )
+
+        self.client.login(username='other_staff', password='spass_other')
+        response = self.client.get(reverse('driver_request_detail', args=[driver_request.pk]))
+        self.assertEqual(response.status_code, 403)
+
     def test_staff_base_navigation_hides_documents_link(self):
         staff_user = User.objects.create_user(username='staff5', password='spass5')
         StaffMember.objects.create(
@@ -353,6 +588,26 @@ class ViewsTests(TestCase):
             'document_type': 'policy',
         })
         self.assertEqual(response.status_code, 403)
+
+    def test_company_document_capability_flags_are_exposed_in_context(self):
+        manager_user = User.objects.create_user(username='mgr3', password='mgrpass3')
+        StaffMember.objects.create(
+            user=manager_user,
+            staff_id='MGR003',
+            first_name='Mina',
+            last_name='Stone',
+            department='FIELD',
+            branch='LAGOS',
+            is_active=True
+        )
+        UserRole.objects.create(user=manager_user, role='manager')
+
+        self.client.login(username='mgr3', password='mgrpass3')
+        response = self.client.get(reverse('company_documents_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context['can_view_company_documents'])
+        self.assertFalse(response.context['can_create_company_documents'])
 
     def test_staff_cannot_delete_company_document(self):
         staff_user = User.objects.create_user(username='staff7', password='spass7')
@@ -476,8 +731,8 @@ class ViewsTests(TestCase):
         self.assertIsNone(equipment.assigned_staff)
         self.assertIsNone(equipment.asset.assigned_staff)
 
-    def test_manager_dashboard_scoped_to_department(self):
-        # Create a manager with a department and two staff members in different depts
+    def test_manager_dashboard_shows_all_departments(self):
+        # Managers should see all assets across departments by default
         manager = User.objects.create_user(username='mgr', password='mgrpass')
         UserRole.objects.create(user=manager, role='manager', department='HR')
 
@@ -495,7 +750,7 @@ class ViewsTests(TestCase):
         response = self.client.get(reverse('dashboard'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'HR Car')
-        self.assertNotContains(response, 'Other Car')
+        self.assertContains(response, 'Other Car')
 
     def test_driver_my_assets_redirects_to_dashboard(self):
         driver = User.objects.create_user(username='driver1', password='dpass')
@@ -527,6 +782,19 @@ class ViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Assigned Tablet')
         self.assertNotContains(response, 'Other Printer')
+
+    def test_driver_without_staff_profile_sees_no_unscoped_equipment(self):
+        driver = User.objects.create_user(username='driver_no_profile', password='dpass_np')
+        UserRole.objects.create(user=driver, role='driver')
+        OfficeEquipment.objects.create(name='Company Printer', serial_number='CPR001', assigned_user='someone_else', equipment_type='printer', regional_office='Lagos')
+
+        self.client.login(username='driver_no_profile', password='dpass_np')
+        response = self.client.get(reverse('equipment_list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Company Printer')
+        self.assertEqual(response.context['total_equipment'], 0)
+        self.assertEqual(response.context['regional_office_counts']['Lagos'], 0)
+        self.assertEqual(response.context['equipment_type_counts']['printer'], 0)
 
     def test_driver_dashboard_scopes_to_assigned_assets_and_documents(self):
         driver = User.objects.create_user(username='driver2', password='dpass2')

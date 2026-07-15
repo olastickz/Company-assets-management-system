@@ -19,6 +19,21 @@
             --table-hover: #f7f9fc;
             --card-shadow: rgba(0,0,0,.08);
         }
+        body {
+            margin: 0;
+            background: #f8faff;
+            color: #0F172A;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body, input, select, button, textarea {
+            font-family: inherit;
+        }
+
         .message { 
             margin:15px 0; 
             padding:12px 14px; 
@@ -624,9 +639,17 @@
         </div>
         {% if request.user.is_authenticated %}
         <nav class="main-nav">
-            <a href="{% url 'dashboard' %}">Dashboard</a>
-            <a href="{% url 'equipment_list' %}">Equipment</a>
-            {% if is_manager %}
+            {% if not is_driver and not is_staff_member %}
+                <a href="{% url 'dashboard' %}">Dashboard</a>
+                <a href="{% url 'equipment_list' %}">Equipment</a>
+            {% else %}
+                <!-- For staff/driver show only a minimal nav to relevant views -->
+                <a href="{% url 'dashboard' %}">Assigned Work</a>
+            {% endif %}
+            {% if can_request_driver %}
+                <a href="{% url 'driver_requests_list' %}">Driver Requests</a>
+            {% endif %}
+            {% if can_view_company_documents %}
                 <a href="{% url 'company_documents_list' %}">Documents</a>
             {% endif %}
         </nav>
@@ -637,7 +660,7 @@
             </button>
             {% if request.user.is_authenticated %}
             <span>Hi {{ request.user.username }}</span>
-            {% if is_admin %}
+            {% if can_access_admin_tools %}
             <a href="{% url 'admin:index' %}" style="color: var(--header-text); text-decoration:none; margin-left:14px; font-weight:600;">🔧 Admin</a>
             <span style="color: var(--header-text); margin-left:8px; margin-right:8px;">/</span>
             {% endif %}

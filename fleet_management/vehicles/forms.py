@@ -1,7 +1,7 @@
 from django import forms
 from django.core import validators
 from django.core.exceptions import ValidationError
-from .models import Asset, CompanyAsset, MaintenanceItem, OfficeEquipment, OfficeEquipmentMaintenance, CompanyDocument, StaffMember, Vehicle
+from .models import Asset, CompanyAsset, MaintenanceItem, OfficeEquipment, OfficeEquipmentMaintenance, CompanyDocument, StaffMember, Vehicle, DriverRequest
 
 # Year field removed - use `purchase_date` instead of separate year
 
@@ -232,6 +232,61 @@ class OfficeEquipmentMaintenanceForm(forms.ModelForm):
             'maintenance_date': forms.DateInput(attrs={'type': 'date'}),
             'due_date': forms.DateInput(attrs={'type': 'date'}),
         }
+
+
+class DriverRequestForm(forms.ModelForm):
+    preferred_date = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+        label='Preferred date for driver support'
+    )
+
+    class Meta:
+        model = DriverRequest
+        fields = ['details', 'preferred_date']
+        widgets = {
+            'details': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 4,
+                'placeholder': 'Describe the task, pickup location, destination, or support needed',
+            }),
+        }
+
+
+class DriverAssignmentForm(forms.ModelForm):
+    assigned_driver = forms.ModelChoiceField(
+        queryset=StaffMember.objects.filter(user__role__role='driver', driver_status='available', is_active=True).order_by('staff_id'),
+        required=True,
+        label='Available Driver',
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    notes = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 3,
+            'placeholder': 'Optional assignment notes or instructions',
+        }),
+        label='Assignment notes'
+    )
+
+    class Meta:
+        model = DriverRequest
+        fields = ['assigned_driver', 'notes']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        queryset = StaffMember.objects.filter(
+            user__role__role='driver',
+            driver_status='available',
+            is_active=True,
+        ).order_by('staff_id')
+
+        instance = kwargs.get('instance')
+        if instance and instance.assigned_driver is not None:
+            queryset = queryset | StaffMember.objects.filter(pk=instance.assigned_driver.pk)
+
+        self.fields['assigned_driver'].queryset = queryset.distinct().order_by('staff_id')
 
 
 class EquipmentTransferForm(forms.Form):

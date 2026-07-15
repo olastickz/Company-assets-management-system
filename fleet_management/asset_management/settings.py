@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
 
+import dj_database_url
+
 # Build paths inside the project
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -18,31 +20,15 @@ if ENV_PATH.exists():
             os.environ.setdefault(key.strip(), value.strip())
 
 # SECURITY
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
-if not SECRET_KEY:
-    import warnings
-    warnings.warn(
-        'DJANGO_SECRET_KEY is not set. For production, set the DJANGO_SECRET_KEY '
-        'environment variable to a secure random value.',
-        UserWarning
-    )
-    # Keep a fallback for local development only.
-    SECRET_KEY = 'CHANGE_THIS_IN_PRODUCTION_TO_A_SECURE_RANDOM_KEY'
+SECRET_KEY = os.getenv('SECRET_KEY') or os.getenv('DJANGO_SECRET_KEY') or 'CHANGE_THIS_IN_PRODUCTION_TO_A_SECURE_RANDOM_KEY'
 
-DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() in ('true', '1', 'yes')
-allowed_hosts = os.getenv('DJANGO_ALLOWED_HOSTS')
+default_debug = 'False' if os.getenv('RENDER') else 'True'
+DEBUG = os.getenv('DEBUG', os.getenv('DJANGO_DEBUG', default_debug)).lower() in ('true', '1', 'yes', 'on')
+allowed_hosts = os.getenv('ALLOWED_HOSTS') or os.getenv('DJANGO_ALLOWED_HOSTS')
 if allowed_hosts:
-    ALLOWED_HOSTS = allowed_hosts.split(',')
+    ALLOWED_HOSTS = [host.strip() for host in allowed_hosts.split(',') if host.strip()]
 else:
-    ALLOWED_HOSTS = ['*']
-
-# Warn if DEBUG is True
-if DEBUG:
-    import warnings
-    warnings.warn(
-        'DEBUG is set to True. This should be False in production.',
-        UserWarning
-    )
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
 # ========================
 # Installed apps
@@ -77,6 +63,7 @@ REST_FRAMEWORK = {
 # ========================
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -111,15 +98,11 @@ WSGI_APPLICATION = 'asset_management.wsgi.application'
 # Database
 # ========================
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-        'ATOMIC_REQUESTS': False,  # Avoid holding locks during entire request
-        'CONN_MAX_AGE': 0,  # Close DB connections after each request to reduce contention
-        'OPTIONS': {
-            'timeout': 20,  # Wait up to 20 seconds for database lock
-        }
-    }
+    'default': dj_database_url.config(
+        default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
+        conn_max_age=0,
+        conn_health_checks=False,
+    )
 }
 
 # ========================
@@ -151,6 +134,7 @@ LOGIN_REDIRECT_URL = '/'
 # ========================
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # ========================
 # Default primary key
@@ -164,8 +148,8 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', 'topafgg@gmail.com')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', 'mbqn xqaw kozx roaj')
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
 # Expiry alert email configuration
@@ -199,14 +183,20 @@ SESSION_TIMEOUT_USER = 0  # Close on browser close
 # Security Settings (Production)
 # ========================
 # HTTPS Security (set to True in production)
-SECURE_SSL_REDIRECT = os.getenv('DJANGO_SECURE_SSL_REDIRECT', 'False').lower() in ('true', '1', 'yes')
+SECURE_SSL_REDIRECT = not DEBUG if os.getenv('DJANGO_SECURE_SSL_REDIRECT') is None else os.getenv('DJANGO_SECURE_SSL_REDIRECT', 'False').lower() in ('true', '1', 'yes')
 SECURE_HSTS_SECONDS = int(os.getenv('DJANGO_SECURE_HSTS_SECONDS', '0'))
 SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv('DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS', 'False').lower() in ('true', '1', 'yes')
 SECURE_HSTS_PRELOAD = os.getenv('DJANGO_SECURE_HSTS_PRELOAD', 'False').lower() in ('true', '1', 'yes')
 
-# Cookie Security
-SESSION_COOKIE_SECURE = os.getenv('DJANGO_SESSION_COOKIE_SECURE', 'False').lower() in ('true', '1', 'yes')
-CSRF_COOKIE_SECURE = os.getenv('DJANGO_CSRF_COOKIE_SECURE', 'False').lower() in ('true', '1', 'yes')
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+else:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'http')
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
 

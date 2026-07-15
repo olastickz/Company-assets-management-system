@@ -1,0 +1,4 @@
+C:\Users\USER\OneDrive\Desktop\Project for telnet\fleet_management\asset_management\settings.py:42: UserWarning: DEBUG is set to True. This should be False in production.
+  warnings.warn(
+Creating test database for alias 'default'...
+

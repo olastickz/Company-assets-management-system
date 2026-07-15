@@ -303,6 +303,16 @@ class StaffMember(models.Model):
         null=True,
         help_text='Primary Telnet branch'
     )
+    driver_status = models.CharField(
+        max_length=20,
+        choices=[
+            ('available', 'Available'),
+            ('unavailable', 'Unavailable'),
+            ('on_leave', 'On Leave'),
+        ],
+        default='available',
+        help_text='Driver availability status for assignment workflows'
+    )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -888,3 +898,67 @@ class CompanyDocument(models.Model):
         today = timezone.now().date()
         delta = self.expiry_date - today
         return delta.days
+
+
+class DriverRequest(models.Model):
+    STATUS_CHOICES = [
+        ('requested', 'Requested'),
+        ('assigned', 'Assigned'),
+        ('declined', 'Declined'),
+        ('cancelled', 'Cancelled'),
+        ('completed', 'Completed'),
+    ]
+
+    requested_by = models.ForeignKey(
+        'StaffMember',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='driver_requests',
+        help_text='Staff member who created the driver request'
+    )
+    requester_user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='driver_requests',
+        help_text='User who created the driver request'
+    )
+    details = models.TextField(blank=True, null=True)
+    preferred_date = models.DateField(blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='requested')
+    assigned_driver = models.ForeignKey(
+        'StaffMember',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_driver_requests',
+        help_text='Driver assigned to handle this request'
+    )
+    assigned_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='driver_requests_assigned',
+        help_text='Manager or admin who assigned the driver'
+    )
+    assigned_at = models.DateTimeField(blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Driver Request'
+        verbose_name_plural = 'Driver Requests'
+        indexes = [
+            models.Index(fields=['status']),
+            models.Index(fields=['requested_by']),
+            models.Index(fields=['assigned_driver']),
+        ]
+
+    def __str__(self):
+        requester = self.requested_by.full_name if self.requested_by else (self.requester_user.username if self.requester_user else 'Unknown')
+        return f"Driver request by {requester} ({self.get_status_display()})"

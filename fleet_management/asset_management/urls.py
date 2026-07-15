@@ -7,7 +7,7 @@ from django.views.generic import RedirectView
 from vehicles import views
 
 urlpatterns = [
-    path('favicon.ico', RedirectView.as_view(url='https://telnetng.com/_next/image?url=%2Fimages%2Ftelnet-logo-new.png&w=384&q=75', permanent=False)),
+    path('favicon.ico', RedirectView.as_view(url='https://telnetng.com/_next/image?url=%%2Fimages%%2Ftelnet-logo-new.png&w=384&q=75', permanent=False)),
     path('admin/', admin.site.urls),
     path('api/', include('vehicles.api_urls')),
 

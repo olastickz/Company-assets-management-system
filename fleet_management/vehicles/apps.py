@@ -1,6 +1,7 @@
 import sys
 
 from django.apps import AppConfig
+from django.conf import settings
 from django.db.models.signals import post_migrate, post_save
 from django.utils import timezone
 
@@ -15,9 +16,15 @@ class VehiclesConfig(AppConfig):
     def ready(self):
         from .models import EmailSchedule
 
+        if 'test' in sys.argv:
+            # Avoid scheduler startup during test runs to prevent SQLite locking.
+            return
+
         # Connect the scheduler setup to run after database migrations
-        post_migrate.connect(self.setup_scheduler, sender=self)
-        # Connect schedule updates
+        if 'runserver' in sys.argv:
+            post_migrate.connect(self.setup_scheduler, sender=self)
+
+        # Connect schedule updates when an EmailSchedule is saved
         post_save.connect(self.update_scheduler, sender=EmailSchedule)
 
         # Start the scheduler when Django is running as the development server.
@@ -56,17 +63,17 @@ class VehiclesConfig(AppConfig):
                 # Use the configured time
                 hour = schedule.schedule_time.hour
                 minute = schedule.schedule_time.minute
-                print(f"📅 Scheduler configured for {hour:02d}:{minute:02d}")
+                print(f"Scheduler configured for {hour:02d}:{minute:02d}")
             else:
                 # Default to 10:00 AM if not configured
                 hour = 10
                 minute = 0
-                print("📅 Scheduler using default time 10:00")
+                print("Scheduler using default time 10:00")
         except Exception as e:
             # Fallback to 10:00 AM if database not ready
             hour = 10
             minute = 0
-            print(f"📅 Scheduler fallback to 10:00 due to: {e}")
+            print(f"Scheduler fallback to 10:00 due to: {e}")
 
         # ⏰ Run every day at the configured time in the Django timezone
         scheduler.add_job(

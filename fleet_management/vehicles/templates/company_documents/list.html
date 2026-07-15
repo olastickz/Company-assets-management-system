@@ -5,6 +5,88 @@
 
 {% block extra_head %}
 <style>
+    body {
+        background: #f8faff;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        color: #0F172A;
+        margin: 0;
+    }
+
+    .document-shell {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 28px 20px 40px;
+    }
+
+    .document-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 18px;
+        flex-wrap: wrap;
+        padding: 24px 26px;
+        margin-bottom: 22px;
+        background: #ffffff;
+        border-radius: 20px;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        box-shadow: 0 4px 6px rgba(15, 23, 42, 0.05);
+    }
+
+    .document-header h1 {
+        margin: 0 0 8px;
+        font-size: 2.2rem;
+        font-weight: 700;
+        line-height: 1.2;
+        color: #0f172a;
+    }
+
+    .document-header p {
+        margin: 0;
+        color: #64748b;
+        font-size: 0.95rem;
+        line-height: 1.6;
+    }
+
+    .document-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        justify-content: flex-end;
+    }
+
+    .scope-pill-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 24px;
+    }
+
+    .scope-pill-group a {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 10px 14px;
+        border-radius: 999px;
+        border: 1px solid rgba(37, 99, 235, 0.2);
+        background: #ffffff;
+        color: #1e3a8a;
+        font-weight: 600;
+        text-decoration: none;
+        transition: all 0.2s ease;
+    }
+
+    .scope-pill-group a:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px rgba(37, 99, 235, 0.16);
+    }
+
+    .scope-pill-group a.active {
+        background: #2563eb;
+        border-color: #2563eb;
+        color: #ffffff;
+    }
+
     .doc-stat-card {
         flex: 1;
         min-width: 170px;
@@ -55,9 +137,10 @@
     .doc-filter-bar {
         background: #ffffff;
         padding: 18px 20px;
-        border-radius: 14px;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+        border-radius: 18px;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
         margin-bottom: 24px;
+        border: 1px solid rgba(15, 23, 42, 0.06);
     }
 
     .doc-filter-group a {
@@ -65,11 +148,17 @@
     }
 
     .doc-table thead th {
-        background: #2c3e50;
+        background: #1e3a8a;
         color: white;
         position: sticky;
         top: 0;
         z-index: 2;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+    }
+
+    .doc-table tbody tr {
+        transition: background 0.18s ease;
     }
 
     .doc-table tbody tr:hover {
@@ -292,38 +381,40 @@
 
 {% block content %}
 {% include 'partials/back_to_dashboard.html' %}
-<div style="max-width:1200px; margin:0 auto; padding:20px;">
-    {% if is_manager %}
-    <div style="display:flex; flex-direction:column; gap:16px; margin-bottom:24px;">
-        <div style="display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px;">
-            <div>
-                {% if scope_filter == 'vehicle' %}
-                    <h1 style="margin-bottom:8px;">🚗 Vehicle Asset Documents</h1>
-                    <p style="margin:0; color:#6b7280;">Track and manage asset document expiries.</p>
-                {% elif scope_filter == 'equipment' %}
-                    <h1 style="margin-bottom:8px;">🛠️ Equipment Documents</h1>
-                    <p style="margin:0; color:#6b7280;">Track and manage equipment document expiries.</p>
-                {% elif scope_filter == 'company' %}
-                    <h1 style="margin-bottom:8px;">📋 Company Documents</h1>
-                    <p style="margin:0; color:#6b7280;">Track and manage company-wide document expiries.</p>
-                {% else %}
-                    <h1 style="margin-bottom:8px;">📋 All Documents</h1>
-                    <p style="margin:0; color:#6b7280;">Track and manage all documents for company, vehicle assets, and equipment.</p>
-                {% endif %}
-            </div>
-            {% if can_create_company_document %}
-            <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:flex-end;">
-                {% include 'partials/document_dropdown.html' with back_url=request.get_full_path %}
-            </div>
+<div class="document-shell">
+    {% if can_view_company_documents %}
+    <div class="document-header">
+        <div>
+            {% if scope_filter == 'vehicle' %}
+                <h1>🚗 Vehicle Asset Documents</h1>
+                <p>Track and manage asset document expiries.</p>
+            {% elif scope_filter == 'equipment' %}
+                <h1>🛠️ Equipment Documents</h1>
+                <p>Track and manage equipment document expiries.</p>
+            {% elif scope_filter == 'company' %}
+                <h1>📋 Company Documents</h1>
+                <p>Track and manage company-wide document expiries.</p>
+            {% else %}
+                <h1>📋 All Documents</h1>
+                <p>Track and manage all documents for company, vehicle assets, and equipment.</p>
             {% endif %}
         </div>
-
-        <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
-            <a id="scope-all" href="{% url 'company_documents_list' %}?scope=all{% if scope_query_string %}&{{ scope_query_string }}{% endif %}" class="btn btn-outline-secondary {% if scope_filter == 'all' %}active{% endif %}">All Documents (<span id="count-all">{{ total_count }}</span>)</a>
-            <a id="scope-company" href="{% url 'company_documents_list' %}?scope=company{% if scope_query_string %}&{{ scope_query_string }}{% endif %}" class="btn btn-outline-secondary {% if scope_filter == 'company' %}active{% endif %}">Company (<span id="count-company">{{ company_document_count }}</span>)</a>
-            <a id="scope-vehicle" href="{% url 'company_documents_list' %}?scope=vehicle{% if scope_query_string %}&{{ scope_query_string }}{% endif %}" class="btn btn-outline-secondary {% if scope_filter == 'vehicle' %}active{% endif %}">Vehicle Asset Documents (<span id="count-vehicle">{{ vehicle_document_count }}</span>)</a>
-            <a id="scope-equipment" href="{% url 'company_documents_list' %}?scope=equipment{% if scope_query_string %}&{{ scope_query_string }}{% endif %}" class="btn btn-outline-secondary {% if scope_filter == 'equipment' %}active{% endif %}">Equipment (<span id="count-equipment">{{ equipment_document_count }}</span>)</a>
+        {% if can_create_company_documents %}
+        <div class="document-actions">
+            {% include 'partials/document_dropdown.html' with back_url=request.get_full_path %}
         </div>
+        {% else %}
+        <div style="padding:10px 12px; border-left:4px solid #f59e0b; background:#fff7ed; color:#9a5b00; border-radius:8px; font-size:14px;">
+            Document creation is restricted to administrators.
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="scope-pill-group">
+        <a id="scope-all" href="{% url 'company_documents_list' %}?scope=all{% if scope_query_string %}&{{ scope_query_string }}{% endif %}" class="{% if scope_filter == 'all' %}active{% endif %}">All Documents (<span id="count-all">{{ total_count }}</span>)</a>
+        <a id="scope-company" href="{% url 'company_documents_list' %}?scope=company{% if scope_query_string %}&{{ scope_query_string }}{% endif %}" class="{% if scope_filter == 'company' %}active{% endif %}">Company (<span id="count-company">{{ company_document_count }}</span>)</a>
+        <a id="scope-vehicle" href="{% url 'company_documents_list' %}?scope=vehicle{% if scope_query_string %}&{{ scope_query_string }}{% endif %}" class="{% if scope_filter == 'vehicle' %}active{% endif %}">Vehicle Asset Documents (<span id="count-vehicle">{{ vehicle_document_count }}</span>)</a>
+        <a id="scope-equipment" href="{% url 'company_documents_list' %}?scope=equipment{% if scope_query_string %}&{{ scope_query_string }}{% endif %}" class="{% if scope_filter == 'equipment' %}active{% endif %}">Equipment (<span id="count-equipment">{{ equipment_document_count }}</span>)</a>
     </div>
 
     {% else %}
@@ -334,7 +425,7 @@
     </div>
     {% endif %}
 
-    {% if is_manager %}
+    {% if can_view_company_documents %}
     {% comment %}Vehicle documents summary card (quick access) — shows vehicle document count{% endcomment %}
     <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:12px;">
         {% include 'partials/vehicle_documents_card.html' %}
@@ -474,7 +565,7 @@
                     <tr>
                         <td colspan="8" class="text-center doc-empty-state">
                             <p>No documents found.</p>
-                            {% if can_create_company_document %}
+                            {% if can_create_company_documents %}
                                 <a href="{% url 'company_document_create' %}?back_url={{ request.get_full_path|urlencode }}" class="btn btn-primary btn-sm">Create First Document</a>
                             {% endif %}
                         </td>

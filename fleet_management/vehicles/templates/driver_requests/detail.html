@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+
+{% block title %}Driver Request {{ driver_request.pk }} - Telnet Assets Management System{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Driver Request #{{ driver_request.pk }}</h1>
+        <p>Details for this support request and assignment status.</p>
+    </div>
+    <a class="button-inline" href="{% url 'driver_requests_list' %}">Back to list</a>
+</div>
+
+<div class="section-card">
+    <div class="detail-grid">
+        <div class="detail-card">
+            <h2>Requester</h2>
+            {% if driver_request.requested_by %}
+                <p>{{ driver_request.requested_by.full_name }}</p>
+                <p>{{ driver_request.requested_by.department }} / {{ driver_request.requested_by.branch }}</p>
+            {% else %}
+                <p>{{ driver_request.requester_user.username }}</p>
+                <p>User account: {{ driver_request.requester_user.username }}</p>
+            {% endif %}
+        </div>
+        <div class="detail-card">
+            <h2>Status</h2>
+            <p>{{ driver_request.get_status_display }}</p>
+            <p>Preferred date: {{ driver_request.preferred_date|default:'Not specified' }}</p>
+        </div>
+        <div class="detail-card">
+            <h2>Assigned driver</h2>
+            {% if driver_request.assigned_driver %}
+                <p>{{ driver_request.assigned_driver.full_name }}</p>
+            {% else %}
+                <p>Not assigned</p>
+            {% endif %}
+            <p>Assigned at: {{ driver_request.assigned_at|default:'N/A' }}</p>
+        </div>
+    </div>
+</div>
+
+<div class="section-card">
+    <h2>Request details</h2>
+    <p style="white-space: pre-wrap;">{{ driver_request.details|default:'No details provided' }}</p>
+    <h2>Assignment notes</h2>
+    <p style="white-space: pre-wrap;">{{ driver_request.notes|default:'No assignment notes yet' }}</p>
+</div>
+
+{% if assign_form %}
+<div class="section-card">
+    <h2>Assign driver</h2>
+    <form method="post" action="{% url 'driver_request_assign' driver_request.pk %}">
+        {% csrf_token %}
+        <div class="form-item">
+            {{ assign_form.assigned_driver.label_tag }}
+            {{ assign_form.assigned_driver }}
+            {% if assign_form.assigned_driver.errors %}
+                <div class="field-errors">{{ assign_form.assigned_driver.errors }}</div>
+            {% endif %}
+        </div>
+        <div class="form-item">
+            {{ assign_form.notes.label_tag }}
+            {{ assign_form.notes }}
+            {% if assign_form.notes.errors %}
+                <div class="field-errors">{{ assign_form.notes.errors }}</div>
+            {% endif %}
+        </div>
+        <div class="action-row">
+            <button type="submit" class="button-inline">Assign Driver</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+{% endblock %}
