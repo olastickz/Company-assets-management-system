@@ -6,6 +6,7 @@ fleet_management/.venv/
 fleet_management/db.sqlite3
 fleet_management/db.sqlite3-shm
 fleet_management/db.sqlite3-wal
+db.sqlite3
 
 # VS Code local settings
 .vscode/
