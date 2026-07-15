@@ -646,6 +646,9 @@
                 <!-- For staff/driver show only a minimal nav to relevant views -->
                 <a href="{% url 'dashboard' %}">Assigned Work</a>
             {% endif %}
+            {% if can_request_driver %}
+                <a href="{% url 'driver_requests_list' %}">Driver Requests</a>
+            {% endif %}
             {% if can_view_company_documents %}
                 <a href="{% url 'company_documents_list' %}">Documents</a>
             {% endif %}

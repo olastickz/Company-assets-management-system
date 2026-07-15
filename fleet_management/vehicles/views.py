@@ -18,16 +18,17 @@ import logging
 from openpyxl import Workbook
 import uuid
 from urllib.parse import urlencode, urlparse, parse_qs
-from .models import CompanyAsset, Vehicle, MaintenanceItem, OfficeEquipment, OfficeEquipmentMaintenance, AuditLog, CompanyDocument, EquipmentTransfer, StaffMember, Asset, AssetRelationship
+from .models import CompanyAsset, Vehicle, MaintenanceItem, OfficeEquipment, OfficeEquipmentMaintenance, AuditLog, CompanyDocument, EquipmentTransfer, StaffMember, Asset, AssetRelationship, DriverRequest
 
 # Logger for application events
 logger = logging.getLogger(__name__)
-from .forms import CompanyAssetForm, VehicleForm, MaintenanceItemForm, OfficeEquipmentForm, OfficeEquipmentMaintenanceForm, EquipmentTransferForm, CompanyDocumentForm, StaffMemberForm
+from .forms import CompanyAssetForm, VehicleForm, MaintenanceItemForm, OfficeEquipmentForm, OfficeEquipmentMaintenanceForm, EquipmentTransferForm, CompanyDocumentForm, StaffMemberForm, DriverRequestForm, DriverAssignmentForm
 from .permissions import (
-    require_admin, require_manager, is_admin, is_manager, is_driver,
+    require_admin, require_manager, require_role, is_admin, is_manager, is_driver,
     get_user_role, log_audit, get_client_ip,
     can_view_company_documents, can_create_company_documents,
     can_edit_company_documents, can_delete_company_documents,
+    can_request_driver, can_assign_driver,
 )
 
 
@@ -270,17 +271,6 @@ def dashboard(request):
             vehicles = CompanyAsset.objects.none()
             equipments = OfficeEquipment.objects.none()
             documents = CompanyDocument.objects.none()
-
-    # If the current user is a Department Manager and no department filter
-    # was provided, default the view to their department for scoped visibility.
-    try:
-        if not department_filter and current_role == 'manager' and hasattr(request.user, 'role'):
-            dept = request.user.role.department
-            if dept:
-                department_filter = dept
-    except Exception:
-        # Fail closed to avoid breaking dashboard for anonymous or system users
-        department_filter = department_filter
 
     if assigned_staff_id and current_role not in ['staff', 'driver']:
         vehicles = vehicles.filter(assigned_staff_id=assigned_staff_id)
@@ -1809,15 +1799,7 @@ def equipment_list(request):
     sort_dir = request.GET.get('sort_dir', 'desc')
     page_num = request.GET.get('page', 1)
 
-    # Department scoping: default to manager's department when applicable
     department_filter = request.GET.get('department', '')
-    try:
-        if not department_filter and get_user_role(request.user) == 'manager' and hasattr(request.user, 'role'):
-            dept = request.user.role.department
-            if dept:
-                department_filter = dept
-    except Exception:
-        department_filter = department_filter
 
     # Advanced filters
     date_from = request.GET.get('date_from', '')
@@ -2268,15 +2250,6 @@ def company_documents_list(request):
     search_query = request.GET.get('search', '').strip()
     department_filter = request.GET.get('department', '')
 
-    # Default to manager's department when applicable
-    try:
-        if not department_filter and get_user_role(request.user) == 'manager' and hasattr(request.user, 'role'):
-            dept = request.user.role.department
-            if dept:
-                department_filter = dept
-    except Exception:
-        department_filter = department_filter
-
     documents = CompanyDocument.objects.all().order_by('-expiry_date')
 
     # If a department filter is active, scope documents to that department (responsible staff or related assets)
@@ -2479,6 +2452,149 @@ def my_assets(request):
     except Exception:
         pass
     return redirect('dashboard')
+
+
+def _get_available_drivers():
+    return StaffMember.objects.filter(
+        user__role__role='driver',
+        driver_status='available',
+        is_active=True,
+    ).order_by('staff_id')
+
+
+@login_required
+@require_role('staff', 'driver', 'manager', 'admin')
+def driver_requests_list(request):
+    """List driver requests for managers and the requesting staff/driver."""
+    current_role = get_user_role(request.user)
+    if current_role in ['manager', 'admin']:
+        requests_qs = DriverRequest.objects.all().order_by('-created_at')
+    else:
+        staff_profile = getattr(request.user, 'staff_profile', None)
+        if staff_profile is not None:
+            requests_qs = DriverRequest.objects.filter(
+                Q(requested_by=staff_profile) | Q(assigned_driver=staff_profile)
+            ).order_by('-created_at')
+        else:
+            requests_qs = DriverRequest.objects.none()
+
+    status_filter = request.GET.get('status', '')
+    if status_filter:
+        requests_qs = requests_qs.filter(status=status_filter)
+
+    page_num = request.GET.get('page', 1)
+    paginator = Paginator(requests_qs, 25)
+    try:
+        page_obj = paginator.page(page_num)
+    except (PageNotAnInteger, EmptyPage):
+        page_obj = paginator.page(1)
+
+    return render(request, 'driver_requests/list.html', {
+        'driver_requests': page_obj,
+        'status_filter': status_filter,
+        'page_obj': page_obj,
+    })
+
+
+@login_required
+@require_role('staff', 'driver', 'manager', 'admin')
+def driver_request_create(request):
+    staff_profile = getattr(request.user, 'staff_profile', None)
+    if request.method == 'POST':
+        form = DriverRequestForm(request.POST)
+        if form.is_valid():
+            driver_request = form.save(commit=False)
+            driver_request.requester_user = request.user
+            driver_request.requested_by = staff_profile
+            driver_request.status = 'requested'
+            driver_request.save()
+            log_audit(
+                request.user,
+                'create',
+                'driverrequest',
+                object_id=driver_request.pk,
+                description='Created driver request'
+            )
+            messages.success(request, 'Your driver request has been submitted.')
+            return redirect('driver_requests_list')
+    else:
+        form = DriverRequestForm()
+    return render(request, 'driver_requests/form.html', {
+        'form': form,
+        'action': 'Request Driver Support',
+    })
+
+
+@login_required
+@require_role('staff', 'driver', 'manager', 'admin')
+def driver_request_detail(request, pk):
+    driver_request = get_object_or_404(DriverRequest, pk=pk)
+    current_role = get_user_role(request.user)
+    staff_profile = getattr(request.user, 'staff_profile', None)
+
+    if not (
+        current_role in ['manager', 'admin'] or
+        driver_request.requester_user == request.user or
+        (driver_request.assigned_driver and driver_request.assigned_driver == staff_profile)
+    ):
+        return HttpResponseForbidden('Access denied')
+
+    assign_form = None
+    if can_assign_driver(request.user) and driver_request.status in ['requested', 'assigned']:
+        assign_form = DriverAssignmentForm(instance=driver_request)
+
+    return render(request, 'driver_requests/detail.html', {
+        'driver_request': driver_request,
+        'assign_form': assign_form,
+    })
+
+
+@login_required
+@require_manager
+def driver_request_assign(request, pk):
+    driver_request = get_object_or_404(DriverRequest, pk=pk)
+    if request.method != 'POST':
+        return redirect('driver_request_detail', pk=pk)
+
+    if driver_request.status == 'cancelled':
+        return HttpResponseForbidden('Cannot assign a cancelled request')
+
+    previous_driver_id = driver_request.assigned_driver_id
+    form = DriverAssignmentForm(request.POST, instance=driver_request)
+    if form.is_valid():
+        assigned_driver = form.cleaned_data['assigned_driver']
+        if assigned_driver.driver_status != 'available' and assigned_driver.pk != previous_driver_id:
+            return HttpResponseForbidden('Selected driver is not available')
+
+        driver_request = form.save(commit=False)
+        driver_request.status = 'assigned'
+        driver_request.assigned_by = request.user
+        driver_request.assigned_at = timezone.now()
+        driver_request.save()
+
+        if previous_driver_id and previous_driver_id != assigned_driver.pk:
+            previous_driver = StaffMember.objects.filter(pk=previous_driver_id).first()
+            if previous_driver:
+                previous_driver.driver_status = 'available'
+                previous_driver.save(update_fields=['driver_status'])
+
+        assigned_driver.driver_status = 'unavailable'
+        assigned_driver.save(update_fields=['driver_status'])
+
+        log_audit(
+            request.user,
+            'update',
+            'driverrequest',
+            object_id=driver_request.pk,
+            description=f'Assigned driver {assigned_driver} to request'
+        )
+        messages.success(request, 'Driver has been assigned to the request.')
+        return redirect('driver_request_detail', pk=pk)
+
+    return render(request, 'driver_requests/detail.html', {
+        'driver_request': driver_request,
+        'assign_form': form,
+    })
 
 
 @login_required

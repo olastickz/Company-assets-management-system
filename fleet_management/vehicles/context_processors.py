@@ -7,6 +7,8 @@ from .permissions import (
     can_create_company_documents,
     can_edit_company_documents,
     can_delete_company_documents,
+    can_request_driver,
+    can_assign_driver,
     can_access_admin_tools,
     can_manage_staff,
     can_create_assets,
@@ -36,6 +38,8 @@ def user_roles(request):
             'can_bulk_import_assets': False,
             'can_bulk_import_equipment': False,
             'can_export_assets': False,
+            'can_request_driver': False,
+            'can_assign_driver': False,
             'can_create_company_document': False,
         }
 
@@ -58,5 +62,7 @@ def user_roles(request):
         'can_bulk_import_assets': can_bulk_import_assets(request.user),
         'can_bulk_import_equipment': can_bulk_import_equipment(request.user),
         'can_export_assets': can_export_assets(request.user),
+        'can_request_driver': can_request_driver(request.user),
+        'can_assign_driver': can_assign_driver(request.user),
         'can_create_company_document': can_create_company_documents(request.user),
     }

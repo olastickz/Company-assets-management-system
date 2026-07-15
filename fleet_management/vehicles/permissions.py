@@ -58,6 +58,16 @@ def can_delete_company_documents(user):
     return is_manager(user)
 
 
+def can_request_driver(user):
+    """Drivers, staff, and managers can request driver assignment support."""
+    return get_user_role(user) in ['driver', 'staff', 'manager']
+
+
+def can_assign_driver(user):
+    """Only managers and admins can assign drivers to requests."""
+    return is_manager(user)
+
+
 def can_access_admin_tools(user):
     """Admin-only tools such as staff management, bulk imports, and exports."""
     return is_admin(user)
