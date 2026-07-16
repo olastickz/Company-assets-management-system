@@ -119,7 +119,11 @@ class CompanyAsset(models.Model):
             return 'safe'
 
 
-Vehicle = CompanyAsset
+class Vehicle(CompanyAsset):
+    class Meta:
+        proxy = True
+        verbose_name = 'Vehicle'
+        verbose_name_plural = 'Vehicles'
 
 
 class MaintenanceItem(models.Model):

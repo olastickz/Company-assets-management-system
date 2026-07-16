@@ -17,7 +17,11 @@ if ENV_PATH.exists():
             if '=' not in line:
                 continue
             key, value = line.split('=', 1)
-            os.environ.setdefault(key.strip(), value.strip())
+            key = key.strip()
+            value = value.strip()
+            if not key or not value:
+                continue
+            os.environ.setdefault(key, value)
 
 # SECURITY
 SECRET_KEY = os.getenv('SECRET_KEY') or os.getenv('DJANGO_SECRET_KEY') or 'CHANGE_THIS_IN_PRODUCTION_TO_A_SECURE_RANDOM_KEY'

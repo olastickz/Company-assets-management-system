@@ -20,6 +20,10 @@ class VehiclesConfig(AppConfig):
             # Avoid scheduler startup during test runs to prevent SQLite locking.
             return
 
+        # Make sure the legacy `vehicles.vehicle` content type and permissions exist
+        # for old fixture payloads that still reference `Vehicle` by its historical model name.
+        post_migrate.connect(self.ensure_legacy_vehicle_permissions, sender=self)
+
         # Connect the scheduler setup to run after database migrations
         if 'runserver' in sys.argv:
             post_migrate.connect(self.setup_scheduler, sender=self)
@@ -30,6 +34,29 @@ class VehiclesConfig(AppConfig):
         # Start the scheduler when Django is running as the development server.
         if 'runserver' in sys.argv:
             self.setup_scheduler()
+
+    def ensure_legacy_vehicle_permissions(self, **kwargs):
+        from django.contrib.auth.models import Permission
+        from django.contrib.contenttypes.models import ContentType
+
+        vehicle_content_type, _ = ContentType.objects.get_or_create(
+            app_label='vehicles',
+            model='vehicle',
+        )
+
+        legacy_permissions = {
+            'add_vehicle': 'Can add vehicle',
+            'change_vehicle': 'Can change vehicle',
+            'delete_vehicle': 'Can delete vehicle',
+            'view_vehicle': 'Can view vehicle',
+        }
+
+        for codename, name in legacy_permissions.items():
+            Permission.objects.get_or_create(
+                content_type=vehicle_content_type,
+                codename=codename,
+                defaults={'name': name},
+            )
 
     def setup_scheduler(self, **kwargs):
         global scheduler
