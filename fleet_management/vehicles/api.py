@@ -7,7 +7,7 @@ from .models import Vehicle, OfficeEquipment
 from .serializers import VehicleSerializer, OfficeEquipmentSerializer
 
 
-class VehicleViewSet(viewsets.ReadOnlyModelViewSet):
+class VehicleViewSet(viewsets.ModelViewSet):
     queryset = Vehicle.objects.all().order_by('-updated_at')
     serializer_class = VehicleSerializer
     permission_classes = [permissions.IsAuthenticated]
