@@ -13,7 +13,7 @@ class VehicleViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
 
-class OfficeEquipmentViewSet(viewsets.ReadOnlyModelViewSet):
+class OfficeEquipmentViewSet(viewsets.ModelViewSet):
     queryset = OfficeEquipment.objects.all().order_by('-updated_at')
     serializer_class = OfficeEquipmentSerializer
     permission_classes = [permissions.IsAuthenticated]
