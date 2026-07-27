@@ -256,16 +256,23 @@ def dashboard(request):
 
     current_role = get_user_role(request.user)
     staff_profile = getattr(request.user, 'staff_profile', None)
-    if current_role in ['staff', 'driver']:
+    if current_role == 'staff':
+        if staff_profile is not None:
+            assigned_staff_id = str(staff_profile.pk)
+            vehicles = vehicles.filter(assigned_staff=staff_profile)
+            equipments = equipments.filter(assigned_staff=staff_profile)
+        else:
+            vehicles = CompanyAsset.objects.none()
+            equipments = OfficeEquipment.objects.none()
+        documents = CompanyDocument.objects.none()
+    elif current_role == 'driver':
         if staff_profile is not None:
             assigned_staff_id = str(staff_profile.pk)
             vehicles = vehicles.filter(assigned_staff=staff_profile)
             equipments = equipments.filter(assigned_staff=staff_profile)
             documents = documents.filter(
-                Q(responsible_staff=staff_profile) |
-                Q(related_asset__assigned_staff=staff_profile) |
                 Q(related_vehicle__assigned_staff=staff_profile) |
-                Q(related_equipment__assigned_staff=staff_profile)
+                (Q(related_asset__assigned_staff=staff_profile) & Q(related_asset__asset_type='vehicle'))
             ).distinct()
         else:
             vehicles = CompanyAsset.objects.none()
@@ -859,6 +866,22 @@ def vehicle_detail(request, pk):
 
     current_role = get_user_role(request.user)
     staff_profile = getattr(request.user, 'staff_profile', None)
+    if current_role == 'staff':
+        related_documents = CompanyDocument.objects.none()
+    elif current_role == 'driver':
+        if staff_profile and vehicle.assigned_staff == staff_profile:
+            if vehicle.asset:
+                related_documents = CompanyDocument.objects.filter(
+                    Q(related_vehicle=vehicle) |
+                    Q(related_asset=vehicle.asset, related_asset__asset_type='vehicle')
+                ).distinct().order_by('-expiry_date')
+            else:
+                related_documents = CompanyDocument.objects.filter(
+                    related_vehicle=vehicle
+                ).order_by('-expiry_date')
+        else:
+            related_documents = CompanyDocument.objects.none()
+
     can_report_maintenance = False
     if current_role in ['admin', 'manager']:
         can_report_maintenance = True
@@ -2201,6 +2224,9 @@ def equipment_detail(request, pk):
 
     current_role = get_user_role(request.user)
     staff_profile = getattr(request.user, 'staff_profile', None)
+    if current_role in ['staff', 'driver']:
+        related_documents = CompanyDocument.objects.none()
+
     can_report_maintenance = False
     if current_role in ['admin', 'manager']:
         can_report_maintenance = True
@@ -2700,11 +2726,27 @@ def company_documents_data(request):
     })
 
 
+def _can_view_company_document(user, document):
+    current_role = get_user_role(user)
+    if current_role in ['admin', 'manager']:
+        return True
+    if current_role == 'driver':
+        staff_profile = getattr(user, 'staff_profile', None)
+        if not staff_profile:
+            return False
+        if document.related_vehicle and document.related_vehicle.assigned_staff == staff_profile:
+            return True
+        if document.related_asset and document.related_asset.asset_type == 'vehicle' and document.related_asset.assigned_staff == staff_profile:
+            return True
+    return False
+
 @login_required(login_url='login')
-@require_manager
 def company_document_detail(request, pk):
     """View detail of a single company document"""
     document = get_object_or_404(CompanyDocument, pk=pk)
+    if not _can_view_company_document(request.user, document):
+        return HttpResponseForbidden('Access denied')
+
     context = {
         'document': document,
         'back_url': get_back_url(request, django_reverse('company_documents_list'))
@@ -2886,7 +2928,7 @@ def staff_autocomplete(request):
 
 
 @login_required(login_url='login')
-@require_admin
+@require_manager
 def company_document_create(request):
     """Create a new company document"""
     related_vehicle_id = request.GET.get('related_vehicle')
@@ -2911,12 +2953,14 @@ def company_document_create(request):
             document = form.save(commit=False)
             document.created_by = request.user
             document.save()
-            
-            log_audit(request.user, 'create', 'companydocument', object_id=document.pk, 
+
+            log_audit(request.user, 'create', 'companydocument', object_id=document.pk,
                      description=f'Created document: {document.name}')
-            
+
             messages.success(request, f'Document "{document.name}" created successfully!')
             return redirect('company_document_detail', pk=document.pk)
+        else:
+            form = CompanyDocumentForm(request.POST)
     else:
         form = CompanyDocumentForm(initial=initial)
         back_url = request.GET.get('back_url') or get_back_url(request, django_reverse('company_documents_list'))
@@ -2944,12 +2988,14 @@ def company_document_edit(request, pk):
         back_url = request.POST.get('back_url') or get_back_url(request, django_reverse('company_document_detail', args=[pk]))
         if form.is_valid():
             form.save()
-            
-            log_audit(request.user, 'edit', 'companydocument', object_id=pk, 
+
+            log_audit(request.user, 'edit', 'companydocument', object_id=pk,
                      description=f'Updated document: {document.name}')
-            
+
             messages.success(request, f'Document "{document.name}" updated successfully!')
             return redirect('company_document_detail', pk=pk)
+        else:
+            form = CompanyDocumentForm(request.POST, instance=document)
     else:
         form = CompanyDocumentForm(instance=document)
         back_url = request.GET.get('back_url') or get_back_url(request, django_reverse('company_document_detail', args=[pk]))

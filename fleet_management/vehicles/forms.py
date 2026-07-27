@@ -434,9 +434,28 @@ class CompanyDocumentForm(forms.ModelForm):
         issue_date = cleaned_data.get('issue_date')
         expiry_date = cleaned_data.get('expiry_date')
         related_vehicle = cleaned_data.get('related_vehicle')
+        related_equipment = cleaned_data.get('related_equipment')
+        related_asset = cleaned_data.get('related_asset')
+        document_scope = self.data.get('document_scope', '').strip()
 
         if issue_date and expiry_date and expiry_date < issue_date:
             self.add_error('expiry_date', 'Expiry date must be after issue date')
+
+        if document_scope == 'vehicle' and not related_vehicle:
+            self.add_error('related_vehicle', 'Please select a vehicle asset for vehicle documents.')
+
+        if document_scope == 'equipment' and not related_equipment:
+            self.add_error('related_equipment', 'Please select an equipment item for equipment documents.')
+
+        if document_scope == 'company' and related_vehicle:
+            cleaned_data['related_vehicle'] = None
+        if document_scope == 'company' and related_equipment:
+            cleaned_data['related_equipment'] = None
+
+        if document_scope == 'company' and not related_asset and self.instance.pk is None:
+            cleaned_data['related_asset'] = None
+
+        return cleaned_data
 
         related_asset = cleaned_data.get('related_asset')
         related_equipment = cleaned_data.get('related_equipment')
