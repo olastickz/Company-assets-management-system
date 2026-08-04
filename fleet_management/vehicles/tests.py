@@ -42,6 +42,19 @@ class ViewsTests(TestCase):
         response = self.client.get(reverse('dashboard'))
         self.assertEqual(response.status_code, 302)
 
+    def test_api_endpoints_are_available(self):
+        self.client.login(username='testuser', password='testpass')
+
+        staff_response = self.client.get(reverse('staff-list'))
+        documents_response = self.client.get(reverse('documents-list'))
+        maintenance_response = self.client.get(reverse('equipment-maintenance-list'))
+        me_response = self.client.get(reverse('me'))
+
+        self.assertEqual(staff_response.status_code, 200)
+        self.assertEqual(documents_response.status_code, 200)
+        self.assertEqual(maintenance_response.status_code, 200)
+        self.assertEqual(me_response.status_code, 200)
+
     def test_dashboard_loads_with_login(self):
         self.client.login(username='testuser', password='testpass')
         response = self.client.get(reverse('dashboard'))
