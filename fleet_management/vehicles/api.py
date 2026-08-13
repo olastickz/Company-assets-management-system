@@ -189,6 +189,26 @@ def documents_api(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+@api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
+@permission_classes([permissions.IsAuthenticated])
+def document_detail_api(request, pk):
+    document = get_object_or_404(CompanyDocument, pk=pk)
+
+    if request.method == 'GET':
+        serializer = CompanyDocumentSerializer(document)
+        return Response(serializer.data)
+
+    if request.method in ['PUT', 'PATCH']:
+        serializer = CompanyDocumentSerializer(document, data=request.data, partial=(request.method == 'PATCH'))
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    document.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 @api_view(['GET', 'POST'])
 @permission_classes([permissions.IsAuthenticated])
 def equipment_maintenance_api(request):
@@ -202,6 +222,26 @@ def equipment_maintenance_api(request):
         serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
+@permission_classes([permissions.IsAuthenticated])
+def equipment_maintenance_detail_api(request, pk):
+    maintenance = get_object_or_404(OfficeEquipmentMaintenance, pk=pk)
+
+    if request.method == 'GET':
+        serializer = OfficeEquipmentMaintenanceSerializer(maintenance)
+        return Response(serializer.data)
+
+    if request.method in ['PUT', 'PATCH']:
+        serializer = OfficeEquipmentMaintenanceSerializer(maintenance, data=request.data, partial=(request.method == 'PATCH'))
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    maintenance.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @api_view(['GET'])

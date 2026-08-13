@@ -55,6 +55,10 @@ class ViewsTests(TestCase):
         self.assertEqual(maintenance_response.status_code, 200)
         self.assertEqual(me_response.status_code, 200)
 
+    def test_document_and_maintenance_detail_routes_exist(self):
+        self.assertEqual(reverse('documents-detail', args=[1]), '/api/documents/1/')
+        self.assertEqual(reverse('equipment-maintenance-detail', args=[1]), '/api/equipment-maintenance/1/')
+
     def test_dashboard_loads_with_login(self):
         self.client.login(username='testuser', password='testpass')
         response = self.client.get(reverse('dashboard'))
