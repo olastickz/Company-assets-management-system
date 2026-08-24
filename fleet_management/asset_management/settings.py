@@ -17,18 +17,51 @@ if ENV_PATH.exists():
             if '=' not in line:
                 continue
             key, value = line.split('=', 1)
-            os.environ.setdefault(key.strip(), value.strip())
+            key = key.strip()
+            value = value.strip()
+            if not key or not value:
+                continue
+            os.environ.setdefault(key, value)
 
 # SECURITY
 SECRET_KEY = os.getenv('SECRET_KEY') or os.getenv('DJANGO_SECRET_KEY') or 'CHANGE_THIS_IN_PRODUCTION_TO_A_SECURE_RANDOM_KEY'
 
 default_debug = 'False' if os.getenv('RENDER') else 'True'
 DEBUG = os.getenv('DEBUG', os.getenv('DJANGO_DEBUG', default_debug)).lower() in ('true', '1', 'yes', 'on')
+
+
+def _normalize_host(host):
+    host = host.strip()
+    if not host:
+        return ''
+    return host.replace('https://', '').replace('http://', '')
+
+
+def _normalize_origin(origin):
+    origin = origin.strip()
+    if not origin:
+        return ''
+    if origin.startswith('http://') or origin.startswith('https://'):
+        return origin
+    return f'https://{origin}'
+
+
 allowed_hosts = os.getenv('ALLOWED_HOSTS') or os.getenv('DJANGO_ALLOWED_HOSTS')
+render_hostname = os.getenv('RENDER_EXTERNAL_HOSTNAME') or os.getenv('RENDER_HOSTNAME')
+
+# Allow all hosts for development/testing
 if allowed_hosts:
-    ALLOWED_HOSTS = [host.strip() for host in allowed_hosts.split(',') if host.strip()]
+    ALLOWED_HOSTS = [_normalize_host(host) for host in allowed_hosts.split(',') if host.strip()]
 else:
-    ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+    ALLOWED_HOSTS = ['*']
+
+CSRF_TRUSTED_ORIGINS = [_normalize_origin(origin) for origin in os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',') if origin.strip()]
+if 'http://207.180.246.69:7038' not in CSRF_TRUSTED_ORIGINS:
+    CSRF_TRUSTED_ORIGINS.append('http://207.180.246.69:7038')
+if render_hostname:
+    csrf_origin = f'https://{render_hostname}'
+    if csrf_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(csrf_origin)
 
 # ========================
 # Installed apps
@@ -97,13 +130,23 @@ WSGI_APPLICATION = 'asset_management.wsgi.application'
 # ========================
 # Database
 # ========================
-DATABASES = {
-    'default': dj_database_url.config(
-        default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
-        conn_max_age=0,
-        conn_health_checks=False,
-    )
-}
+# Use SQLite for local development, PostgreSQL on Render only if DATABASE_URL is properly set
+if os.getenv('RENDER') and os.getenv('DATABASE_URL'):
+    # On Render with DATABASE_URL
+    DATABASES = {
+        'default': dj_database_url.config(
+            conn_max_age=0,
+            conn_health_checks=False,
+        )
+    }
+else:
+    # Local development: always use SQLite
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 # ========================
 # Password validation
@@ -190,12 +233,11 @@ SECURE_HSTS_PRELOAD = os.getenv('DJANGO_SECURE_HSTS_PRELOAD', 'False').lower() i
 
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
 else:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'http')
-    SESSION_COOKIE_SECURE = False
-    CSRF_COOKIE_SECURE = False
+
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
 
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True

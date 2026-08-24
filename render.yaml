@@ -4,7 +4,7 @@ services:
     runtime: python
     plan: free
     buildCommand: |
-      pip install -r root-requirements.txt
+      pip install -r requirements.txt
       cd fleet_management
       python manage.py collectstatic --noinput
       python manage.py migrate
@@ -17,6 +17,6 @@ services:
       - key: DEBUG
         value: "False"
       - key: ALLOWED_HOSTS
-        value: "localhost,127.0.0.1"
+        value: "localhost,127.0.0.1,207.180.246.69"
       - key: DATABASE_URL
         sync: false

@@ -42,6 +42,23 @@ class ViewsTests(TestCase):
         response = self.client.get(reverse('dashboard'))
         self.assertEqual(response.status_code, 302)
 
+    def test_api_endpoints_are_available(self):
+        self.client.login(username='testuser', password='testpass')
+
+        staff_response = self.client.get(reverse('staff-list'))
+        documents_response = self.client.get(reverse('documents-list'))
+        maintenance_response = self.client.get(reverse('equipment-maintenance-list'))
+        me_response = self.client.get(reverse('me'))
+
+        self.assertEqual(staff_response.status_code, 200)
+        self.assertEqual(documents_response.status_code, 200)
+        self.assertEqual(maintenance_response.status_code, 200)
+        self.assertEqual(me_response.status_code, 200)
+
+    def test_document_and_maintenance_detail_routes_exist(self):
+        self.assertEqual(reverse('documents-detail', args=[1]), '/api/documents/1/')
+        self.assertEqual(reverse('equipment-maintenance-detail', args=[1]), '/api/equipment-maintenance/1/')
+
     def test_dashboard_loads_with_login(self):
         self.client.login(username='testuser', password='testpass')
         response = self.client.get(reverse('dashboard'))
@@ -607,7 +624,7 @@ class ViewsTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.context['can_view_company_documents'])
-        self.assertFalse(response.context['can_create_company_documents'])
+        self.assertTrue(response.context['can_create_company_documents'])
 
     def test_staff_cannot_delete_company_document(self):
         staff_user = User.objects.create_user(username='staff7', password='spass7')
@@ -796,7 +813,7 @@ class ViewsTests(TestCase):
         self.assertEqual(response.context['regional_office_counts']['Lagos'], 0)
         self.assertEqual(response.context['equipment_type_counts']['printer'], 0)
 
-    def test_driver_dashboard_scopes_to_assigned_assets_and_documents(self):
+    def test_driver_dashboard_scopes_to_assigned_vehicle_documents_only(self):
         driver = User.objects.create_user(username='driver2', password='dpass2')
         staff = StaffMember.objects.create(
             user=driver, staff_id='DRV02', first_name='Dora', last_name='Driver', department='DRIVE', branch='LAGOS', is_active=True
@@ -805,17 +822,25 @@ class ViewsTests(TestCase):
             staff_id='OTH01', first_name='Other', last_name='Staff', department='HR', branch='ABUJA', is_active=True
         )
         UserRole.objects.create(user=driver, role='driver')
-        Vehicle.objects.create(name='Assigned Car', license_plate='ASGD01', assigned_staff=staff)
+        assigned_vehicle = Vehicle.objects.create(name='Assigned Car', license_plate='ASGD01', assigned_staff=staff)
         OfficeEquipment.objects.create(name='Assigned Laptop', serial_number='LPT001', assigned_staff=staff)
         CompanyDocument.objects.create(
-            name='Assigned Doc', document_type='contract', issue_date=timezone.now().date(), expiry_date=timezone.now().date() + timezone.timedelta(days=30), notify_days_before=15,
-            responsible_staff=staff
+            name='Assigned Vehicle Doc', document_type='contract', issue_date=timezone.now().date(), expiry_date=timezone.now().date() + timezone.timedelta(days=30), notify_days_before=15,
+            related_vehicle=assigned_vehicle
         )
-        Vehicle.objects.create(name='Other Car', license_plate='OTHR01', assigned_staff=other_staff)
-        OfficeEquipment.objects.create(name='Other Equipment', serial_number='OTH002', assigned_staff=other_staff)
+        other_vehicle = Vehicle.objects.create(name='Other Car', license_plate='OTHR01', assigned_staff=other_staff)
+        other_equipment = OfficeEquipment.objects.create(name='Other Equipment', serial_number='OTH002', assigned_staff=other_staff)
         CompanyDocument.objects.create(
-            name='Other Doc', document_type='insurance', issue_date=timezone.now().date(), expiry_date=timezone.now().date() + timezone.timedelta(days=30), notify_days_before=15,
+            name='Other Vehicle Doc', document_type='insurance', issue_date=timezone.now().date(), expiry_date=timezone.now().date() + timezone.timedelta(days=30), notify_days_before=15,
+            related_vehicle=other_vehicle
+        )
+        CompanyDocument.objects.create(
+            name='Other Responsible Doc', document_type='insurance', issue_date=timezone.now().date(), expiry_date=timezone.now().date() + timezone.timedelta(days=30), notify_days_before=15,
             responsible_staff=other_staff
+        )
+        CompanyDocument.objects.create(
+            name='Other Equipment Doc', document_type='insurance', issue_date=timezone.now().date(), expiry_date=timezone.now().date() + timezone.timedelta(days=30), notify_days_before=15,
+            related_equipment=other_equipment
         )
 
         self.client.login(username='driver2', password='dpass2')
@@ -823,10 +848,11 @@ class ViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Assigned Car')
         self.assertContains(response, 'Assigned Laptop')
-        self.assertContains(response, 'Assigned Doc')
+        self.assertContains(response, 'Assigned Vehicle Doc')
         self.assertNotContains(response, 'Other Car')
-        self.assertNotContains(response, 'Other Equipment')
-        self.assertNotContains(response, 'Other Doc')
+        self.assertNotContains(response, 'Other Vehicle Doc')
+        self.assertNotContains(response, 'Other Responsible Doc')
+        self.assertNotContains(response, 'Other Equipment Doc')
 
 
 class CompanyDocumentTests(TestCase):
@@ -835,6 +861,102 @@ class CompanyDocumentTests(TestCase):
         self.user = User.objects.create_user(username='docuser', password='docpass')
         self.user_role = UserRole.objects.create(user=self.user, role='manager')
         self.user.save()
+
+    def test_vehicle_scope_requires_related_vehicle(self):
+        self.client.login(username='docuser', password='docpass')
+        response = self.client.post(reverse('company_document_create'), {
+            'name': 'Missing Vehicle Link',
+            'document_type': 'insurance',
+            'issue_date': (timezone.now().date() - timezone.timedelta(days=30)).strftime('%Y-%m-%d'),
+            'expiry_date': (timezone.now().date() + timezone.timedelta(days=180)).strftime('%Y-%m-%d'),
+            'notify_days_before': '30',
+            'document_scope': 'vehicle',
+            'status': 'active',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        form = response.context['form']
+        self.assertIn('related_vehicle', form.errors)
+        self.assertIn('Please select a vehicle asset for vehicle documents.', form.errors['related_vehicle'])
+
+    def test_driver_can_view_assigned_vehicle_document_detail(self):
+        driver = User.objects.create_user(username='driver_doc', password='dpass_doc')
+        staff = StaffMember.objects.create(
+            user=driver,
+            staff_id='DRV10',
+            first_name='Derek',
+            last_name='Driver',
+            department='DRIVE',
+            branch='LAGOS',
+            is_active=True
+        )
+        UserRole.objects.create(user=driver, role='driver')
+        assigned_vehicle = Vehicle.objects.create(name='Assigned Detail Car', license_plate='ADOC01', assigned_staff=staff)
+        document = CompanyDocument.objects.create(
+            name='Driver Assigned Doc',
+            document_type='insurance',
+            issue_date=timezone.now().date(),
+            expiry_date=timezone.now().date() + timezone.timedelta(days=30),
+            notify_days_before=15,
+            related_vehicle=assigned_vehicle,
+        )
+
+        self.client.login(username='driver_doc', password='dpass_doc')
+        response = self.client.get(reverse('company_document_detail', args=[document.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Driver Assigned Doc')
+
+    def test_driver_cannot_view_other_vehicle_document_detail(self):
+        driver = User.objects.create_user(username='driver_doc2', password='dpass_doc2')
+        staff = StaffMember.objects.create(
+            user=driver,
+            staff_id='DRV11',
+            first_name='Drew',
+            last_name='Driver',
+            department='DRIVE',
+            branch='LAGOS',
+            is_active=True
+        )
+        UserRole.objects.create(user=driver, role='driver')
+        other_vehicle = Vehicle.objects.create(name='Other Detail Car', license_plate='ODOC01')
+        document = CompanyDocument.objects.create(
+            name='Other Vehicle Doc',
+            document_type='insurance',
+            issue_date=timezone.now().date(),
+            expiry_date=timezone.now().date() + timezone.timedelta(days=30),
+            notify_days_before=15,
+            related_vehicle=other_vehicle,
+        )
+
+        self.client.login(username='driver_doc2', password='dpass_doc2')
+        response = self.client.get(reverse('company_document_detail', args=[document.pk]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_staff_cannot_view_vehicle_document_detail(self):
+        staff_user = User.objects.create_user(username='staff_doc', password='spass_doc')
+        staff = StaffMember.objects.create(
+            user=staff_user,
+            staff_id='STF020',
+            first_name='Sam',
+            last_name='Staff',
+            department='FIELD',
+            branch='LAGOS',
+            is_active=True
+        )
+        UserRole.objects.create(user=staff_user, role='staff')
+        vehicle = Vehicle.objects.create(name='Staff Detail Car', license_plate='SDOC01', assigned_staff=staff)
+        document = CompanyDocument.objects.create(
+            name='Staff Assigned Doc',
+            document_type='insurance',
+            issue_date=timezone.now().date(),
+            expiry_date=timezone.now().date() + timezone.timedelta(days=30),
+            notify_days_before=15,
+            related_vehicle=vehicle,
+        )
+
+        self.client.login(username='staff_doc', password='spass_doc')
+        response = self.client.get(reverse('company_document_detail', args=[document.pk]))
+        self.assertEqual(response.status_code, 403)
 
     def test_get_status_returns_expired(self):
         document = CompanyDocument.objects.create(
