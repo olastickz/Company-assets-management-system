@@ -132,13 +132,23 @@ WSGI_APPLICATION = 'asset_management.wsgi.application'
 # ========================
 # Database
 # ========================
-DATABASES = {
-    'default': dj_database_url.config(
-        default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
-        conn_max_age=0,
-        conn_health_checks=False,
-    )
-}
+# Use SQLite for local development, PostgreSQL on Render only if DATABASE_URL is properly set
+if os.getenv('RENDER') and os.getenv('DATABASE_URL'):
+    # On Render with DATABASE_URL
+    DATABASES = {
+        'default': dj_database_url.config(
+            conn_max_age=0,
+            conn_health_checks=False,
+        )
+    }
+else:
+    # Local development: always use SQLite
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 # ========================
 # Password validation
