@@ -48,18 +48,16 @@ def _normalize_origin(origin):
 
 allowed_hosts = os.getenv('ALLOWED_HOSTS') or os.getenv('DJANGO_ALLOWED_HOSTS')
 render_hostname = os.getenv('RENDER_EXTERNAL_HOSTNAME') or os.getenv('RENDER_HOSTNAME')
-default_hosts = ['localhost', '127.0.0.1']
-if render_hostname:
-    default_hosts.append(render_hostname)
-else:
-    default_hosts.append('company-assets-management-system.onrender.com')
 
+# Allow all hosts for development/testing
 if allowed_hosts:
     ALLOWED_HOSTS = [_normalize_host(host) for host in allowed_hosts.split(',') if host.strip()]
 else:
-    ALLOWED_HOSTS = default_hosts
+    ALLOWED_HOSTS = ['*']
 
 CSRF_TRUSTED_ORIGINS = [_normalize_origin(origin) for origin in os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',') if origin.strip()]
+if 'http://207.180.246.69:7038' not in CSRF_TRUSTED_ORIGINS:
+    CSRF_TRUSTED_ORIGINS.append('http://207.180.246.69:7038')
 if render_hostname:
     csrf_origin = f'https://{render_hostname}'
     if csrf_origin not in CSRF_TRUSTED_ORIGINS:
@@ -235,12 +233,11 @@ SECURE_HSTS_PRELOAD = os.getenv('DJANGO_SECURE_HSTS_PRELOAD', 'False').lower() i
 
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
 else:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'http')
-    SESSION_COOKIE_SECURE = False
-    CSRF_COOKIE_SECURE = False
+
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
 
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True

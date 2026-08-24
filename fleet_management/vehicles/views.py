@@ -246,8 +246,9 @@ def dashboard(request):
     expiring_threshold = today + timedelta(days=alert_days)
 
     # Query vehicles (now CompanyAsset), equipment, and company documents
-    vehicles = CompanyAsset.objects.all().order_by('-updated_at')
-    equipments = OfficeEquipment.objects.all().order_by('-updated_at')
+    # Use select_related to avoid N+1 query problems
+    vehicles = CompanyAsset.objects.select_related('assigned_staff').all().order_by('-updated_at')
+    equipments = OfficeEquipment.objects.select_related('assigned_staff').all().order_by('-updated_at')
     documents = CompanyDocument.objects.all().order_by('-updated_at')
     staff_members = StaffMember.objects.filter(is_active=True).order_by('staff_id')
     assigned_staff_id = request.GET.get('assigned_staff', '')
