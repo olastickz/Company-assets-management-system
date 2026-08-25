@@ -7,7 +7,7 @@ from django.contrib.auth.forms import PasswordResetForm
 from django.contrib.auth.models import User
 from django.shortcuts import get_object_or_404
 from .models import Vehicle, OfficeEquipment, Asset, StaffMember, CompanyDocument, OfficeEquipmentMaintenance
-from .permissions import get_user_role
+from .permissions import get_user_role, is_admin
 from .serializers import (
     VehicleSerializer,
     OfficeEquipmentSerializer,
@@ -287,12 +287,18 @@ def export_equipment_csv_api(request):
 
 
 @api_view(['POST'])
+@authentication_classes([TokenAuthentication, BasicAuthentication])
 @permission_classes([permissions.IsAuthenticated])
 def bulk_upload_assets_api(request):
-    return views.bulk_upload_assets(request)
+    if not is_admin(request.user):
+        return Response({'detail': 'Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
+    return views.bulk_upload_assets.__wrapped__(request)
 
 
 @api_view(['POST'])
+@authentication_classes([TokenAuthentication, BasicAuthentication])
 @permission_classes([permissions.IsAuthenticated])
 def bulk_upload_equipment_api(request):
-    return views.bulk_upload_equipment(request)
+    if not is_admin(request.user):
+        return Response({'detail': 'Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
+    return views.bulk_upload_equipment.__wrapped__(request)

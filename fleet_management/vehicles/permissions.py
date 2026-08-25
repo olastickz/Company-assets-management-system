@@ -12,6 +12,8 @@ def get_user_role(user):
     """Get the role of a user, returns 'staff' if not set"""
     if not user.is_authenticated:
         return None
+    if user.is_superuser:
+        return 'admin'
     try:
         return user.role.role
     except UserRole.DoesNotExist:
