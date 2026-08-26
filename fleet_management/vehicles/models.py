@@ -798,6 +798,12 @@ class CompanyDocument(models.Model):
         help_text='Select an existing staff member responsible for this document'
     )
     notes = models.TextField(blank=True, null=True)
+    document_file = models.FileField(
+        upload_to='company_documents/',
+        blank=True,
+        null=True,
+        help_text='Optional uploaded document file'
+    )
 
     @property
     def responsible_display(self):

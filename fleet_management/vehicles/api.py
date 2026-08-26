@@ -1,5 +1,5 @@
-from rest_framework import viewsets, permissions, status
-from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework import parsers, viewsets, permissions, status
+from rest_framework.decorators import api_view, permission_classes, authentication_classes, parser_classes
 from rest_framework.authentication import BasicAuthentication, TokenAuthentication
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
@@ -178,6 +178,7 @@ def asset_history_api(request, pk):
 
 @api_view(['GET', 'POST'])
 @permission_classes([permissions.IsAuthenticated])
+@parser_classes([parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser])
 def documents_api(request):
     if request.method == 'GET':
         queryset = CompanyDocument.objects.all().order_by('-created_at')
