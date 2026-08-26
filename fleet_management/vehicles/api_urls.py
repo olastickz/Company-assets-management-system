@@ -4,11 +4,12 @@ from rest_framework.permissions import AllowAny
 from rest_framework.reverse import reverse
 from rest_framework.response import Response
 from rest_framework.routers import DefaultRouter
-from .api import VehicleViewSet, OfficeEquipmentViewSet, get_token
+from .api import CompanyDocumentViewSet, VehicleViewSet, OfficeEquipmentViewSet, get_token
 
 router = DefaultRouter()
 router.register(r'vehicles', VehicleViewSet, basename='vehicle')
 router.register(r'equipment', OfficeEquipmentViewSet, basename='equipment')
+router.register(r'documents', CompanyDocumentViewSet, basename='document')
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -16,6 +17,7 @@ def api_root(request, format=None):
     return Response({
         'vehicles': reverse('vehicle-list', request=request, format=format),
         'equipment': reverse('equipment-list', request=request, format=format),
+        'documents': reverse('document-list', request=request, format=format),
         'get-token': reverse('get-token', request=request, format=format),
     })
 

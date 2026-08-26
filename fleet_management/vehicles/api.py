@@ -1,10 +1,11 @@
-from rest_framework import viewsets, permissions, status
+from rest_framework import parsers, viewsets, permissions, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 from django.contrib.auth.models import User
 from .models import Vehicle, OfficeEquipment
-from .serializers import VehicleSerializer, OfficeEquipmentSerializer
+from .models import CompanyDocument
+from .serializers import CompanyDocumentSerializer, VehicleSerializer, OfficeEquipmentSerializer
 
 
 class VehicleViewSet(viewsets.ReadOnlyModelViewSet):
@@ -17,6 +18,16 @@ class OfficeEquipmentViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = OfficeEquipment.objects.all().order_by('-updated_at')
     serializer_class = OfficeEquipmentSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+
+class CompanyDocumentViewSet(viewsets.ModelViewSet):
+    queryset = CompanyDocument.objects.all().order_by('expiry_date')
+    serializer_class = CompanyDocumentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
 
 
 @api_view(['POST'])
