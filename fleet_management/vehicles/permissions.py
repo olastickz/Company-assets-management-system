@@ -46,8 +46,8 @@ def can_view_company_documents(user):
 
 
 def can_create_company_documents(user):
-    """Managers and administrators can create company documents."""
-    return is_manager(user)
+    """Only administrators can create company documents."""
+    return is_admin(user)
 
 
 def can_edit_company_documents(user):

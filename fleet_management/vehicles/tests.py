@@ -625,7 +625,7 @@ class ViewsTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.context['can_view_company_documents'])
-        self.assertTrue(response.context['can_create_company_documents'])
+        self.assertFalse(response.context['can_create_company_documents'])
 
     def test_staff_cannot_delete_company_document(self):
         staff_user = User.objects.create_user(username='staff7', password='spass7')
@@ -864,7 +864,9 @@ class CompanyDocumentTests(TestCase):
         self.user.save()
 
     def test_vehicle_scope_requires_related_vehicle(self):
-        self.client.login(username='docuser', password='docpass')
+        admin_user = User.objects.create_user(username='docadmin', password='docadminpass')
+        UserRole.objects.create(user=admin_user, role='admin')
+        self.client.login(username='docadmin', password='docadminpass')
         response = self.client.post(reverse('company_document_create'), {
             'name': 'Missing Vehicle Link',
             'document_type': 'insurance',

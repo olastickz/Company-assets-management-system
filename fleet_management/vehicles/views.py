@@ -2929,7 +2929,7 @@ def staff_autocomplete(request):
 
 
 @login_required(login_url='login')
-@require_manager
+@require_admin
 def company_document_create(request):
     """Create a new company document"""
     related_vehicle_id = request.GET.get('related_vehicle')
