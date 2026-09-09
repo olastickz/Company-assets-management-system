@@ -2,6 +2,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.utils import timezone
+from rest_framework.test import APIClient
 from .models import Asset, Vehicle, CompanyDocument, UserRole, StaffMember, OfficeEquipment, DriverRequest
 
 
@@ -1100,3 +1101,45 @@ class CompanyDocumentTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.context['documents']), 1)
         self.assertEqual(response.context['documents'][0].name, 'Searchable Vehicle Doc')
+
+
+class VersionedApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username='api-manager',
+            password='api-pass',
+            email='manager@example.com',
+        )
+        UserRole.objects.create(user=self.user, role='manager')
+
+    def test_profile_requires_authentication(self):
+        response = self.client.get('/api/v1/settings/profile/')
+        self.assertEqual(response.status_code, 401)
+
+    def test_manager_can_read_overview_report(self):
+        self.client.force_authenticate(self.user)
+        response = self.client.get('/api/v1/reports/overview/')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('assets', response.data)
+        self.assertIn('documents', response.data)
+
+    def test_manager_cannot_change_notification_schedule(self):
+        self.client.force_authenticate(self.user)
+        response = self.client.patch(
+            '/api/v1/notifications/schedule/',
+            {'is_enabled': False},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_authenticated_user_can_update_profile(self):
+        self.client.force_authenticate(self.user)
+        response = self.client.patch(
+            '/api/v1/settings/profile/',
+            {'first_name': 'Api', 'last_name': 'Manager'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['first_name'], 'Api')
+        self.assertEqual(response.data['last_name'], 'Manager')

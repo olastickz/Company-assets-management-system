@@ -10,6 +10,7 @@ urlpatterns = [
     path('favicon.ico', RedirectView.as_view(url='https://telnetng.com/_next/image?url=%%2Fimages%%2Ftelnet-logo-new.png&w=384&q=75', permanent=False)),
     path('admin/', admin.site.urls),
     path('api/', include('vehicles.api_urls')),
+    path('api/v1/', include('vehicles.api_v1_urls')),
 
     # LOGIN / LOGOUT
     path('login/', views.CustomLoginView.as_view(), name='login'),
