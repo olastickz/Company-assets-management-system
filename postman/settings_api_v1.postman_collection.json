@@ -83,7 +83,7 @@
           "_postman_previewlanguage": "json",
           "header": [],
           "cookie": [],
-          "body": "{\"id\": 4, \"schedule_time\": \"10:00:00\", \"alert_days\": 15, \"is_enabled\": true, \"last_sent\": \"2026-07-14T10:41:05.600417Z\", \"updated_at\": \"2026-09-07T07:54:41.164928Z\"}"
+          "body": "{\"id\": 4, \"schedule_time\": \"10:00:00\", \"alert_days\": 15, \"is_enabled\": true, \"last_sent\": \"2026-07-14T10:41:05.600417Z\", \"updated_at\": \"2026-09-14T17:24:34.989542Z\"}"
         }
       ]
     },
@@ -143,7 +143,7 @@
           "_postman_previewlanguage": "json",
           "header": [],
           "cookie": [],
-          "body": "{\"id\": 4, \"schedule_time\": \"10:00:00\", \"alert_days\": 15, \"is_enabled\": true, \"last_sent\": \"2026-07-14T10:41:05.600417Z\", \"updated_at\": \"2026-09-07T07:54:41.251607Z\"}"
+          "body": "{\"id\": 4, \"schedule_time\": \"10:00:00\", \"alert_days\": 15, \"is_enabled\": true, \"last_sent\": \"2026-07-14T10:41:05.600417Z\", \"updated_at\": \"2026-09-14T17:24:35.251790Z\"}"
         }
       ]
     },
@@ -177,7 +177,7 @@
           "_postman_previewlanguage": "json",
           "header": [],
           "cookie": [],
-          "body": "{\"id\": 32, \"username\": \"postman-admin-d0ad6c48\", \"first_name\": \"\", \"last_name\": \"\", \"email\": \"postman-d0ad6c48@example.com\"}"
+          "body": "{\"id\": 39, \"username\": \"postman-admin-f0d6f81d\", \"first_name\": \"\", \"last_name\": \"\", \"email\": \"postman-f0d6f81d@example.com\"}"
         }
       ]
     },
@@ -237,7 +237,7 @@
           "_postman_previewlanguage": "json",
           "header": [],
           "cookie": [],
-          "body": "{\"id\": 32, \"username\": \"postman-admin-d0ad6c48\", \"first_name\": \"Postman\", \"last_name\": \"Tester\", \"email\": \"postman-d0ad6c48@example.com\"}"
+          "body": "{\"id\": 39, \"username\": \"postman-admin-f0d6f81d\", \"first_name\": \"Postman\", \"last_name\": \"Tester\", \"email\": \"postman-f0d6f81d@example.com\"}"
         }
       ]
     }

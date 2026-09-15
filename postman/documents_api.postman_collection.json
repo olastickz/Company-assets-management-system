@@ -1,0 +1,214 @@
+{
+  "info": {
+    "name": "Documents API",
+    "description": "Document CRUD requests, including multipart file upload.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "delivery_id",
+      "value": "1"
+    },
+    {
+      "key": "document_id",
+      "value": ""
+    },
+    {
+      "key": "document_file_path",
+      "value": "./document-upload.pdf"
+    }
+  ],
+  "item": [
+    {
+      "name": "Upload Document",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token {{token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "multipart/form-data"
+          }
+        ],
+        "url": "{{base_url}}/api/documents/",
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "name",
+              "value": "Postman Upload Test",
+              "type": "text"
+            },
+            {
+              "key": "document_type",
+              "value": "other",
+              "type": "text"
+            },
+            {
+              "key": "expiry_date",
+              "value": "2027-01-01",
+              "type": "text"
+            },
+            {
+              "key": "issue_date",
+              "value": "2026-01-01",
+              "type": "text"
+            },
+            {
+              "key": "document_file",
+              "type": "file",
+              "src": "{{document_file_path}}"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('creates document', function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "",
+              "pm.collectionVariables.set('document_id', pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "List Documents",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token {{token}}"
+          }
+        ],
+        "url": "{{base_url}}/api/documents/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('lists documents', function () {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.json()).to.be.an('array');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get Uploaded Document",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token {{token}}"
+          }
+        ],
+        "url": "{{base_url}}/api/documents/{{document_id}}/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('gets uploaded document', function () {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.json().id).to.eql(Number(pm.collectionVariables.get('document_id')));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Update Uploaded Document",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token {{token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "multipart/form-data"
+          }
+        ],
+        "url": "{{base_url}}/api/documents/{{document_id}}/",
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "name",
+              "value": "Postman Updated Document",
+              "type": "text"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('updates document', function () {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.json().name).to.eql('Postman Updated Document');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delete Uploaded Document",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token {{token}}"
+          }
+        ],
+        "url": "{{base_url}}/api/documents/{{document_id}}/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('deletes document', function () {",
+              "    pm.response.to.have.status(204);",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
