@@ -194,6 +194,17 @@
     </div>
 
     <div class="card-panel">
+        {% if document.document_file %}
+        <div class="section-block">
+            <h2 class="section-title">📎 Document Attachment</h2>
+            <div class="info-box">
+                <strong>File available</strong>
+                <p style="margin: 0 0 10px;">{{ document.document_file.name|cut:'company_documents/' }}</p>
+                <a href="{{ document.document_file.url }}" target="_blank" rel="noopener" class="button primary" style="display: inline-flex;">Open document</a>
+            </div>
+        </div>
+        {% endif %}
+
         <div class="section-block">
             <h2 class="section-title">📄 Document Information</h2>
             <div class="grid-two">

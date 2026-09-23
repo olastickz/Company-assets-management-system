@@ -1,4 +1,5 @@
 from django.contrib.auth.models import User
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.utils import timezone
@@ -35,7 +36,7 @@ class VehicleModelTests(TestCase):
 class ViewsTests(TestCase):
     def setUp(self):
         self.client = Client()
-        self.user = User.objects.create_user(username='testuser', password='testpass')
+        self.user = User.objects.create_superuser(username='testuser', email='test@example.com', password='testpass')
         self.user_role = UserRole.objects.create(user=self.user, role='admin')
         self.user.save()
 
@@ -65,6 +66,12 @@ class ViewsTests(TestCase):
         response = self.client.get(reverse('dashboard'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Assets Dashboard')
+
+    def test_admin_maintenance_route_exists(self):
+        self.client.login(username='testuser', password='testpass')
+        response = self.client.get('/admin/maintenance/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Maintenance Overview')
 
     def test_equipment_list_loads_with_login(self):
         self.client.login(username='testuser', password='testpass')
@@ -991,6 +998,23 @@ class CompanyDocumentTests(TestCase):
         )
         self.assertEqual(document.get_status(), 'safe')
 
+    def test_uploaded_document_file_renders_download_link(self):
+        self.client.login(username='docuser', password='docpass')
+        document = CompanyDocument.objects.create(
+            name='Uploaded File Doc',
+            document_type='contract',
+            issue_date=timezone.now().date() - timezone.timedelta(days=30),
+            expiry_date=timezone.now().date() + timezone.timedelta(days=90),
+            notify_days_before=30,
+            document_file=SimpleUploadedFile('uploaded_file.txt', b'hello world', content_type='text/plain'),
+        )
+
+        response = self.client.get(reverse('company_document_detail', args=[document.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Open document')
+        self.assertContains(response, '/media/company_documents/')
+        self.assertContains(response, 'uploaded_file')
+
     def test_company_documents_list_filters_by_status(self):
         self.client.login(username='docuser', password='docpass')
         CompanyDocument.objects.create(
@@ -1134,6 +1158,40 @@ class VersionedApiTests(TestCase):
             format='json',
         )
         self.assertEqual(response.status_code, 403)
+
+    def test_admin_can_disable_notification_schedule_with_boolean_string(self):
+        admin = User.objects.create_user(
+            username='api-admin',
+            password='api-pass',
+        )
+        UserRole.objects.create(user=admin, role='admin')
+        self.client.force_authenticate(admin)
+
+        response = self.client.patch(
+            '/api/v1/notifications/schedule/',
+            {'is_enabled': 'false'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data['is_enabled'])
+
+    def test_notification_schedule_rejects_invalid_boolean(self):
+        admin = User.objects.create_user(
+            username='api-admin-invalid',
+            password='api-pass',
+        )
+        UserRole.objects.create(user=admin, role='admin')
+        self.client.force_authenticate(admin)
+
+        response = self.client.patch(
+            '/api/v1/notifications/schedule/',
+            {'is_enabled': 'off'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('is_enabled', response.data)
 
     def test_authenticated_user_can_update_profile(self):
         self.client.force_authenticate(self.user)

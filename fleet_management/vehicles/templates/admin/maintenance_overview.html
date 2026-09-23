@@ -1,0 +1,78 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}Maintenance Overview{% endblock %}
+
+{% block content %}
+<div class="module">
+    <h2>Maintenance Overview</h2>
+    <p>Track recent vehicle and equipment maintenance activity across the Telnet asset portfolio.</p>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 20px 0;">
+        <div class="module" style="padding: 16px; border-radius: 8px; background: #f8fafc;">
+            <h3 style="margin-top: 0;">Vehicle Maintenance</h3>
+            <div style="font-size: 2rem; font-weight: 700;">{{ total_vehicle_maintenance }}</div>
+            <small>records logged</small>
+        </div>
+        <div class="module" style="padding: 16px; border-radius: 8px; background: #f8fafc;">
+            <h3 style="margin-top: 0;">Equipment Maintenance</h3>
+            <div style="font-size: 2rem; font-weight: 700;">{{ total_equipment_maintenance }}</div>
+            <small>records logged</small>
+        </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 24px;">
+        <div class="module">
+            <h3>Recent Vehicle Maintenance</h3>
+            {% if vehicle_maintenance %}
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: #f8f8f8;">
+                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Asset</th>
+                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Description</th>
+                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in vehicle_maintenance %}
+                    <tr>
+                        <td style="border: 1px solid #ddd; padding: 8px;">{{ item.vehicle.name }}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">{{ item.description }}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">{{ item.date_performed|date:"Y-m-d" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p>No recent vehicle maintenance records found.</p>
+            {% endif %}
+        </div>
+
+        <div class="module">
+            <h3>Recent Equipment Maintenance</h3>
+            {% if equipment_maintenance %}
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: #f8f8f8;">
+                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Equipment</th>
+                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Description</th>
+                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in equipment_maintenance %}
+                    <tr>
+                        <td style="border: 1px solid #ddd; padding: 8px;">{{ item.equipment.name }}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">{{ item.description }}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">{{ item.maintenance_date|date:"Y-m-d" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p>No recent equipment maintenance records found.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

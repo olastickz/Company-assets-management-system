@@ -321,7 +321,7 @@
     </div>
 
     <div class="form-card">
-        <form method="post" novalidate>
+        <form method="post" enctype="multipart/form-data" novalidate>
             {% csrf_token %}
             <input type="hidden" name="back_url" value="{{ back_url }}" />
 

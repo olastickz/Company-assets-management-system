@@ -23,6 +23,6 @@ services:
       - key: APP_ADMIN_USERNAME
         value: "telnet"
       - key: APP_ADMIN_PASSWORD
-        value: "Olastickz2630"
+        sync: false
       - key: DATABASE_URL
         sync: false

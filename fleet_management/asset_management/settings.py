@@ -24,10 +24,13 @@ if ENV_PATH.exists():
             os.environ.setdefault(key, value)
 
 # SECURITY
-SECRET_KEY = os.getenv('SECRET_KEY') or os.getenv('DJANGO_SECRET_KEY') or 'CHANGE_THIS_IN_PRODUCTION_TO_A_SECURE_RANDOM_KEY'
-
 default_debug = 'False' if os.getenv('RENDER') else 'True'
 DEBUG = os.getenv('DEBUG', os.getenv('DJANGO_DEBUG', default_debug)).lower() in ('true', '1', 'yes', 'on')
+
+configured_secret_key = os.getenv('SECRET_KEY') or os.getenv('DJANGO_SECRET_KEY')
+if not configured_secret_key and not DEBUG:
+    raise RuntimeError('SECRET_KEY must be configured when DEBUG is disabled.')
+SECRET_KEY = configured_secret_key or 'development-only-secret-key'
 
 
 def _normalize_host(host):
@@ -192,8 +195,8 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+EMAIL_HOST_USER = os.getenv('topafgg@gmaail.com')
+EMAIL_HOST_PASSWORD = os.getenv('mtut nicv qyxa rjyf')
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
 # Expiry alert email configuration
@@ -237,8 +240,8 @@ if not DEBUG:
 else:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'http')
 
-SESSION_COOKIE_SECURE = False
-CSRF_COOKIE_SECURE = False
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
 
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True

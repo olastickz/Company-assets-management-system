@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Asset, AssetAssignmentHistory, AssetRelationship, CompanyAsset, MaintenanceItem, OfficeEquipment, OfficeEquipmentMaintenance, UserRole, StaffMember, AuditLog, EmailRecipient, EmailDeliveryLog, EmailSchedule, EquipmentTransfer, CompanyDocument
+from .models import Asset, AssetAssignmentHistory, AssetRelationship, CompanyAsset, MaintenanceItem, OfficeEquipment, OfficeEquipmentMaintenance, UserRole, StaffMember, AuditLog, EmailRecipient, EmailDeliveryLog, EmailSchedule, EquipmentTransfer, CompanyDocument, DriverRequest
 from .permissions import is_admin
 from django import forms
 from django.utils.safestring import mark_safe
@@ -366,8 +366,31 @@ class EmailAdminSite(admin.AdminSite):
         urls = super().get_urls()
         custom_urls = [
             path('email-system/', self.admin_view(self.email_system_view), name='email_system'),
+            path('maintenance/', self.admin_view(self.maintenance_overview_view), name='maintenance'),
         ]
         return custom_urls + urls
+
+    def maintenance_overview_view(self, request):
+        """Custom admin view for maintenance management overview."""
+        from django.utils import timezone
+        from vehicles.models import MaintenanceItem, OfficeEquipmentMaintenance
+
+        context = self.each_context(request)
+        today = timezone.now().date()
+
+        vehicle_maintenance = MaintenanceItem.objects.select_related('vehicle').order_by('-date_performed')[:10]
+        equipment_maintenance = OfficeEquipmentMaintenance.objects.select_related('equipment').order_by('-maintenance_date')[:10]
+
+        context.update({
+            'title': 'Maintenance Overview',
+            'today': today,
+            'vehicle_maintenance': vehicle_maintenance,
+            'equipment_maintenance': equipment_maintenance,
+            'total_vehicle_maintenance': MaintenanceItem.objects.count(),
+            'total_equipment_maintenance': OfficeEquipmentMaintenance.objects.count(),
+        })
+
+        return render(request, 'admin/maintenance_overview.html', context)
 
     def email_system_view(self, request):
         """Custom admin view for email system management"""
@@ -431,7 +454,6 @@ admin.site.register(StaffMember)
 admin.site.register(AuditLog)
 admin.site.register(EmailRecipient)
 admin.site.register(EmailDeliveryLog)
-admin.site.register(EmailSchedule)
 
 @admin.register(Asset)
 class AssetAdmin(admin.ModelAdmin):
@@ -453,6 +475,20 @@ class AssetRelationshipAdmin(admin.ModelAdmin):
     list_filter = ('relation_type', 'created_at')
     search_fields = ('from_asset__name', 'to_asset__name', 'notes')
     readonly_fields = ('created_at',)
+
+@admin.register(DriverRequest)
+class DriverRequestAdmin(admin.ModelAdmin):
+    list_display = ('requested_by', 'requester_user', 'preferred_date', 'status', 'assigned_driver', 'created_at')
+    list_filter = ('status', 'preferred_date', 'created_at')
+    search_fields = (
+        'details',
+        'requested_by__first_name',
+        'requested_by__last_name',
+        'requester_user__username',
+        'assigned_driver__first_name',
+        'assigned_driver__last_name',
+    )
+    readonly_fields = ('created_at', 'updated_at')
 
 # Register Django's built-in User and Group models
 from django.contrib.auth.models import User, Group

@@ -17,7 +17,9 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         User = get_user_model()
         username = os.getenv('APP_ADMIN_USERNAME', 'telnet')
-        password = os.getenv('APP_ADMIN_PASSWORD', 'Olastickz2630')
+        password = os.getenv('APP_ADMIN_PASSWORD')
+        if not password:
+            raise ValueError('APP_ADMIN_PASSWORD must be configured before creating an admin account.')
         legacy_username = os.getenv('LEGACY_ADMIN_USERNAME', 'Olastickz')
         email = os.getenv('APP_ADMIN_EMAIL', '')
         reset_password = options['reset_password']

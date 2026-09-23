@@ -2948,7 +2948,7 @@ def company_document_create(request):
 
     if request.method == 'POST':
         document_scope = request.POST.get('document_scope', 'company')
-        form = CompanyDocumentForm(request.POST)
+        form = CompanyDocumentForm(request.POST, request.FILES)
         back_url = request.POST.get('back_url') or get_back_url(request, django_reverse('company_documents_list'))
         if form.is_valid():
             document = form.save(commit=False)
@@ -2985,7 +2985,7 @@ def company_document_edit(request, pk):
 
     if request.method == 'POST':
         document_scope = request.POST.get('document_scope', document_scope)
-        form = CompanyDocumentForm(request.POST, instance=document)
+        form = CompanyDocumentForm(request.POST, request.FILES, instance=document)
         back_url = request.POST.get('back_url') or get_back_url(request, django_reverse('company_document_detail', args=[pk]))
         if form.is_valid():
             form.save()

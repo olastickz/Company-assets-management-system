@@ -404,7 +404,7 @@ class CompanyDocumentForm(forms.ModelForm):
             'related_asset', 'related_vehicle', 'related_equipment',
             'issue_date', 'expiry_date', 'renewal_date',
             'document_number', 'issuing_authority', 'status',
-            'notify_days_before', 'responsible_person', 'responsible_staff', 'location', 'notes'
+            'notify_days_before', 'responsible_person', 'responsible_staff', 'location', 'notes', 'document_file'
         ]
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
@@ -421,6 +421,7 @@ class CompanyDocumentForm(forms.ModelForm):
             'responsible_person': forms.TextInput(attrs={'class': 'form-control'}),
             'location': forms.TextInput(attrs={'class': 'form-control'}),
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'document_file': forms.ClearableFileInput(attrs={'class': 'form-control'}),
         }
 
     def clean_notify_days_before(self):
