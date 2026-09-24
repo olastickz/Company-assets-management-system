@@ -133,7 +133,8 @@ WSGI_APPLICATION = 'asset_management.wsgi.application'
 # ========================
 # Database
 # ========================
-# Use DATABASE_URL when configured; otherwise use SQLite for local development.
+# Prefer PostgreSQL on the VPS / production environment. The app supports either
+# a DATABASE_URL value or standard POSTGRES_* environment variables.
 if os.getenv('DATABASE_URL'):
     DATABASES = {
         'default': dj_database_url.config(
@@ -143,12 +144,52 @@ if os.getenv('DATABASE_URL'):
         )
     }
 else:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
+    postgres_db = (
+        os.getenv('POSTGRES_DB')
+        or os.getenv('PGDATABASE')
+        or os.getenv('DB_NAME')
+    )
+    postgres_user = (
+        os.getenv('POSTGRES_USER')
+        or os.getenv('PGUSER')
+        or os.getenv('DB_USER')
+    )
+    postgres_password = (
+        os.getenv('POSTGRES_PASSWORD')
+        or os.getenv('PGPASSWORD')
+        or os.getenv('DB_PASSWORD')
+    )
+    postgres_host = (
+        os.getenv('POSTGRES_HOST')
+        or os.getenv('PGHOST')
+        or os.getenv('DB_HOST')
+        or 'localhost'
+    )
+    postgres_port = (
+        os.getenv('POSTGRES_PORT')
+        or os.getenv('PGPORT')
+        or os.getenv('DB_PORT')
+        or '5432'
+    )
+
+    if postgres_db and postgres_user and postgres_password:
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.postgresql',
+                'NAME': postgres_db,
+                'USER': postgres_user,
+                'PASSWORD': postgres_password,
+                'HOST': postgres_host,
+                'PORT': postgres_port,
+            }
         }
-    }
+    else:
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            }
+        }
 
 # ========================
 # Password validation
