@@ -31,3 +31,4 @@ fleet_management/staticfiles/
 
 # Environment variables
 .env
+fleet_management/.env

@@ -1,0 +1,11 @@
+.git
+.venv
+fleet_management/.venv
+fleet_management/db.sqlite3
+fleet_management/media
+fleet_management/staticfiles
+fleet_management/__pycache__
+**/__pycache__
+**/*.pyc
+.env
+fleet_management/.env

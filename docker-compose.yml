@@ -1,0 +1,33 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - ./fleet_management/.env
+    working_dir: /app/fleet_management
+    command: >-
+      sh -c "python manage.py migrate &&
+      python manage.py collectstatic --noinput &&
+      exec gunicorn asset_management.wsgi:application
+      --bind 0.0.0.0:7038 --workers 3"
+    ports:
+      - "7038:7038"
+    volumes:
+      - ./fleet_management/media:/app/fleet_management/media
+      - ./fleet_management/staticfiles:/app/fleet_management/staticfiles
+    restart: unless-stopped
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - ./fleet_management/.env
+    working_dir: /app/fleet_management
+    command: python manage.py run_email_scheduler
+    volumes:
+      - ./fleet_management/media:/app/fleet_management/media
+    depends_on:
+      - web
+    restart: unless-stopped
