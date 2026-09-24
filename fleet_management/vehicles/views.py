@@ -18,14 +18,17 @@ import logging
 from openpyxl import Workbook
 import uuid
 from urllib.parse import urlencode, urlparse, parse_qs
-from .models import CompanyAsset, Vehicle, MaintenanceItem, OfficeEquipment, OfficeEquipmentMaintenance, AuditLog, CompanyDocument, EquipmentTransfer, StaffMember, Asset, AssetRelationship
+from .models import CompanyAsset, Vehicle, MaintenanceItem, OfficeEquipment, OfficeEquipmentMaintenance, AuditLog, CompanyDocument, EquipmentTransfer, StaffMember, Asset, AssetRelationship, DriverRequest
 
 # Logger for application events
 logger = logging.getLogger(__name__)
-from .forms import CompanyAssetForm, VehicleForm, MaintenanceItemForm, OfficeEquipmentForm, OfficeEquipmentMaintenanceForm, EquipmentTransferForm, CompanyDocumentForm, StaffMemberForm
+from .forms import CompanyAssetForm, VehicleForm, MaintenanceItemForm, OfficeEquipmentForm, OfficeEquipmentMaintenanceForm, EquipmentTransferForm, CompanyDocumentForm, StaffMemberForm, DriverRequestForm, DriverAssignmentForm
 from .permissions import (
-    require_admin, require_manager, is_admin, is_manager, 
-    get_user_role, log_audit, get_client_ip
+    require_admin, require_manager, require_role, is_admin, is_manager, is_driver,
+    get_user_role, log_audit, get_client_ip,
+    can_view_company_documents, can_create_company_documents,
+    can_edit_company_documents, can_delete_company_documents,
+    can_request_driver, can_assign_driver,
 )
 
 
@@ -106,6 +109,34 @@ def _split_name(full_name):
     if len(parts) <= 1:
         return parts[0], ''
     return parts[0], ' '.join(parts[1:])
+
+
+def _normalize_name(name):
+    return ' '.join(name.strip().lower().split()) if name else ''
+
+
+def _assigned_user_matches_current_user(equipment, user):
+    if not equipment.assigned_user or not user.is_authenticated:
+        return False
+
+    assigned_user = _normalize_name(equipment.assigned_user)
+    candidates = {user.username.strip().lower()}
+    if user.first_name or user.last_name:
+        full_name = f"{user.first_name} {user.last_name}".strip()
+        if full_name:
+            candidates.add(_normalize_name(full_name))
+            candidates.add(_normalize_name(f"{user.last_name} {user.first_name}".strip()))
+        if user.first_name:
+            candidates.add(user.first_name.strip().lower())
+        if user.last_name:
+            candidates.add(user.last_name.strip().lower())
+
+    staff_profile = getattr(user, 'staff_profile', None)
+    if staff_profile:
+        candidates.add(_normalize_name(staff_profile.full_name))
+        candidates.add(staff_profile.staff_id.strip().lower())
+
+    return assigned_user in candidates
 
 
 def _generate_legacy_staff_id(name):
@@ -215,28 +246,69 @@ def dashboard(request):
     expiring_threshold = today + timedelta(days=alert_days)
 
     # Query vehicles (now CompanyAsset), equipment, and company documents
-    vehicles = CompanyAsset.objects.all().order_by('-updated_at')
-    equipments = OfficeEquipment.objects.all().order_by('-updated_at')
+    # Use select_related to avoid N+1 query problems
+    vehicles = CompanyAsset.objects.select_related('assigned_staff').all().order_by('-updated_at')
+    equipments = OfficeEquipment.objects.select_related('assigned_staff').all().order_by('-updated_at')
     documents = CompanyDocument.objects.all().order_by('-updated_at')
     staff_members = StaffMember.objects.filter(is_active=True).order_by('staff_id')
     assigned_staff_id = request.GET.get('assigned_staff', '')
     department_filter = request.GET.get('department', '')
     branch_filter = request.GET.get('branch', '')
 
-    if assigned_staff_id:
+    current_role = get_user_role(request.user)
+    staff_profile = getattr(request.user, 'staff_profile', None)
+    if current_role == 'staff':
+        if staff_profile is not None:
+            assigned_staff_id = str(staff_profile.pk)
+            vehicles = vehicles.filter(assigned_staff=staff_profile)
+            equipments = equipments.filter(assigned_staff=staff_profile)
+        else:
+            vehicles = CompanyAsset.objects.none()
+            equipments = OfficeEquipment.objects.none()
+        documents = CompanyDocument.objects.none()
+    elif current_role == 'driver':
+        if staff_profile is not None:
+            assigned_staff_id = str(staff_profile.pk)
+            vehicles = vehicles.filter(assigned_staff=staff_profile)
+            equipments = equipments.filter(assigned_staff=staff_profile)
+            documents = documents.filter(
+                Q(related_vehicle__assigned_staff=staff_profile) |
+                (Q(related_asset__assigned_staff=staff_profile) & Q(related_asset__asset_type='vehicle'))
+            ).distinct()
+        else:
+            vehicles = CompanyAsset.objects.none()
+            equipments = OfficeEquipment.objects.none()
+            documents = CompanyDocument.objects.none()
+
+    if assigned_staff_id and current_role not in ['staff', 'driver']:
         vehicles = vehicles.filter(assigned_staff_id=assigned_staff_id)
         equipments = equipments.filter(assigned_staff_id=assigned_staff_id)
-        documents = documents.filter(responsible_staff_id=assigned_staff_id)
+        documents = documents.filter(
+            Q(responsible_staff_id=assigned_staff_id) |
+            Q(related_asset__assigned_staff_id=assigned_staff_id) |
+            Q(related_vehicle__assigned_staff_id=assigned_staff_id) |
+            Q(related_equipment__assigned_staff_id=assigned_staff_id)
+        ).distinct()
 
     if department_filter:
         vehicles = vehicles.filter(assigned_staff__department=department_filter)
         equipments = equipments.filter(assigned_staff__department=department_filter)
-        documents = documents.filter(responsible_staff__department=department_filter)
+        documents = documents.filter(
+            Q(responsible_staff__department=department_filter) |
+            Q(related_asset__assigned_staff__department=department_filter) |
+            Q(related_vehicle__assigned_staff__department=department_filter) |
+            Q(related_equipment__assigned_staff__department=department_filter)
+        ).distinct()
 
     if branch_filter:
         vehicles = vehicles.filter(assigned_staff__branch=branch_filter)
         equipments = equipments.filter(assigned_staff__branch=branch_filter)
-        documents = documents.filter(responsible_staff__branch=branch_filter)
+        documents = documents.filter(
+            Q(responsible_staff__branch=branch_filter) |
+            Q(related_asset__assigned_staff__branch=branch_filter) |
+            Q(related_vehicle__assigned_staff__branch=branch_filter) |
+            Q(related_equipment__assigned_staff__branch=branch_filter)
+        ).distinct()
 
     if search_query:
         vehicles = vehicles.filter(
@@ -792,6 +864,31 @@ def vehicle_detail(request, pk):
         related_documents = CompanyDocument.objects.filter(
             related_vehicle=vehicle
         ).order_by('-expiry_date')
+
+    current_role = get_user_role(request.user)
+    staff_profile = getattr(request.user, 'staff_profile', None)
+    if current_role == 'staff':
+        related_documents = CompanyDocument.objects.none()
+    elif current_role == 'driver':
+        if staff_profile and vehicle.assigned_staff == staff_profile:
+            if vehicle.asset:
+                related_documents = CompanyDocument.objects.filter(
+                    Q(related_vehicle=vehicle) |
+                    Q(related_asset=vehicle.asset, related_asset__asset_type='vehicle')
+                ).distinct().order_by('-expiry_date')
+            else:
+                related_documents = CompanyDocument.objects.filter(
+                    related_vehicle=vehicle
+                ).order_by('-expiry_date')
+        else:
+            related_documents = CompanyDocument.objects.none()
+
+    can_report_maintenance = False
+    if current_role in ['admin', 'manager']:
+        can_report_maintenance = True
+    elif staff_profile and vehicle.assigned_staff == staff_profile:
+        can_report_maintenance = True
+
     return render(request, 'asset_detail.html', {
         'vehicle': vehicle,
         'maintenance_items': maintenance_items,
@@ -801,6 +898,7 @@ def vehicle_detail(request, pk):
         'related_assets': related_assets,
         'related_documents': related_documents,
         'vehicle_type_choices': Vehicle.VEHICLE_TYPE_CHOICES,
+        'can_report_maintenance': can_report_maintenance,
         'back_url': get_back_url(request, django_reverse('dashboard')),
     })
 
@@ -882,9 +980,22 @@ def vehicle_delete(request, pk):
 # ----------------------------
 # Maintenance CRUD
 # ----------------------------
-@require_manager
+@login_required
 def maintenance_create(request, vehicle_pk):
     vehicle = get_object_or_404(Vehicle, pk=vehicle_pk)
+    current_role = get_user_role(request.user)
+    staff_profile = getattr(request.user, 'staff_profile', None)
+
+    if current_role in ['staff', 'driver']:
+        if not staff_profile or (
+            vehicle.assigned_staff != staff_profile and
+            not _assigned_user_matches_current_user(vehicle, request.user)
+        ):
+            return HttpResponseForbidden('Access denied')
+
+    elif current_role not in ['admin', 'manager']:
+        return HttpResponseForbidden('Access denied')
+
     if request.method == 'POST':
         form = MaintenanceItemForm(request.POST)
         back_url = request.POST.get('back_url') or get_back_url(request, django_reverse('asset_detail', args=[vehicle_pk]))
@@ -1353,9 +1464,20 @@ def equipment_delete(request, pk):
     return render(request, 'equipment_confirm_delete.html', {'equipment': equipment, 'back_url': back_url})
 
 
-@require_manager
+@login_required
 def equipment_maintenance_create(request, equipment_pk):
     equipment = get_object_or_404(OfficeEquipment, pk=equipment_pk)
+    current_role = get_user_role(request.user)
+    staff_profile = getattr(request.user, 'staff_profile', None)
+
+    if current_role in ['staff', 'driver']:
+        if not staff_profile or (
+            equipment.assigned_staff != staff_profile and
+            not _assigned_user_matches_current_user(equipment, request.user)
+        ):
+            return HttpResponseForbidden('Access denied')
+    elif current_role not in ['admin', 'manager']:
+        return HttpResponseForbidden('Access denied')
 
     if request.method == 'POST':
         form = OfficeEquipmentMaintenanceForm(request.POST)
@@ -1701,6 +1823,8 @@ def equipment_list(request):
     sort_dir = request.GET.get('sort_dir', 'desc')
     page_num = request.GET.get('page', 1)
 
+    department_filter = request.GET.get('department', '')
+
     # Advanced filters
     date_from = request.GET.get('date_from', '')
     date_to = request.GET.get('date_to', '')
@@ -1717,6 +1841,15 @@ def equipment_list(request):
         page_size = 25
 
     equipments = OfficeEquipment.objects.all()
+    current_role = get_user_role(request.user)
+    staff_profile = getattr(request.user, 'staff_profile', None)
+    if current_role in ['staff', 'driver']:
+        if staff_profile is not None:
+            equipments = equipments.filter(assigned_staff=staff_profile)
+        else:
+            equipments = OfficeEquipment.objects.none()
+    elif department_filter:
+        equipments = equipments.filter(assigned_staff__department=department_filter)
 
     # Enhanced search with multiple fields and optimization
     if search_query:
@@ -1842,7 +1975,7 @@ def equipment_list(request):
     damaged_count = equipments.filter(status='damaged').count()
     unassigned_count = equipments.filter(Q(assigned_user__isnull=True) | Q(assigned_user='')).count()
     regional_offices = [choice[0] for choice in OfficeEquipment.REGIONAL_OFFICE_CHOICES]
-    regional_office_counts = {office: OfficeEquipment.objects.filter(regional_office=office).count() for office in regional_offices}
+    regional_office_counts = {office: equipments.filter(regional_office=office).count() for office in regional_offices}
     equipment_types = OfficeEquipment.EQUIPMENT_TYPE_CHOICES
     subsidiaries = [choice[0] for choice in OfficeEquipment.SUBSIDIARY_CHOICES if choice[0]]
 
@@ -1859,9 +1992,9 @@ def equipment_list(request):
         for choice in OfficeEquipment.EQUIPMENT_TYPE_CHOICES
     ]
 
-    # Equipment type counts for cards (always show total counts, not filtered counts)
+    # Equipment-type counts for the visible scoped inventory.
     equipment_type_counts = {
-        choice[0]: OfficeEquipment.objects.filter(equipment_type=choice[0]).count()
+        choice[0]: equipments.filter(equipment_type=choice[0]).count()
         for choice in OfficeEquipment.EQUIPMENT_TYPE_CHOICES
     }
 
@@ -1885,6 +2018,7 @@ def equipment_list(request):
         'regional_office_filter': regional_office_filter,
         'equipment_type_filter': equipment_type_filter,
         'assignment_status_filter': assignment_status_filter,
+        'department_filter': department_filter,
         'sort_by': sort_by,
         'sort_dir': sort_dir,
         'page_size': page_size,
@@ -1969,6 +2103,14 @@ def equipment_list_filtered(request, **filters):
         page_size = 25
 
     equipments = OfficeEquipment.objects.filter(**filters)
+    current_role = get_user_role(request.user)
+    staff_profile = getattr(request.user, 'staff_profile', None)
+
+    if current_role in ['staff', 'driver']:
+        if staff_profile is not None:
+            equipments = equipments.filter(assigned_staff=staff_profile)
+        else:
+            equipments = OfficeEquipment.objects.none()
 
     # Apply additional filters
     if search_query:
@@ -2017,7 +2159,7 @@ def equipment_list_filtered(request, **filters):
     damaged_count = equipments.filter(status='damaged').count()
     unassigned_count = equipments.filter(Q(assigned_user__isnull=True) | Q(assigned_user='')).count()
     regional_offices = [choice[0] for choice in OfficeEquipment.REGIONAL_OFFICE_CHOICES]
-    regional_office_counts = {office: OfficeEquipment.objects.filter(regional_office=office).count() for office in regional_offices}
+    regional_office_counts = {office: equipments.filter(regional_office=office).count() for office in regional_offices}
     equipment_types = OfficeEquipment.EQUIPMENT_TYPE_CHOICES
     subsidiaries = [choice[0] for choice in OfficeEquipment.SUBSIDIARY_CHOICES if choice[0]]
 
@@ -2080,12 +2222,27 @@ def equipment_detail(request, pk):
         related_documents = CompanyDocument.objects.filter(
             related_equipment=equipment
         ).order_by('-expiry_date')
+
+    current_role = get_user_role(request.user)
+    staff_profile = getattr(request.user, 'staff_profile', None)
+    if current_role in ['staff', 'driver']:
+        related_documents = CompanyDocument.objects.none()
+
+    can_report_maintenance = False
+    if current_role in ['admin', 'manager']:
+        can_report_maintenance = True
+    elif staff_profile and equipment.assigned_staff == staff_profile:
+        can_report_maintenance = True
+    elif current_role in ['staff', 'driver'] and _assigned_user_matches_current_user(equipment, request.user):
+        can_report_maintenance = True
+
     return render(request, 'equipment_detail.html', {
         'equipment': equipment,
         'maintenance_records': maintenance_records,
         'assignment_history': assignment_history,
         'related_assets': related_assets,
         'related_documents': related_documents,
+        'can_report_maintenance': can_report_maintenance,
         'back_url': get_back_url(request, django_reverse('equipment_list'))
     })
 
@@ -2118,8 +2275,18 @@ def company_documents_list(request):
     type_filter = request.GET.get('type', 'all')
     scope_filter = request.GET.get('scope', 'all')
     search_query = request.GET.get('search', '').strip()
+    department_filter = request.GET.get('department', '')
 
     documents = CompanyDocument.objects.all().order_by('-expiry_date')
+
+    # If a department filter is active, scope documents to that department (responsible staff or related assets)
+    if department_filter:
+        documents = documents.filter(
+            Q(responsible_staff__department=department_filter) |
+            Q(related_asset__assigned_staff__department=department_filter) |
+            Q(related_vehicle__assigned_staff__department=department_filter) |
+            Q(related_equipment__assigned_staff__department=department_filter)
+        ).distinct()
 
     if scope_filter == 'vehicle':
         documents = documents.filter(
@@ -2236,7 +2403,11 @@ def company_documents_list(request):
         'expiring_count': expiring_count,
         'safe_count': safe_count,
         'document_type_choices': CompanyDocument.DOCUMENT_TYPE_CHOICES,
-        'can_create_company_document': is_admin(request.user),
+        'can_view_company_documents': can_view_company_documents(request.user),
+        'can_create_company_documents': can_create_company_documents(request.user),
+        'can_edit_company_documents': can_edit_company_documents(request.user),
+        'can_delete_company_documents': can_delete_company_documents(request.user),
+        'can_create_company_document': can_create_company_documents(request.user),
         'preserved_query_string': preserved_query_string,
         'status_query_string': status_query_string,
         'scope_query_string': scope_query_string,
@@ -2246,7 +2417,7 @@ def company_documents_list(request):
     return render(request, 'company_documents/list.html', context)
 
 
-@login_required(login_url='login')
+@require_manager
 def company_documents_counts(request):
     """Return JSON payload of document counts used by frontend to refresh counts via AJAX."""
     from .models import Asset, AssetRelationship
@@ -2294,7 +2465,174 @@ def company_documents_counts(request):
     return JsonResponse(payload)
 
 
-@login_required(login_url='login')
+@login_required
+def my_assets(request):
+    """Shortcut for users (drivers/staff) to view assets assigned to them.
+
+    Redirects to the dashboard with the `assigned_staff` query parameter
+    when the current user is linked to a `StaffMember` record.
+    """
+    try:
+        staff = request.user.staff_profile
+        if staff:
+            return redirect(django_reverse('dashboard') + f'?assigned_staff={staff.pk}')
+    except Exception:
+        pass
+    return redirect('dashboard')
+
+
+def _get_available_drivers():
+    return StaffMember.objects.filter(
+        user__role__role='driver',
+        driver_status='available',
+        is_active=True,
+    ).order_by('staff_id')
+
+
+@login_required
+@require_role('staff', 'driver', 'manager', 'admin')
+def driver_requests_list(request):
+    """List driver requests for managers and the requesting staff/driver."""
+    current_role = get_user_role(request.user)
+    if current_role in ['manager', 'admin']:
+        requests_qs = DriverRequest.objects.all().order_by('-created_at')
+    else:
+        staff_profile = getattr(request.user, 'staff_profile', None)
+        if staff_profile is not None:
+            requests_qs = DriverRequest.objects.filter(
+                Q(requested_by=staff_profile) | Q(assigned_driver=staff_profile)
+            ).order_by('-created_at')
+        else:
+            requests_qs = DriverRequest.objects.none()
+
+    status_filter = request.GET.get('status', '')
+    if status_filter:
+        requests_qs = requests_qs.filter(status=status_filter)
+
+    page_num = request.GET.get('page', 1)
+    paginator = Paginator(requests_qs, 25)
+    try:
+        page_obj = paginator.page(page_num)
+    except (PageNotAnInteger, EmptyPage):
+        page_obj = paginator.page(1)
+
+    return render(request, 'driver_requests/list.html', {
+        'driver_requests': page_obj,
+        'status_filter': status_filter,
+        'page_obj': page_obj,
+    })
+
+
+@login_required
+@require_role('staff', 'driver', 'manager', 'admin')
+def driver_request_create(request):
+    staff_profile = getattr(request.user, 'staff_profile', None)
+    if request.method == 'POST':
+        form = DriverRequestForm(request.POST)
+        if form.is_valid():
+            driver_request = form.save(commit=False)
+            driver_request.requester_user = request.user
+            driver_request.requested_by = staff_profile
+            driver_request.status = 'requested'
+            driver_request.save()
+            log_audit(
+                request.user,
+                'create',
+                'driverrequest',
+                object_id=driver_request.pk,
+                description='Created driver request'
+            )
+            messages.success(request, 'Your driver request has been submitted.')
+            return redirect('driver_requests_list')
+    else:
+        form = DriverRequestForm()
+    return render(request, 'driver_requests/form.html', {
+        'form': form,
+        'action': 'Request Driver Support',
+    })
+
+
+@login_required
+@require_role('staff', 'driver', 'manager', 'admin')
+def driver_request_detail(request, pk):
+    driver_request = get_object_or_404(DriverRequest, pk=pk)
+    current_role = get_user_role(request.user)
+    staff_profile = getattr(request.user, 'staff_profile', None)
+
+    if not (
+        current_role in ['manager', 'admin'] or
+        driver_request.requester_user == request.user or
+        (driver_request.assigned_driver and driver_request.assigned_driver == staff_profile)
+    ):
+        return HttpResponseForbidden('Access denied')
+
+    assign_form = None
+    if can_assign_driver(request.user) and driver_request.status in ['requested', 'assigned']:
+        assign_form = DriverAssignmentForm(instance=driver_request)
+
+    return render(request, 'driver_requests/detail.html', {
+        'driver_request': driver_request,
+        'assign_form': assign_form,
+    })
+
+
+@login_required
+@require_manager
+def driver_request_assign(request, pk):
+    driver_request = get_object_or_404(DriverRequest, pk=pk)
+    if request.method != 'POST':
+        return redirect('driver_request_detail', pk=pk)
+
+    if driver_request.status == 'cancelled':
+        return HttpResponseForbidden('Cannot assign a cancelled request')
+
+    previous_driver_id = driver_request.assigned_driver_id
+    form = DriverAssignmentForm(request.POST, instance=driver_request)
+    if form.is_valid():
+        assigned_driver = form.cleaned_data['assigned_driver']
+        if assigned_driver.driver_status != 'available' and assigned_driver.pk != previous_driver_id:
+            return HttpResponseForbidden('Selected driver is not available')
+
+        driver_request = form.save(commit=False)
+        driver_request.status = 'assigned'
+        driver_request.assigned_by = request.user
+        driver_request.assigned_at = timezone.now()
+        driver_request.save()
+
+        if previous_driver_id and previous_driver_id != assigned_driver.pk:
+            previous_driver = StaffMember.objects.filter(pk=previous_driver_id).first()
+            if previous_driver:
+                previous_driver.driver_status = 'available'
+                previous_driver.save(update_fields=['driver_status'])
+
+        assigned_driver.driver_status = 'unavailable'
+        assigned_driver.save(update_fields=['driver_status'])
+
+        log_audit(
+            request.user,
+            'update',
+            'driverrequest',
+            object_id=driver_request.pk,
+            description=f'Assigned driver {assigned_driver} to request'
+        )
+        messages.success(request, 'Driver has been assigned to the request.')
+        return redirect('driver_request_detail', pk=pk)
+
+    return render(request, 'driver_requests/detail.html', {
+        'driver_request': driver_request,
+        'assign_form': form,
+    })
+
+
+@login_required
+def _my_assets_counts_removed_for_prd(request):
+    # Previously returned per-user asset counts for the 'My Assets' UI.
+    # Removed per PRD; kept as a no-op placeholder to avoid accidental imports.
+    from django.http import JsonResponse
+    return JsonResponse({'vehicles': 0, 'equipment': 0, 'documents': 0, 'total': 0})
+
+
+@require_manager
 def company_documents_data(request):
     """Return JSON list of documents for current filters/pagination for frontend updates."""
     # Build queryset using similar filters as company_documents_list
@@ -2389,11 +2727,27 @@ def company_documents_data(request):
     })
 
 
+def _can_view_company_document(user, document):
+    current_role = get_user_role(user)
+    if current_role in ['admin', 'manager']:
+        return True
+    if current_role == 'driver':
+        staff_profile = getattr(user, 'staff_profile', None)
+        if not staff_profile:
+            return False
+        if document.related_vehicle and document.related_vehicle.assigned_staff == staff_profile:
+            return True
+        if document.related_asset and document.related_asset.asset_type == 'vehicle' and document.related_asset.assigned_staff == staff_profile:
+            return True
+    return False
+
 @login_required(login_url='login')
-@require_manager
 def company_document_detail(request, pk):
     """View detail of a single company document"""
     document = get_object_or_404(CompanyDocument, pk=pk)
+    if not _can_view_company_document(request.user, document):
+        return HttpResponseForbidden('Access denied')
+
     context = {
         'document': document,
         'back_url': get_back_url(request, django_reverse('company_documents_list'))
@@ -2594,18 +2948,20 @@ def company_document_create(request):
 
     if request.method == 'POST':
         document_scope = request.POST.get('document_scope', 'company')
-        form = CompanyDocumentForm(request.POST)
+        form = CompanyDocumentForm(request.POST, request.FILES)
         back_url = request.POST.get('back_url') or get_back_url(request, django_reverse('company_documents_list'))
         if form.is_valid():
             document = form.save(commit=False)
             document.created_by = request.user
             document.save()
-            
-            log_audit(request.user, 'create', 'companydocument', object_id=document.pk, 
+
+            log_audit(request.user, 'create', 'companydocument', object_id=document.pk,
                      description=f'Created document: {document.name}')
-            
+
             messages.success(request, f'Document "{document.name}" created successfully!')
             return redirect('company_document_detail', pk=document.pk)
+        else:
+            form = CompanyDocumentForm(request.POST)
     else:
         form = CompanyDocumentForm(initial=initial)
         back_url = request.GET.get('back_url') or get_back_url(request, django_reverse('company_documents_list'))
@@ -2629,16 +2985,18 @@ def company_document_edit(request, pk):
 
     if request.method == 'POST':
         document_scope = request.POST.get('document_scope', document_scope)
-        form = CompanyDocumentForm(request.POST, instance=document)
+        form = CompanyDocumentForm(request.POST, request.FILES, instance=document)
         back_url = request.POST.get('back_url') or get_back_url(request, django_reverse('company_document_detail', args=[pk]))
         if form.is_valid():
             form.save()
-            
-            log_audit(request.user, 'edit', 'companydocument', object_id=pk, 
+
+            log_audit(request.user, 'edit', 'companydocument', object_id=pk,
                      description=f'Updated document: {document.name}')
-            
+
             messages.success(request, f'Document "{document.name}" updated successfully!')
             return redirect('company_document_detail', pk=pk)
+        else:
+            form = CompanyDocumentForm(request.POST, instance=document)
     else:
         form = CompanyDocumentForm(instance=document)
         back_url = request.GET.get('back_url') or get_back_url(request, django_reverse('company_document_detail', args=[pk]))

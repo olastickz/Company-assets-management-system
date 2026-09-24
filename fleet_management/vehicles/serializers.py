@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import CompanyDocument, Vehicle, OfficeEquipment
+from .models import Vehicle, OfficeEquipment, Asset, StaffMember, CompanyDocument, OfficeEquipmentMaintenance
 
 
 class VehicleSerializer(serializers.ModelSerializer):
@@ -14,8 +14,25 @@ class OfficeEquipmentSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class AssetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Asset
+        fields = '__all__'
+
+
+class StaffMemberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StaffMember
+        fields = '__all__'
+
 class CompanyDocumentSerializer(serializers.ModelSerializer):
     class Meta:
         model = CompanyDocument
         fields = '__all__'
         read_only_fields = ['created_by', 'created_at', 'updated_at']
+
+
+class OfficeEquipmentMaintenanceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OfficeEquipmentMaintenance
+        fields = '__all__'

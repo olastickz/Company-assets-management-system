@@ -1,7 +1,7 @@
 from django import forms
 from django.core import validators
 from django.core.exceptions import ValidationError
-from .models import Asset, CompanyAsset, MaintenanceItem, OfficeEquipment, OfficeEquipmentMaintenance, CompanyDocument, StaffMember, Vehicle
+from .models import Asset, CompanyAsset, MaintenanceItem, OfficeEquipment, OfficeEquipmentMaintenance, CompanyDocument, StaffMember, Vehicle, DriverRequest
 
 # Year field removed - use `purchase_date` instead of separate year
 
@@ -234,6 +234,61 @@ class OfficeEquipmentMaintenanceForm(forms.ModelForm):
         }
 
 
+class DriverRequestForm(forms.ModelForm):
+    preferred_date = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+        label='Preferred date for driver support'
+    )
+
+    class Meta:
+        model = DriverRequest
+        fields = ['details', 'preferred_date']
+        widgets = {
+            'details': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 4,
+                'placeholder': 'Describe the task, pickup location, destination, or support needed',
+            }),
+        }
+
+
+class DriverAssignmentForm(forms.ModelForm):
+    assigned_driver = forms.ModelChoiceField(
+        queryset=StaffMember.objects.filter(user__role__role='driver', driver_status='available', is_active=True).order_by('staff_id'),
+        required=True,
+        label='Available Driver',
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    notes = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 3,
+            'placeholder': 'Optional assignment notes or instructions',
+        }),
+        label='Assignment notes'
+    )
+
+    class Meta:
+        model = DriverRequest
+        fields = ['assigned_driver', 'notes']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        queryset = StaffMember.objects.filter(
+            user__role__role='driver',
+            driver_status='available',
+            is_active=True,
+        ).order_by('staff_id')
+
+        instance = kwargs.get('instance')
+        if instance and instance.assigned_driver is not None:
+            queryset = queryset | StaffMember.objects.filter(pk=instance.assigned_driver.pk)
+
+        self.fields['assigned_driver'].queryset = queryset.distinct().order_by('staff_id')
+
+
 class EquipmentTransferForm(forms.Form):
     """Form for transferring equipment between staff members"""
     transferred_to = forms.CharField(
@@ -349,7 +404,7 @@ class CompanyDocumentForm(forms.ModelForm):
             'related_asset', 'related_vehicle', 'related_equipment',
             'issue_date', 'expiry_date', 'renewal_date',
             'document_number', 'issuing_authority', 'status',
-            'notify_days_before', 'responsible_person', 'responsible_staff', 'location', 'notes'
+            'notify_days_before', 'responsible_person', 'responsible_staff', 'location', 'notes', 'document_file'
         ]
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
@@ -366,6 +421,7 @@ class CompanyDocumentForm(forms.ModelForm):
             'responsible_person': forms.TextInput(attrs={'class': 'form-control'}),
             'location': forms.TextInput(attrs={'class': 'form-control'}),
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'document_file': forms.ClearableFileInput(attrs={'class': 'form-control'}),
         }
 
     def clean_notify_days_before(self):
@@ -379,9 +435,28 @@ class CompanyDocumentForm(forms.ModelForm):
         issue_date = cleaned_data.get('issue_date')
         expiry_date = cleaned_data.get('expiry_date')
         related_vehicle = cleaned_data.get('related_vehicle')
+        related_equipment = cleaned_data.get('related_equipment')
+        related_asset = cleaned_data.get('related_asset')
+        document_scope = self.data.get('document_scope', '').strip()
 
         if issue_date and expiry_date and expiry_date < issue_date:
             self.add_error('expiry_date', 'Expiry date must be after issue date')
+
+        if document_scope == 'vehicle' and not related_vehicle:
+            self.add_error('related_vehicle', 'Please select a vehicle asset for vehicle documents.')
+
+        if document_scope == 'equipment' and not related_equipment:
+            self.add_error('related_equipment', 'Please select an equipment item for equipment documents.')
+
+        if document_scope == 'company' and related_vehicle:
+            cleaned_data['related_vehicle'] = None
+        if document_scope == 'company' and related_equipment:
+            cleaned_data['related_equipment'] = None
+
+        if document_scope == 'company' and not related_asset and self.instance.pk is None:
+            cleaned_data['related_asset'] = None
+
+        return cleaned_data
 
         related_asset = cleaned_data.get('related_asset')
         related_equipment = cleaned_data.get('related_equipment')

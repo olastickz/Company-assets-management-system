@@ -65,7 +65,139 @@ def execute(client, name, method, path, body=None):
     }, response.status_code
 
 
-def write_collection(name, description, requests):
+def add_test_script(item, lines):
+    item['event'] = [{
+        'listen': 'test',
+        'script': {
+            'type': 'text/javascript',
+            'exec': lines,
+        },
+    }]
+    return item
+
+
+def add_saved_response(item, name, code, status, body=''):
+    request = item['request']
+    item['response'] = [{
+        'name': name,
+        'originalRequest': request,
+        'status': status,
+        'code': code,
+        '_postman_previewlanguage': 'json' if body else None,
+        'header': [],
+        'cookie': [],
+        'body': json.dumps(body, default=str) if body else '',
+    }]
+    return item
+
+
+def document_request(method, path, body=None):
+    request = {
+        'method': method,
+        'header': [{'key': 'Authorization', 'value': 'Token {{token}}'}],
+        'url': '{{base_url}}' + path,
+    }
+    if body is not None:
+        request['body'] = {'mode': 'formdata', 'formdata': body}
+    return request
+
+
+def document_collection_items():
+    create = {
+        'name': 'Upload Document',
+        'request': document_request('POST', '/api/documents/', [
+            {'key': 'name', 'value': 'Postman Upload Test', 'type': 'text'},
+            {'key': 'document_type', 'value': 'other', 'type': 'text'},
+            {'key': 'expiry_date', 'value': '2027-01-01', 'type': 'text'},
+            {'key': 'issue_date', 'value': '2026-01-01', 'type': 'text'},
+            {'key': 'document_file', 'type': 'file', 'src': '{{document_file_path}}'},
+        ]),
+    }
+    add_test_script(create, [
+        "pm.test('creates document', function () {",
+        '    pm.response.to.have.status(201);',
+        '});',
+        '',
+        "pm.collectionVariables.set('document_id', pm.response.json().id);",
+    ])
+    add_saved_response(create, '201 Created', 201, 'Created', {
+        'id': 1,
+        'name': 'Postman Upload Test',
+        'document_type': 'other',
+        'issue_date': '2026-01-01',
+        'expiry_date': '2027-01-01',
+        'status': 'active',
+        'document_file': '/media/company_documents/document-upload.pdf',
+    })
+
+    list_documents = {
+        'name': 'List Documents',
+        'request': document_request('GET', '/api/documents/'),
+    }
+    add_test_script(list_documents, [
+        "pm.test('lists documents', function () {",
+        '    pm.response.to.have.status(200);',
+        '    pm.expect(pm.response.json()).to.be.an(\'array\');',
+        '});',
+    ])
+    add_saved_response(list_documents, '200 OK', 200, 'OK', [])
+
+    get_document = {
+        'name': 'Get Uploaded Document',
+        'request': document_request('GET', '/api/documents/{{document_id}}/'),
+    }
+    add_test_script(get_document, [
+        "pm.test('gets uploaded document', function () {",
+        '    pm.response.to.have.status(200);',
+        "    pm.expect(pm.response.json().id).to.eql(Number(pm.collectionVariables.get('document_id')));",
+        '});',
+    ])
+    add_saved_response(get_document, '200 OK', 200, 'OK', {
+        'id': 1,
+        'name': 'Postman Upload Test',
+        'document_type': 'other',
+        'issue_date': '2026-01-01',
+        'expiry_date': '2027-01-01',
+        'status': 'active',
+        'document_file': '/media/company_documents/document-upload.pdf',
+    })
+
+    update_document = {
+        'name': 'Update Uploaded Document',
+        'request': document_request('PATCH', '/api/documents/{{document_id}}/', [
+            {'key': 'name', 'value': 'Postman Updated Document', 'type': 'text'},
+        ]),
+    }
+    add_test_script(update_document, [
+        "pm.test('updates document', function () {",
+        '    pm.response.to.have.status(200);',
+        "    pm.expect(pm.response.json().name).to.eql('Postman Updated Document');",
+        '});',
+    ])
+    add_saved_response(update_document, '200 OK', 200, 'OK', {
+        'id': 1,
+        'name': 'Postman Updated Document',
+        'document_type': 'other',
+        'issue_date': '2026-01-01',
+        'expiry_date': '2027-01-01',
+        'status': 'active',
+        'document_file': '/media/company_documents/document-upload.pdf',
+    })
+
+    delete_document = {
+        'name': 'Delete Uploaded Document',
+        'request': document_request('DELETE', '/api/documents/{{document_id}}/'),
+    }
+    add_test_script(delete_document, [
+        "pm.test('deletes document', function () {",
+        '    pm.response.to.have.status(204);',
+        '});',
+    ])
+    add_saved_response(delete_document, '204 No Content', 204, 'No Content')
+    return [create, list_documents, get_document, update_document, delete_document]
+
+
+def write_collection(name, description, requests, extra_variables=None):
     collection = {
         'info': {
             'name': name,
@@ -76,7 +208,7 @@ def write_collection(name, description, requests):
             {'key': 'base_url', 'value': BASE_URL},
             {'key': 'token', 'value': ''},
             {'key': 'delivery_id', 'value': '1'},
-        ],
+        ] + (extra_variables or []),
         'item': requests,
     }
     OUTPUT.mkdir(exist_ok=True)
@@ -143,6 +275,29 @@ def main():
     statuses = []
     for name, method, path in report_specs:
         item, code = execute(manager_client, name, method, path)
+        if name == 'Documents Report':
+            add_test_script(item, [
+                "pm.test('returns HTTP 200', function () {",
+                '    pm.response.to.have.status(200);',
+                '});',
+                '',
+                'const body = pm.response.json();',
+                "pm.test('returns a document report', function () {",
+                "    pm.expect(body).to.have.all.keys('count', 'results');",
+                '    pm.expect(body.count).to.be.a(\'number\');',
+                '    pm.expect(body.results).to.be.an(\'array\');',
+                '    pm.expect(body.count).to.equal(body.results.length);',
+                '});',
+                '',
+                "pm.test('documents contain required fields', function () {",
+                '    body.results.forEach(function (document) {',
+                "        pm.expect(document).to.have.property('id');",
+                "        pm.expect(document).to.have.property('name');",
+                "        pm.expect(document).to.have.property('document_type');",
+                "        pm.expect(document).to.have.property('status');",
+                '    });',
+                '});',
+            ])
         reports.append(item)
         statuses.append((name, code))
     for name, method, path, body in notification_specs:
@@ -172,6 +327,15 @@ def main():
         write_collection('Reports API v1', 'Reports API requests with tested saved responses.', reports),
         write_collection('Notifications API v1', 'Notification API requests with tested saved responses.', notification_results),
         write_collection('Settings API v1', 'Settings API requests with tested saved responses.', settings),
+        write_collection(
+            'Documents API',
+            'Document CRUD requests, including multipart file upload.',
+            document_collection_items(),
+            [
+                {'key': 'document_id', 'value': ''},
+                {'key': 'document_file_path', 'value': './document-upload.pdf'},
+            ],
+        ),
     ]
     print(json.dumps({'collections': [str(path) for path in paths], 'request_count': len(statuses), 'statuses': statuses}, default=str))
 

@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+
+{% block title %}Driver Requests - Telnet Assets Management System{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Driver Requests</h1>
+        <p>View requested driver support and manage assignments.</p>
+    </div>
+    {% if can_request_driver %}
+        <a class="button-inline" href="{% url 'driver_request_create' %}">Request Driver Support</a>
+    {% endif %}
+</div>
+
+<div class="table-card">
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Requested by</th>
+                <th>Status</th>
+                <th>Preferred Date</th>
+                <th>Assigned Driver</th>
+                <th>Created</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for request in driver_requests %}
+            <tr>
+                <td>{{ request.pk }}</td>
+                <td>
+                    {% if request.requested_by %}
+                        {{ request.requested_by.full_name }}
+                    {% else %}
+                        {{ request.requester_user.username }}
+                    {% endif %}
+                </td>
+                <td>{{ request.get_status_display }}</td>
+                <td>{{ request.preferred_date|default:'—' }}</td>
+                <td>
+                    {% if request.assigned_driver %}
+                        {{ request.assigned_driver.full_name }}
+                    {% else %}
+                        Unassigned
+                    {% endif %}
+                </td>
+                <td>{{ request.created_at|date:'M j, Y' }}</td>
+                <td><a href="{% url 'driver_request_detail' request.pk %}">View</a></td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="7">No driver requests found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if page_obj.has_other_pages %}
+<div class="pagination">
+    {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}">Previous</a>
+    {% endif %}
+    <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}">Next</a>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

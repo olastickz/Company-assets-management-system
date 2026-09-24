@@ -11,7 +11,9 @@
             <input type="search" name="q" value="{{ query }}" placeholder="Search by name, staff ID, or branch" class="form-control" style="width:320px; display:inline-block;">
             <button class="btn btn-primary" type="submit">Search</button>
         </form>
+        {% if is_admin %}
         <a class="btn btn-success" href="{% url 'staff_create' %}">+ Add Staff</a>
+        {% endif %}
     </div>
 
     {% if legacy_names and is_admin %}

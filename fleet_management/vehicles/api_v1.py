@@ -282,7 +282,16 @@ class NotificationScheduleView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
         if 'is_enabled' in request.data:
-            schedule.is_enabled = bool(request.data['is_enabled'])
+            enabled = request.data['is_enabled']
+            if isinstance(enabled, bool):
+                schedule.is_enabled = enabled
+            elif isinstance(enabled, str) and enabled.lower() in ('true', 'false'):
+                schedule.is_enabled = enabled.lower() == 'true'
+            else:
+                return Response(
+                    {'is_enabled': 'Use a boolean value.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         schedule.updated_by = request.user
         schedule.save()
         return Response(self.serialize(schedule))

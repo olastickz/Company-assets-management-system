@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ action }} - Telnet Assets Management System{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ action }}</h1>
+        <p>Submit a driver request for support or transportation.</p>
+    </div>
+</div>
+
+<div class="form-card">
+    <form method="post">
+        {% csrf_token %}
+        <div class="form-item">
+            {{ form.details.label_tag }}
+            {{ form.details }}
+            {% if form.details.errors %}
+                <div class="field-errors">{{ form.details.errors }}</div>
+            {% endif %}
+        </div>
+
+        <div class="form-item">
+            {{ form.preferred_date.label_tag }}
+            {{ form.preferred_date }}
+            {% if form.preferred_date.errors %}
+                <div class="field-errors">{{ form.preferred_date.errors }}</div>
+            {% endif %}
+        </div>
+
+        <div class="action-row">
+            <button type="submit" class="button-inline">Submit Request</button>
+            <a class="link" href="{% url 'driver_requests_list' %}">Back to list</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

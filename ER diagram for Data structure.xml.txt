@@ -1,0 +1,68 @@
++----------------+       +------------------+       +------------------+
+|     Asset      |       |   CompanyAsset   |       |  OfficeEquipment |
+|----------------|       |------------------|       |------------------|
+| asset_id (PK)  |<------| asset_id (FK)    |       | asset_id (FK)    |
+| asset_type     |       | license_plate    |       | serial_number    |
+| purchase_date  |       | make/model       |       | condition        |
+| status         |       | ...              |       | ...              |
++----------------+       +------------------+       +------------------+
+        |                         |
+        | (1)                      | (1)
+        | has                      | has
+        | (0..*)                   | (0..*)
++------------------+       +------------------+       +------------------+
+| MaintenanceItem  |       |CompanyDocument   |       |OfficeEquipment   |
+|------------------|       |------------------|       |Maintenance       |
+| maint_id (PK)    |       | doc_id (PK)      |       |------------------|
+| asset_id (FK)    |       | asset_id (FK)    |       | equip_maint_id(PK)|
+| date             |       | expiry_date      |       | equipment_id (FK)|
+| description      |       | file_link        |       | date             |
++------------------+       +------------------+       | notes            |
+                                                     +------------------+
+
++------------------+       +------------------+       +------------------+
+|  StaffMember     |       |  UserRole        |       |     User         |
+|------------------|       |------------------|       | (Django built-in)|
+| staff_id (PK)    |       | role_id (PK)     |       |------------------|
+| name             |       | user_id (FK)     |       | id (PK)          |
+| department       |       | role_name        |       | username         |
++------------------+       | department       |       | email            |
+        |                  +------------------+       +------------------+
+        | (1)                            ^
+        | assigns                        | (1)
+        | (0..*)                         |
++------------------+       +------------------+
+|AssetAssignment   |       |  AuditLog        |
+|History           |       |------------------|
+|------------------|       | log_id (PK)      |
+| assign_id (PK)   |       | user_id (FK)     |
+| asset_id (FK)    |       | action           |
+| staff_id (FK)    |       | timestamp        |
+| start_date       |       | details          |
+| end_date         |       +------------------+
++------------------+
+
++------------------+       +------------------+
+| AssetRelationship|       | EquipmentTransfer|
+|------------------|       |------------------|
+| rel_id (PK)      |       | transfer_id (PK) |
+| parent_asset_id  |       | equipment_id (FK)|
+| child_asset_id   |       | from_staff (FK)  |
+| relationship_type|       | to_staff (FK)    |
++------------------+       | transfer_date    |
+                           +------------------+
+
++------------------+       +------------------+       +------------------+
+| EmailRecipient   |       | EmailDeliveryLog |       | EmailSchedule    |
+|------------------|       |------------------|       |------------------|
+| recipient_id(PK) |       | log_id (PK)      |       | schedule_id (PK) |
+| email_address    |       | recipient_id (FK)|       | event_type       |
+| staff_id (FK)    |       | sent_time        |       | scheduled_time   |
+| subscribed_events|       | status           |       | recurring        |
++------------------+       +------------------+       +------------------+
+
+Legend:
+PK = Primary Key
+FK = Foreign Key
+(1) = one-to-many relationship (1 to *)
+(0..*) = zero or many

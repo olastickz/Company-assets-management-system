@@ -1,0 +1,56 @@
+Scheduler configured for 11:41
+Traceback (most recent call last):
+  File "C:\Users\USER\OneDrive\Desktop\Project for telnet\fleet_management\manage.py", line 22, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\USER\OneDrive\Desktop\Project for telnet\fleet_management\manage.py", line 18, in main
+    execute_from_command_line(sys.argv)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\USER\OneDrive\Desktop\Project for telnet\.venv\Lib\site-packages\django\core\management\__init__.py", line 443, in execute_from_command_line
+    utility.execute()
+    ~~~~~~~~~~~~~~~^^
+  File "C:\Users\USER\OneDrive\Desktop\Project for telnet\.venv\Lib\site-packages\django\core\management\__init__.py", line 437, in execute
+    self.fetch_command(subcommand).run_from_argv(self.argv)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\USER\OneDrive\Desktop\Project for telnet\.venv\Lib\site-packages\django\core\management\base.py", line 420, in run_from_argv
+    self.execute(*args, **cmd_options)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USER\OneDrive\Desktop\Project for telnet\.venv\Lib\site-packages\django\core\management\base.py", line 464, in execute
+    output = self.handle(*args, **options)
+  File "C:\Users\USER\OneDrive\Desktop\Project for telnet\.venv\Lib\site-packages\django\core\management\commands\loaddata.py", line 103, in handle
+    self.loaddata(fixture_labels)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "C:\Users\USER\OneDrive\Desktop\Project for telnet\.venv\Lib\site-packages\django\core\management\commands\loaddata.py", line 164, in loaddata
+    self.load_label(fixture_label)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "C:\Users\USER\OneDrive\Desktop\Project for telnet\.venv\Lib\site-packages\django\core\management\commands\loaddata.py", line 254, in load_label
+    if self.save_obj(obj):
+       ~~~~~~~~~~~~~^^^^^
+  File "C:\Users\USER\OneDrive\Desktop\Project for telnet\.venv\Lib\site-packages\django\core\management\commands\loaddata.py", line 210, in save_obj
+    obj.save(using=self.using)
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USER\OneDrive\Desktop\Project for telnet\.venv\Lib\site-packages\django\core\serializers\base.py", line 266, in save
+    models.Model.save_base(self.object, using=using, raw=True, **kwargs)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USER\OneDrive\Desktop\Project for telnet\.venv\Lib\site-packages\django\db\models\base.py", line 981, in save_base
+    post_save.send(
+    ~~~~~~~~~~~~~~^
+        sender=origin,
+        ^^^^^^^^^^^^^^
+    ...<4 lines>...
+        using=using,
+        ^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\USER\OneDrive\Desktop\Project for telnet\.venv\Lib\site-packages\django\dispatch\dispatcher.py", line 209, in send
+    response = receiver(signal=self, sender=sender, **named)
+  File "C:\Users\USER\OneDrive\Desktop\Project for telnet\fleet_management\vehicles\apps.py", line 100, in update_scheduler
+    self.setup_scheduler()
+    ~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\USER\OneDrive\Desktop\Project for telnet\fleet_management\vehicles\apps.py", line 94, in setup_scheduler
+    print("\U0001f680 Scheduler started!")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USER\AppData\Local\Python\pythoncore-3.14-64\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f680' in position 0: character maps to <undefined>

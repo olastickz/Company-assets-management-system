@@ -238,6 +238,10 @@
         </div>
         {% if is_admin %}
         <a href="{% url 'equipment_maintenance_create' equipment.pk %}" class="button-inline">+ Add Maintenance Record</a>
+        {% elif can_report_maintenance %}
+        <a href="{% url 'equipment_maintenance_create' equipment.pk %}" class="button-inline">🚨 Report Fault / Request Maintenance</a>
+        {% elif user_role == 'staff' or user_role == 'driver' %}
+        <p style="margin:0; color:#475569; font-size:0.95rem;">This equipment is not assigned to you, so escalation/reporting is unavailable here. Contact your manager to request access or assignment.</p>
         {% endif %}
     </div>
     <div class="table-card">
