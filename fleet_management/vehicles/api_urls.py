@@ -8,6 +8,7 @@ from .api import (
     CompanyDocumentViewSet,
     VehicleViewSet,
     OfficeEquipmentViewSet,
+    EquipmentWorkOrderViewSet,
     get_token,
     staff_api,
     staff_detail_api,
@@ -30,6 +31,7 @@ from .api import (
 router = DefaultRouter()
 router.register(r'vehicles', VehicleViewSet, basename='vehicle')
 router.register(r'equipment', OfficeEquipmentViewSet, basename='equipment')
+router.register(r'equipment-work-orders', EquipmentWorkOrderViewSet, basename='equipment-work-order')
 router.register(r'documents', CompanyDocumentViewSet, basename='document')
 
 @api_view(['GET'])
@@ -38,6 +40,7 @@ def api_root(request, format=None):
     return Response({
         'vehicles': reverse('vehicle-list', request=request, format=format),
         'equipment': reverse('equipment-list', request=request, format=format),
+        'equipment-work-orders': reverse('equipment-work-order-list', request=request, format=format),
         'documents': reverse('document-list', request=request, format=format),
         'get-token': reverse('get-token', request=request, format=format),
     })

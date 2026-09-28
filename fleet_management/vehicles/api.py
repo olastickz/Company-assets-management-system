@@ -6,8 +6,8 @@ from rest_framework.authtoken.models import Token
 from django.contrib.auth.forms import PasswordResetForm
 from django.contrib.auth.models import User
 from django.shortcuts import get_object_or_404
-from .models import Vehicle, OfficeEquipment, Asset, StaffMember, CompanyDocument, OfficeEquipmentMaintenance
-from .permissions import get_user_role, is_admin
+from .models import Vehicle, OfficeEquipment, EquipmentWorkOrder, Asset, StaffMember, CompanyDocument, OfficeEquipmentMaintenance
+from .permissions import get_user_role, is_admin, is_manager
 from .serializers import (
     VehicleSerializer,
     OfficeEquipmentSerializer,
@@ -15,6 +15,7 @@ from .serializers import (
     StaffMemberSerializer,
     CompanyDocumentSerializer,
     OfficeEquipmentMaintenanceSerializer,
+    EquipmentWorkOrderSerializer,
 )
 from . import views
 
@@ -29,6 +30,17 @@ class OfficeEquipmentViewSet(viewsets.ModelViewSet):
     queryset = OfficeEquipment.objects.all().order_by('-updated_at')
     serializer_class = OfficeEquipmentSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+
+class ManagerOrAdminPermission(permissions.BasePermission):
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and is_manager(request.user))
+
+
+class EquipmentWorkOrderViewSet(viewsets.ModelViewSet):
+    queryset = EquipmentWorkOrder.objects.select_related('equipment').all()
+    serializer_class = EquipmentWorkOrderSerializer
+    permission_classes = [ManagerOrAdminPermission]
 
 
 class CompanyDocumentViewSet(viewsets.ModelViewSet):

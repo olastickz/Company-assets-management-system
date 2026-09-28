@@ -219,6 +219,12 @@ class OfficeEquipment(models.Model):
         return f"{self.name} ({self.equipment_type})"
 
     def save(self, *args, **kwargs):
+        update_fields = kwargs.get('update_fields')
+        track_status = update_fields is None or 'status' in update_fields
+        previous_status = None
+        if self.pk:
+            previous_status = type(self).objects.filter(pk=self.pk).values_list('status', flat=True).first()
+
         super().save(*args, **kwargs)
         if not self.asset:
             asset = Asset.objects.create(
@@ -231,6 +237,11 @@ class OfficeEquipment(models.Model):
             self.asset = asset
             super().save(update_fields=['asset'])
 
+        if track_status:
+            saved_status = type(self).objects.filter(pk=self.pk).values_list('status', flat=True).first()
+            if previous_status != saved_status:
+                EquipmentWorkOrder.create_for_equipment_status(self, saved_status)
+
 
 class OfficeEquipmentMaintenance(models.Model):
     equipment = models.ForeignKey(OfficeEquipment, on_delete=models.CASCADE, related_name='maintenance_records')
@@ -242,6 +253,83 @@ class OfficeEquipmentMaintenance(models.Model):
 
     def __str__(self):
         return f"{self.equipment.name} - {self.description} ({self.maintenance_date})"
+
+
+class EquipmentWorkOrder(models.Model):
+    WORK_TYPE_CHOICES = [
+        ('repair', 'Repair'),
+        ('certification', 'Certification'),
+    ]
+    PRIORITY_CHOICES = [
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High'),
+    ]
+    STATUS_CHOICES = [
+        ('open', 'Open'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+    ACTIVE_STATUSES = ('open', 'in_progress')
+
+    equipment = models.ForeignKey(OfficeEquipment, on_delete=models.CASCADE, related_name='work_orders')
+    work_type = models.CharField(max_length=20, choices=WORK_TYPE_CHOICES)
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='open')
+    due_date = models.DateField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    completed_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['equipment', 'work_type'],
+                condition=models.Q(status__in=['open', 'in_progress']),
+                name='unique_active_equipment_work_order',
+            ),
+        ]
+
+    @classmethod
+    def create_for_equipment_status(cls, equipment, status_value):
+        work_order_config = {
+            'damaged': ('repair', 'Repair required', 'high'),
+            'pending_certification': ('certification', 'Certification required', 'medium'),
+        }
+        config = work_order_config.get(status_value)
+        if not config:
+            return None
+
+        work_type, title, priority = config
+        work_order, _ = cls.objects.get_or_create(
+            equipment=equipment,
+            work_type=work_type,
+            status__in=cls.ACTIVE_STATUSES,
+            defaults={
+                'status': 'open',
+                'title': f'{title}: {equipment.name}',
+                'description': f'Automatically created when equipment status changed to {equipment.get_status_display()}.',
+                'priority': priority,
+            },
+        )
+        return work_order
+
+    def save(self, *args, **kwargs):
+        if self.status == 'completed' and not self.completed_at:
+            self.completed_at = timezone.now()
+        elif self.status != 'completed':
+            self.completed_at = None
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None:
+            kwargs['update_fields'] = set(update_fields) | {'completed_at'}
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.title} ({self.get_status_display()})'
 
 
 # ========================

@@ -4,7 +4,7 @@ from django.test import TestCase, Client
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
-from .models import Asset, Vehicle, CompanyDocument, UserRole, StaffMember, OfficeEquipment, DriverRequest
+from .models import Asset, Vehicle, CompanyDocument, UserRole, StaffMember, OfficeEquipment, EquipmentWorkOrder, DriverRequest
 
 
 class VehicleModelTests(TestCase):
@@ -31,6 +31,74 @@ class VehicleModelTests(TestCase):
             name='Test', license_plate='TEST126', insurance_expiry=None
         )
         self.assertEqual(vehicle.get_status('insurance_expiry'), 'unknown')
+
+
+class EquipmentWorkOrderTests(TestCase):
+    def test_damaged_status_creates_high_priority_repair_order(self):
+        equipment = OfficeEquipment.objects.create(name='Damaged Printer', status='damaged')
+
+        work_order = EquipmentWorkOrder.objects.get(equipment=equipment)
+
+        self.assertEqual(work_order.work_type, 'repair')
+        self.assertEqual(work_order.priority, 'high')
+        self.assertEqual(work_order.status, 'open')
+
+    def test_pending_certification_creates_certification_order(self):
+        equipment = OfficeEquipment.objects.create(name='Expired Laptop', status='pending_certification')
+
+        work_order = EquipmentWorkOrder.objects.get(equipment=equipment)
+
+        self.assertEqual(work_order.work_type, 'certification')
+        self.assertEqual(work_order.priority, 'medium')
+
+    def test_repeated_status_changes_do_not_duplicate_open_orders(self):
+        equipment = OfficeEquipment.objects.create(name='Damaged Scanner', status='damaged')
+        equipment.status = 'active'
+        equipment.save()
+        equipment.status = 'damaged'
+        equipment.save()
+
+        self.assertEqual(
+            EquipmentWorkOrder.objects.filter(equipment=equipment, status__in=EquipmentWorkOrder.ACTIVE_STATUSES).count(),
+            1,
+        )
+
+        work_order = EquipmentWorkOrder.objects.get(equipment=equipment)
+        work_order.status = 'completed'
+        work_order.save()
+        equipment.status = 'active'
+        equipment.save()
+        equipment.status = 'damaged'
+        equipment.save()
+
+        self.assertEqual(EquipmentWorkOrder.objects.filter(equipment=equipment).count(), 2)
+        self.assertIsNotNone(work_order.completed_at)
+
+    def test_update_fields_without_status_does_not_create_work_order(self):
+        equipment = OfficeEquipment.objects.create(name='Printer', status='active')
+        equipment.status = 'damaged'
+        equipment.name = 'Renamed Printer'
+        equipment.save(update_fields=['name'])
+
+        self.assertFalse(EquipmentWorkOrder.objects.exists())
+
+    def test_work_order_api_is_manager_only_and_returns_equipment_fields(self):
+        manager = User.objects.create_user(username='work-order-manager', password='manager-pass')
+        UserRole.objects.create(user=manager, role='manager')
+        staff = User.objects.create_user(username='work-order-staff', password='staff-pass')
+        UserRole.objects.create(user=staff, role='staff')
+        equipment = OfficeEquipment.objects.create(name='Damaged Monitor', status='damaged')
+        client = APIClient()
+
+        self.assertEqual(client.get('/api/equipment-work-orders/', secure=True).status_code, 401)
+        client.force_authenticate(user=staff)
+        self.assertEqual(client.get('/api/equipment-work-orders/', secure=True).status_code, 403)
+        client.force_authenticate(user=manager)
+        response = client.get('/api/equipment-work-orders/', secure=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data[0]['machine_name'], equipment.name)
+        self.assertEqual(response.data[0]['work_type'], 'repair')
 
 
 class ViewsTests(TestCase):
