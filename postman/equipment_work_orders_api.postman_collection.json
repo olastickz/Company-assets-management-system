@@ -1,0 +1,176 @@
+{
+  "info": {
+    "name": "Equipment Work Orders API",
+    "description": "Admin/manager requests for the equipment work-order queue. Includes token login and work-order listing.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://207.180.246.69:7038",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "paste-admin-token-here",
+      "type": "secret"
+    },
+    {
+      "key": "username",
+      "value": "telnet",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "paste-admin-password-here",
+      "type": "secret"
+    }
+  ],
+  "item": [
+    {
+      "name": "Get Admin Token",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/get-token/",
+          "protocol": "http",
+          "host": [
+            "207.180.246.69",
+            "7038"
+          ],
+          "path": [
+            "api",
+            "get-token",
+            ""
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/get-token/",
+              "protocol": "http",
+              "host": [
+                "207.180.246.69",
+                "7038"
+              ],
+              "path": [
+                "api",
+                "get-token",
+                ""
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"token\": \"<admin-token>\"\n}",
+          "_postman_previewlanguage": "json"
+        }
+      ]
+    },
+    {
+      "name": "List Equipment Work Orders",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token {{token}}",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/equipment-work-orders/",
+          "protocol": "http",
+          "host": [
+            "207.180.246.69",
+            "7038"
+          ],
+          "path": [
+            "api",
+            "equipment-work-orders",
+            ""
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "200 OK - Example",
+          "originalRequest": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Token {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/equipment-work-orders/",
+              "protocol": "http",
+              "host": [
+                "207.180.246.69",
+                "7038"
+              ],
+              "path": [
+                "api",
+                "equipment-work-orders",
+                ""
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "[\n  {\n    \"id\": 1,\n    \"equipment\": 12,\n    \"equipment_name\": \"Laptop\",\n    \"work_type\": \"repair\",\n    \"status\": \"open\",\n    \"priority\": \"high\",\n    \"due_date\": \"2026-09-30\",\n    \"notes\": \"Damaged unit requires inspection\"\n  }\n]",
+          "_postman_previewlanguage": "json"
+        }
+      ]
+    }
+  ]
+}

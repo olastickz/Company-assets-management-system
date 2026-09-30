@@ -133,17 +133,33 @@ WSGI_APPLICATION = 'asset_management.wsgi.application'
 # ========================
 # Database
 # ========================
-# Prefer PostgreSQL on the VPS / production environment. The app supports either
-# a DATABASE_URL value or standard POSTGRES_* environment variables.
-if os.getenv('DATABASE_URL'):
-    DATABASES = {
-        'default': dj_database_url.config(
-            default=os.getenv('DATABASE_URL'),
-            conn_max_age=600,
-            ssl_require=False,
-        )
-    }
-else:
+
+def _is_placeholder_database_url(value):
+    if not value:
+        return False
+    cleaned = value.strip().lower()
+    placeholder_tokens = (
+        'user:password@host:5432/db_name',
+        'user:password@host',
+        'postgresql://user:password@host:5432/db_name',
+        'postgresql://user:password@host',
+        'postgres://user:password@host:5432/db_name',
+        'postgres://user:password@host',
+    )
+    return cleaned in placeholder_tokens or cleaned.endswith('user:password@host:5432/db_name') or cleaned.endswith('user:password@host')
+
+
+def _resolve_database_settings():
+    raw_database_url = os.getenv('DATABASE_URL')
+    if raw_database_url and not _is_placeholder_database_url(raw_database_url):
+        return {
+            'default': dj_database_url.config(
+                default=raw_database_url,
+                conn_max_age=600,
+                ssl_require=False,
+            )
+        }
+
     postgres_db = (
         os.getenv('POSTGRES_DB')
         or os.getenv('PGDATABASE')
@@ -173,7 +189,7 @@ else:
     )
 
     if postgres_db and postgres_user and postgres_password:
-        DATABASES = {
+        return {
             'default': {
                 'ENGINE': 'django.db.backends.postgresql',
                 'NAME': postgres_db,
@@ -183,13 +199,16 @@ else:
                 'PORT': postgres_port,
             }
         }
-    else:
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.sqlite3',
-                'NAME': BASE_DIR / 'db.sqlite3',
-            }
+
+    return {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
         }
+    }
+
+
+DATABASES = _resolve_database_settings()
 
 # ========================
 # Password validation

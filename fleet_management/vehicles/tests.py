@@ -4,7 +4,14 @@ from django.test import TestCase, Client
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
+from asset_management import settings as app_settings
 from .models import Asset, Vehicle, CompanyDocument, UserRole, StaffMember, OfficeEquipment, EquipmentWorkOrder, DriverRequest
+
+
+class DatabaseConfigurationTests(TestCase):
+    def test_placeholder_database_url_is_detected(self):
+        self.assertTrue(app_settings._is_placeholder_database_url('postgresql://USER:PASSWORD@HOST:5432/DB_NAME'))
+        self.assertFalse(app_settings._is_placeholder_database_url('postgresql://fleet:secret@db.internal:5432/fleetdb'))
 
 
 class VehicleModelTests(TestCase):
