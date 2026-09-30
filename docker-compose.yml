@@ -1,4 +1,16 @@
 services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fleet_management}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
   web:
     build:
       context: .
@@ -16,6 +28,8 @@ services:
     volumes:
       - ./fleet_management/media:/app/fleet_management/media
       - ./fleet_management/staticfiles:/app/fleet_management/staticfiles
+    depends_on:
+      - db
     restart: unless-stopped
 
   scheduler:
@@ -29,5 +43,9 @@ services:
     volumes:
       - ./fleet_management/media:/app/fleet_management/media
     depends_on:
+      - db
       - web
     restart: unless-stopped
+
+volumes:
+  postgres_data:
