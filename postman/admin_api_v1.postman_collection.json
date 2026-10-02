@@ -1,0 +1,255 @@
+{
+  "info": {
+    "name": "Admin API v1",
+    "description": "Read-only admin API checks. Set base_url, admin_token, and manager_token before running. Write workflows are covered by Django API tests to avoid creating test records in a shared database.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "admin_token",
+      "value": ""
+    },
+    {
+      "key": "manager_token",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Admin Users",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token {{admin_token}}"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/admin/users/?page_size=10"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('admin can list users', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "const body = pm.response.json();",
+              "pm.test('user list is paginated', function () {",
+              "    pm.expect(body.count).to.be.a('number');",
+              "    pm.expect(body.results).to.be.an('array');",
+              "    pm.expect(body.results.length).to.be.at.most(10);",
+              "    pm.expect(body).to.have.property('next');",
+              "    pm.expect(body).to.have.property('previous');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin Roles",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token {{admin_token}}"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/admin/roles/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('returns the app role catalog', function () {",
+              "    pm.response.to.have.status(200);",
+              "    const roles = pm.response.json().map(function (role) { return role.value; });",
+              "    pm.expect(roles).to.include.members(['admin', 'manager', 'driver', 'staff']);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin Staff Directory",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token {{admin_token}}"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/admin/staff/?page_size=10"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('admin can list staff records', function () {",
+              "    pm.response.to.have.status(200);",
+              "    const body = pm.response.json();",
+              "    pm.expect(body.results).to.be.an('array');",
+              "    pm.expect(body.count).to.be.a('number');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Audit Report",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token {{admin_token}}"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/reports/audit/?page_size=10"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('audit results are paginated', function () {",
+              "    pm.response.to.have.status(200);",
+              "    const body = pm.response.json();",
+              "    pm.expect(body.results).to.be.an('array');",
+              "    pm.expect(body.count).to.be.a('number');",
+              "    pm.expect(body.results.length).to.be.at.most(10);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notification Recipients",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token {{admin_token}}"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/notifications/recipients/?page_size=10"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('admin can list notification recipients', function () {",
+              "    pm.response.to.have.status(200);",
+              "    const body = pm.response.json();",
+              "    pm.expect(body.results).to.be.an('array');",
+              "    pm.expect(body.count).to.be.a('number');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notification Schedule",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token {{admin_token}}"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/notifications/schedule/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('admin can read notification schedule', function () {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.json()).to.have.property('is_enabled');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Organization Settings",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token {{admin_token}}"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/settings/organization/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('admin can read organization settings', function () {",
+              "    pm.response.to.have.status(200);",
+              "    const body = pm.response.json();",
+              "    pm.expect(body).to.have.property('name');",
+              "    pm.expect(body).to.have.property('timezone');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Manager Cannot Access User Administration",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token {{manager_token}}"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/admin/users/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('manager is forbidden from user administration', function () {",
+              "    pm.response.to.have.status(403);",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

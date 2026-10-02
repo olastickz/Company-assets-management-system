@@ -2,9 +2,11 @@ from datetime import datetime
 
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.db.models import Count, Sum
+from django.db.models import Count, Q, Sum
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework import status
+from rest_framework import generics, status
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -24,8 +26,10 @@ from .models import (
     OfficeEquipment,
     OfficeEquipmentMaintenance,
     StaffMember,
+    UserRole,
 )
 from .permissions import get_user_role
+from .serializers import AdminUserSerializer, NotificationRecipientSerializer, StaffMemberSerializer
 
 
 class ManagerPermission(IsAuthenticated):
@@ -40,6 +44,112 @@ class AdminPermission(IsAuthenticated):
         return super().has_permission(request, view) and (
             request.user.is_superuser or get_user_role(request.user) == 'admin'
         )
+
+
+class AdminPagination(PageNumberPagination):
+    page_size = 50
+    page_size_query_param = 'page_size'
+    max_page_size = 200
+
+
+class AdminUsersView(APIView):
+    permission_classes = [AdminPermission]
+    pagination_class = AdminPagination
+
+    def get(self, request):
+        users = User.objects.select_related('role').order_by('username')
+        search = request.query_params.get('search')
+        if search:
+            users = users.filter(
+                Q(username__icontains=search)
+                | Q(first_name__icontains=search)
+                | Q(last_name__icontains=search)
+                | Q(email__icontains=search)
+            )
+        role = request.query_params.get('role')
+        if role == 'admin':
+            users = users.filter(Q(role__role='admin') | Q(is_superuser=True))
+        elif role == 'staff':
+            users = users.filter(Q(role__role='staff') | Q(role__isnull=True))
+        elif role:
+            users = users.filter(role__role=role)
+        active = request.query_params.get('is_active')
+        if active in ('true', 'false'):
+            users = users.filter(is_active=(active == 'true'))
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(users, request, view=self)
+        return paginator.get_paginated_response(AdminUserSerializer(page, many=True).data)
+
+    def post(self, request):
+        serializer = AdminUserSerializer(data=request.data)
+        if serializer.is_valid():
+            return self._create(serializer)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @staticmethod
+    def _create(serializer):
+        user = serializer.save()
+        return Response(AdminUserSerializer(user).data, status=status.HTTP_201_CREATED)
+
+
+class AdminUserDetailView(APIView):
+    permission_classes = [AdminPermission]
+
+    def get(self, request, user_id):
+        user = get_object_or_404(User.objects.select_related('role'), pk=user_id)
+        return Response(AdminUserSerializer(user).data)
+
+    def patch(self, request, user_id):
+        user = get_object_or_404(User.objects.select_related('role'), pk=user_id)
+        if user.is_superuser:
+            return Response({'detail': 'Django superuser accounts cannot be changed through this API.'}, status=status.HTTP_403_FORBIDDEN)
+        if user.pk == request.user.pk and request.data.get('is_active') is False:
+            return Response({'is_active': 'You cannot deactivate your own account.'}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = AdminUserSerializer(user, data=request.data, partial=True)
+        if serializer.is_valid():
+            return Response(AdminUserSerializer(serializer.save()).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class AdminRolesView(APIView):
+    permission_classes = [AdminPermission]
+
+    def get(self, request):
+        return Response([
+            {'value': value, 'label': label}
+            for value, label in UserRole.ROLE_CHOICES
+        ])
+
+
+class AdminStaffListView(generics.ListCreateAPIView):
+    permission_classes = [AdminPermission]
+    serializer_class = StaffMemberSerializer
+    pagination_class = AdminPagination
+
+    def get_queryset(self):
+        staff = StaffMember.objects.select_related('user').order_by('staff_id')
+        search = self.request.query_params.get('search')
+        if search:
+            staff = staff.filter(
+                Q(staff_id__icontains=search)
+                | Q(first_name__icontains=search)
+                | Q(last_name__icontains=search)
+                | Q(email__icontains=search)
+            )
+        for field in ('department', 'branch', 'driver_status'):
+            value = self.request.query_params.get(field)
+            if value:
+                staff = staff.filter(**{field: value})
+        active = self.request.query_params.get('is_active')
+        if active in ('true', 'false'):
+            staff = staff.filter(is_active=(active == 'true'))
+        return staff
+
+
+class AdminStaffDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [AdminPermission]
+    queryset = StaffMember.objects.select_related('user').all()
+    serializer_class = StaffMemberSerializer
 
 
 def serialize_user(user):
@@ -221,7 +331,13 @@ class AuditReportView(APIView):
         logs = AuditLog.objects.select_related('user').all()
         if request.query_params.get('action'):
             logs = logs.filter(action=request.query_params['action'])
-        return Response({'count': logs.count(), 'results': [
+        if request.query_params.get('model_name'):
+            logs = logs.filter(model_name__icontains=request.query_params['model_name'])
+        if request.query_params.get('user'):
+            logs = logs.filter(user__username__icontains=request.query_params['user'])
+        paginator = AdminPagination()
+        page = paginator.paginate_queryset(logs, request, view=self)
+        results = [
             {
                 'id': item.id,
                 'user': item.user.username if item.user else None,
@@ -232,8 +348,9 @@ class AuditReportView(APIView):
                 'ip_address': item.ip_address,
                 'timestamp': item.timestamp,
             }
-            for item in logs[:500]
-        ]})
+            for item in page
+        ]
+        return paginator.get_paginated_response(results)
 
 
 class NotificationScheduleView(APIView):
@@ -301,27 +418,50 @@ class NotificationRecipientsView(APIView):
     permission_classes = [AdminPermission]
 
     def get(self, request):
-        recipients = EmailRecipient.objects.all()
-        return Response({'count': recipients.count(), 'results': [self.serialize(item) for item in recipients]})
+        recipients = EmailRecipient.objects.all().order_by('email')
+        search = request.query_params.get('search')
+        if search:
+            recipients = recipients.filter(
+                Q(email__icontains=search) | Q(full_name__icontains=search)
+            )
+        active = request.query_params.get('is_active')
+        if active in ('true', 'false'):
+            recipients = recipients.filter(is_active=(active == 'true'))
+        paginator = AdminPagination()
+        page = paginator.paginate_queryset(recipients, request, view=self)
+        return paginator.get_paginated_response(
+            NotificationRecipientSerializer(page, many=True).data
+        )
 
     def post(self, request):
-        recipient = EmailRecipient.objects.create(
-            email=request.data.get('email'),
-            full_name=request.data.get('full_name', ''),
-            is_active=request.data.get('is_active', True),
-            created_by=request.user,
-        )
-        return Response(self.serialize(recipient), status=status.HTTP_201_CREATED)
+        serializer = NotificationRecipientSerializer(data=request.data)
+        if serializer.is_valid():
+            recipient = serializer.save(created_by=request.user)
+            return Response(
+                NotificationRecipientSerializer(recipient).data,
+                status=status.HTTP_201_CREATED,
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @staticmethod
-    def serialize(recipient):
-        return {
-            'id': recipient.id,
-            'email': recipient.email,
-            'full_name': recipient.full_name,
-            'is_active': recipient.is_active,
-            'created_at': recipient.created_at,
-        }
+
+class NotificationRecipientDetailView(APIView):
+    permission_classes = [AdminPermission]
+
+    def get(self, request, recipient_id):
+        recipient = get_object_or_404(EmailRecipient, pk=recipient_id)
+        return Response(NotificationRecipientSerializer(recipient).data)
+
+    def patch(self, request, recipient_id):
+        recipient = get_object_or_404(EmailRecipient, pk=recipient_id)
+        serializer = NotificationRecipientSerializer(recipient, data=request.data, partial=True)
+        if serializer.is_valid():
+            return Response(NotificationRecipientSerializer(serializer.save()).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, recipient_id):
+        recipient = get_object_or_404(EmailRecipient, pk=recipient_id)
+        recipient.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class NotificationDeliveriesView(APIView):

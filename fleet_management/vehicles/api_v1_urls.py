@@ -2,11 +2,17 @@ from django.urls import path
 
 from .api_v1 import (
     AuditReportView,
+    AdminRolesView,
+    AdminStaffDetailView,
+    AdminStaffListView,
+    AdminUserDetailView,
+    AdminUsersView,
     DocumentReportView,
     EquipmentReportView,
     MaintenanceReportView,
     NotificationDeliveriesView,
     NotificationRecipientsView,
+    NotificationRecipientDetailView,
     NotificationRetryView,
     NotificationScheduleView,
     NotificationSettingsView,
@@ -19,6 +25,11 @@ from .api_v1 import (
 )
 
 urlpatterns = [
+    path('admin/roles/', AdminRolesView.as_view(), name='api-v1-admin-roles'),
+    path('admin/users/', AdminUsersView.as_view(), name='api-v1-admin-users'),
+    path('admin/users/<int:user_id>/', AdminUserDetailView.as_view(), name='api-v1-admin-user-detail'),
+    path('admin/staff/', AdminStaffListView.as_view(), name='api-v1-admin-staff'),
+    path('admin/staff/<int:pk>/', AdminStaffDetailView.as_view(), name='api-v1-admin-staff-detail'),
     path('reports/overview/', OverviewReportView.as_view(), name='api-v1-report-overview'),
     path('reports/vehicles/', VehicleReportView.as_view(), name='api-v1-report-vehicles'),
     path('reports/equipment/', EquipmentReportView.as_view(), name='api-v1-report-equipment'),
@@ -28,6 +39,7 @@ urlpatterns = [
     path('reports/audit/', AuditReportView.as_view(), name='api-v1-report-audit'),
     path('notifications/schedule/', NotificationScheduleView.as_view(), name='api-v1-notification-schedule'),
     path('notifications/recipients/', NotificationRecipientsView.as_view(), name='api-v1-notification-recipients'),
+    path('notifications/recipients/<int:recipient_id>/', NotificationRecipientDetailView.as_view(), name='api-v1-notification-recipient-detail'),
     path('notifications/deliveries/', NotificationDeliveriesView.as_view(), name='api-v1-notification-deliveries'),
     path('notifications/send-now/', SendNotificationNowView.as_view(), name='api-v1-notification-send-now'),
     path('notifications/deliveries/<int:delivery_id>/retry/', NotificationRetryView.as_view(), name='api-v1-notification-retry'),

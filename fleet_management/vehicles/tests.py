@@ -1,6 +1,6 @@
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, Client
+from django.test import TestCase, Client, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -106,6 +106,128 @@ class EquipmentWorkOrderTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data[0]['machine_name'], equipment.name)
         self.assertEqual(response.data[0]['work_type'], 'repair')
+
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class AdminApiTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(username='api-admin', password='admin-pass')
+        UserRole.objects.create(user=self.admin, role='admin')
+        self.manager = User.objects.create_user(username='api-manager', password='manager-pass')
+        UserRole.objects.create(user=self.manager, role='manager')
+        self.staff_user = User.objects.create_user(username='api-staff', password='staff-pass')
+        UserRole.objects.create(user=self.staff_user, role='staff')
+        self.admin_client = APIClient()
+        self.admin_client.force_authenticate(self.admin)
+        self.manager_client = APIClient()
+        self.manager_client.force_authenticate(self.manager)
+        self.staff_client = APIClient()
+        self.staff_client.force_authenticate(self.staff_user)
+
+    def test_admin_user_list_is_paginated_and_role_catalog_is_available(self):
+        response = self.admin_client.get('/api/v1/admin/users/?page_size=1')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['count'], 3)
+        self.assertEqual(len(response.data['results']), 1)
+        self.assertIsNotNone(response.data['next'])
+
+        roles_response = self.admin_client.get('/api/v1/admin/roles/')
+        self.assertEqual(roles_response.status_code, 200)
+        self.assertEqual(
+            {role['value'] for role in roles_response.data},
+            {'admin', 'manager', 'driver', 'staff'},
+        )
+
+    def test_admin_can_create_and_update_app_user_without_superuser_privileges(self):
+        create_response = self.admin_client.post('/api/v1/admin/users/', {
+            'username': 'managed-api-user',
+            'email': 'managed-api-user@example.com',
+            'role': 'manager',
+            'department': 'Operations',
+        }, format='json')
+        self.assertEqual(create_response.status_code, 201)
+        user = User.objects.get(username='managed-api-user')
+        self.assertFalse(user.has_usable_password())
+        self.assertFalse(user.is_staff)
+        self.assertFalse(user.is_superuser)
+        self.assertEqual(user.role.role, 'manager')
+
+        update_response = self.admin_client.patch(
+            f'/api/v1/admin/users/{user.pk}/',
+            {'role': 'staff', 'is_active': False},
+            format='json',
+        )
+        self.assertEqual(update_response.status_code, 200)
+        user.refresh_from_db()
+        self.assertEqual(user.role.role, 'staff')
+        self.assertFalse(user.is_active)
+
+    def test_admin_routes_reject_manager_and_anonymous_users(self):
+        response = self.manager_client.get('/api/v1/admin/users/')
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(self.manager_client.get('/api/v1/admin/roles/').status_code, 403)
+        self.assertEqual(APIClient().get('/api/v1/admin/users/').status_code, 401)
+
+    def test_superuser_accounts_cannot_be_changed_through_app_user_api(self):
+        root_user = User.objects.create_superuser(
+            username='protected-root', email='protected-root@example.com', password='root-pass'
+        )
+        detail_response = self.admin_client.get(f'/api/v1/admin/users/{root_user.pk}/')
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertEqual(detail_response.data['role'], 'admin')
+        response = self.admin_client.patch(
+            f'/api/v1/admin/users/{root_user.pk}/',
+            {'is_active': False},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_non_admin_cannot_write_staff_assets_or_vehicle_api(self):
+        staff_response = self.manager_client.post('/api/staff/', {
+            'staff_id': 'API-NEW-STAFF',
+            'first_name': 'New',
+            'last_name': 'Staff',
+        }, format='json')
+        self.assertEqual(staff_response.status_code, 403)
+
+        asset = Asset.objects.create(name='Protected API asset')
+        asset_response = self.staff_client.put(
+            f'/api/asset/{asset.pk}/', {'name': 'Changed by staff'}, format='json'
+        )
+        self.assertEqual(asset_response.status_code, 403)
+        vehicle_response = self.manager_client.post('/api/vehicles/', {}, format='json')
+        self.assertEqual(vehicle_response.status_code, 403)
+
+    def test_admin_can_create_update_and_delete_notification_recipient(self):
+        create_response = self.admin_client.post('/api/v1/notifications/recipients/', {
+            'email': 'recipient-api-test@example.com',
+            'full_name': 'API Recipient',
+        }, format='json')
+        self.assertEqual(create_response.status_code, 201)
+        recipient_id = create_response.data['id']
+
+        list_response = self.admin_client.get('/api/v1/notifications/recipients/?page_size=1')
+        self.assertEqual(list_response.status_code, 200)
+        self.assertIn('results', list_response.data)
+
+        detail_response = self.admin_client.get(
+            f'/api/v1/notifications/recipients/{recipient_id}/'
+        )
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertEqual(detail_response.data['email'], 'recipient-api-test@example.com')
+
+        update_response = self.admin_client.patch(
+            f'/api/v1/notifications/recipients/{recipient_id}/',
+            {'is_active': False},
+            format='json',
+        )
+        self.assertEqual(update_response.status_code, 200)
+        self.assertFalse(update_response.data['is_active'])
+
+        delete_response = self.admin_client.delete(
+            f'/api/v1/notifications/recipients/{recipient_id}/'
+        )
+        self.assertEqual(delete_response.status_code, 204)
 
 
 class ViewsTests(TestCase):

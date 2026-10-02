@@ -1,5 +1,16 @@
 from rest_framework import serializers
-from .models import Vehicle, OfficeEquipment, EquipmentWorkOrder, Asset, StaffMember, CompanyDocument, OfficeEquipmentMaintenance
+from django.contrib.auth.models import User
+from .models import (
+    Asset,
+    CompanyDocument,
+    EmailRecipient,
+    EquipmentWorkOrder,
+    OfficeEquipment,
+    OfficeEquipmentMaintenance,
+    StaffMember,
+    UserRole,
+    Vehicle,
+)
 
 
 class VehicleSerializer(serializers.ModelSerializer):
@@ -64,3 +75,60 @@ class EquipmentWorkOrderSerializer(serializers.ModelSerializer):
             'completed_at',
         ]
         read_only_fields = ['created_at', 'updated_at', 'completed_at']
+
+
+class AdminUserSerializer(serializers.ModelSerializer):
+    role = serializers.ChoiceField(choices=UserRole.ROLE_CHOICES, required=False, write_only=True)
+    department = serializers.CharField(max_length=100, allow_blank=True, allow_null=True, required=False, write_only=True)
+    is_superuser = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = User
+        fields = [
+            'id', 'username', 'first_name', 'last_name', 'email', 'is_active',
+            'is_superuser', 'role', 'department',
+        ]
+        read_only_fields = ['id', 'is_superuser']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        try:
+            data['role'] = instance.role.role
+            data['department'] = instance.role.department
+        except UserRole.DoesNotExist:
+            data['role'] = 'admin' if instance.is_superuser else 'staff'
+            data['department'] = None
+        return data
+
+    def create(self, validated_data):
+        role = validated_data.pop('role', 'staff')
+        department = validated_data.pop('department', None)
+        user = User(**validated_data)
+        user.set_unusable_password()
+        user.save()
+        UserRole.objects.create(user=user, role=role, department=department)
+        return user
+
+    def update(self, instance, validated_data):
+        role = validated_data.pop('role', None)
+        department_was_provided = 'department' in validated_data
+        department = validated_data.pop('department', None)
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+        if validated_data:
+            instance.save()
+        if role is not None or department_was_provided:
+            user_role, _ = UserRole.objects.get_or_create(user=instance, defaults={'role': 'staff'})
+            if role is not None:
+                user_role.role = role
+            if department_was_provided:
+                user_role.department = department
+            user_role.save()
+        return instance
+
+
+class NotificationRecipientSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EmailRecipient
+        fields = ['id', 'email', 'full_name', 'is_active', 'created_at']
+        read_only_fields = ['id', 'created_at']

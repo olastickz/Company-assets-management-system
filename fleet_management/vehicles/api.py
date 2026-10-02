@@ -25,11 +25,26 @@ class VehicleViewSet(viewsets.ModelViewSet):
     serializer_class = VehicleSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_permissions(self):
+        if self.request.method in permissions.SAFE_METHODS:
+            return [permissions.IsAuthenticated()]
+        return [AdminWritePermission()]
+
 
 class OfficeEquipmentViewSet(viewsets.ModelViewSet):
     queryset = OfficeEquipment.objects.all().order_by('-updated_at')
     serializer_class = OfficeEquipmentSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def get_permissions(self):
+        if self.request.method in permissions.SAFE_METHODS:
+            return [permissions.IsAuthenticated()]
+        return [AdminWritePermission()]
+
+
+class AdminWritePermission(permissions.BasePermission):
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and is_admin(request.user))
 
 
 class ManagerOrAdminPermission(permissions.BasePermission):
@@ -48,6 +63,13 @@ class CompanyDocumentViewSet(viewsets.ModelViewSet):
     serializer_class = CompanyDocumentSerializer
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
+
+    def get_permissions(self):
+        if self.request.method in permissions.SAFE_METHODS:
+            return [ManagerOrAdminPermission()]
+        if self.action == 'create':
+            return [AdminWritePermission()]
+        return [ManagerOrAdminPermission()]
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
@@ -93,6 +115,8 @@ def get_token(request):
 @api_view(['GET', 'POST'])
 @permission_classes([permissions.IsAuthenticated])
 def staff_api(request):
+    if not is_admin(request.user):
+        return Response({'detail': 'Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
     if request.method == 'GET':
         queryset = StaffMember.objects.all().order_by('staff_id')
         serializer = StaffMemberSerializer(queryset, many=True)
@@ -108,6 +132,8 @@ def staff_api(request):
 @api_view(['GET', 'PUT', 'DELETE'])
 @permission_classes([permissions.IsAuthenticated])
 def staff_detail_api(request, pk):
+    if not is_admin(request.user):
+        return Response({'detail': 'Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
     staff = get_object_or_404(StaffMember, pk=pk)
 
     if request.method == 'GET':
@@ -128,6 +154,8 @@ def staff_detail_api(request, pk):
 @api_view(['GET', 'PUT', 'DELETE'])
 @permission_classes([permissions.IsAuthenticated])
 def asset_detail_api(request, pk):
+    if request.method != 'GET' and not is_admin(request.user):
+        return Response({'detail': 'Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
     asset = get_object_or_404(Asset, pk=pk)
 
     if request.method == 'GET':
@@ -148,6 +176,8 @@ def asset_detail_api(request, pk):
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def asset_assign_api(request, pk):
+    if not is_admin(request.user):
+        return Response({'detail': 'Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
     asset = get_object_or_404(Asset, pk=pk)
     staff_id = request.data.get('staff_id') or request.data.get('staff_member_id') or request.data.get('assigned_staff_id')
 
@@ -169,6 +199,8 @@ def asset_assign_api(request, pk):
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def asset_release_api(request, pk):
+    if not is_admin(request.user):
+        return Response({'detail': 'Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
     asset = get_object_or_404(Asset, pk=pk)
     asset.assigned_staff = None
     asset.save(update_fields=['assigned_staff'])
@@ -184,6 +216,8 @@ def asset_release_api(request, pk):
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def asset_history_api(request, pk):
+    if not is_manager(request.user):
+        return Response({'detail': 'Manager or admin access required.'}, status=status.HTTP_403_FORBIDDEN)
     asset = get_object_or_404(Asset, pk=pk)
     history = []
     for entry in asset.assignments.all().order_by('-assigned_at'):
@@ -202,6 +236,10 @@ def asset_history_api(request, pk):
 @permission_classes([permissions.IsAuthenticated])
 @parser_classes([parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser])
 def documents_api(request):
+    if request.method == 'GET' and not is_manager(request.user):
+        return Response({'detail': 'Manager or admin access required.'}, status=status.HTTP_403_FORBIDDEN)
+    if request.method == 'POST' and not is_admin(request.user):
+        return Response({'detail': 'Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
     if request.method == 'GET':
         queryset = CompanyDocument.objects.all().order_by('-created_at')
         serializer = CompanyDocumentSerializer(queryset, many=True)
@@ -217,6 +255,8 @@ def documents_api(request):
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
 @permission_classes([permissions.IsAuthenticated])
 def document_detail_api(request, pk):
+    if not is_manager(request.user):
+        return Response({'detail': 'Manager or admin access required.'}, status=status.HTTP_403_FORBIDDEN)
     document = get_object_or_404(CompanyDocument, pk=pk)
 
     if request.method == 'GET':
@@ -237,6 +277,8 @@ def document_detail_api(request, pk):
 @api_view(['GET', 'POST'])
 @permission_classes([permissions.IsAuthenticated])
 def equipment_maintenance_api(request):
+    if request.method != 'GET' and not is_manager(request.user):
+        return Response({'detail': 'Manager or admin access required.'}, status=status.HTTP_403_FORBIDDEN)
     if request.method == 'GET':
         queryset = OfficeEquipmentMaintenance.objects.all().order_by('-maintenance_date')
         serializer = OfficeEquipmentMaintenanceSerializer(queryset, many=True)
@@ -252,6 +294,8 @@ def equipment_maintenance_api(request):
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
 @permission_classes([permissions.IsAuthenticated])
 def equipment_maintenance_detail_api(request, pk):
+    if request.method != 'GET' and not is_manager(request.user):
+        return Response({'detail': 'Manager or admin access required.'}, status=status.HTTP_403_FORBIDDEN)
     maintenance = get_object_or_404(OfficeEquipmentMaintenance, pk=pk)
 
     if request.method == 'GET':
@@ -300,12 +344,16 @@ def password_reset_api(request):
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def export_vehicles_csv_api(request):
+    if not is_admin(request.user):
+        return Response({'detail': 'Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
     return views.export_vehicles_csv(request)
 
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def export_equipment_csv_api(request):
+    if not is_admin(request.user):
+        return Response({'detail': 'Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
     return views.export_equipment_csv(request)
 
 
