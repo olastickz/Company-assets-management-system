@@ -13,10 +13,10 @@ services:
 
   web:
     build:
-      context: .
+      context: ..
       dockerfile: Dockerfile
     env_file:
-      - ./fleet_management/.env
+      - ./.env
     working_dir: /app/fleet_management
     command: >-
       sh -c "python manage.py migrate &&
@@ -26,22 +26,22 @@ services:
     ports:
       - "7038:7038"
     volumes:
-      - ./fleet_management/media:/app/fleet_management/media
-      - ./fleet_management/staticfiles:/app/fleet_management/staticfiles
+      - ./media:/app/fleet_management/media
+      - ./staticfiles:/app/fleet_management/staticfiles
     depends_on:
       - db
     restart: unless-stopped
 
   scheduler:
     build:
-      context: .
+      context: ..
       dockerfile: Dockerfile
     env_file:
-      - ./fleet_management/.env
+      - ./.env
     working_dir: /app/fleet_management
     command: python manage.py run_email_scheduler
     volumes:
-      - ./fleet_management/media:/app/fleet_management/media
+      - ./media:/app/fleet_management/media
     depends_on:
       - db
       - web
