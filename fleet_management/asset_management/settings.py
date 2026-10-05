@@ -290,7 +290,7 @@ SESSION_TIMEOUT_USER = 0  # Close on browser close
 # Security Settings (Production)
 # ========================
 # HTTPS Security (set to True in production)
-SECURE_SSL_REDIRECT = not DEBUG if os.getenv('DJANGO_SECURE_SSL_REDIRECT') is None else os.getenv('DJANGO_SECURE_SSL_REDIRECT', 'False').lower() in ('true', '1', 'yes')
+SECURE_SSL_REDIRECT = False
 SECURE_HSTS_SECONDS = int(os.getenv('DJANGO_SECURE_HSTS_SECONDS', '0'))
 SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv('DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS', 'False').lower() in ('true', '1', 'yes')
 SECURE_HSTS_PRELOAD = os.getenv('DJANGO_SECURE_HSTS_PRELOAD', 'False').lower() in ('true', '1', 'yes')
