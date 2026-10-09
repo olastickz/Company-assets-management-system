@@ -1399,3 +1399,118 @@ class VersionedApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['first_name'], 'Api')
         self.assertEqual(response.data['last_name'], 'Manager')
+
+
+class WorkflowApiTests(TestCase):
+    def setUp(self):
+        self.manager = User.objects.create_user(username='workflow-manager', password='manager-pass')
+        UserRole.objects.create(user=self.manager, role='manager')
+        self.manager_client = APIClient()
+        self.manager_client.force_authenticate(self.manager)
+        self.vehicle = Vehicle.objects.create(name='Workflow vehicle', license_plate='WF-VEHICLE-1')
+        self.equipment = OfficeEquipment.objects.create(name='Workflow laptop', assigned_user='Previous Owner')
+
+    def test_vehicle_maintenance_create_list_update_and_delete(self):
+        create_response = self.manager_client.post('/api/vehicle-maintenance/', {
+            'vehicle': self.vehicle.pk,
+            'description': 'Oil service',
+            'cost': '125.00',
+            'notes': 'Scheduled service',
+        }, format='json')
+        self.assertEqual(create_response.status_code, 201)
+        maintenance_id = create_response.data['id']
+        self.assertEqual(create_response.data['vehicle_name'], self.vehicle.name)
+
+        list_response = self.manager_client.get('/api/vehicle-maintenance/?vehicle=' + str(self.vehicle.pk))
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(len(list_response.data), 1)
+
+        update_response = self.manager_client.patch(
+            f'/api/vehicle-maintenance/{maintenance_id}/', {'notes': 'Completed'}, format='json'
+        )
+        self.assertEqual(update_response.status_code, 200)
+        self.assertEqual(update_response.data['notes'], 'Completed')
+        self.assertEqual(self.manager_client.delete(f'/api/vehicle-maintenance/{maintenance_id}/').status_code, 204)
+
+    def test_assigned_staff_can_report_but_cannot_edit_vehicle_maintenance(self):
+        staff_user = User.objects.create_user(username='workflow-staff', password='staff-pass')
+        UserRole.objects.create(user=staff_user, role='staff')
+        staff = StaffMember.objects.create(
+            user=staff_user, staff_id='WF-STAFF-1', first_name='Flow', last_name='Staff'
+        )
+        self.vehicle.assigned_staff = staff
+        self.vehicle.save(update_fields=['assigned_staff'])
+        staff_client = APIClient()
+        staff_client.force_authenticate(staff_user)
+
+        response = staff_client.post('/api/vehicle-maintenance/', {
+            'vehicle': self.vehicle.pk, 'description': 'Reported issue',
+        }, format='json')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(
+            staff_client.patch(f"/api/vehicle-maintenance/{response.data['id']}/", {'notes': 'Not allowed'}, format='json').status_code,
+            403,
+        )
+
+    def test_equipment_transfer_records_previous_owner_and_updates_equipment(self):
+        response = self.manager_client.post('/api/equipment-transfers/', {
+            'equipment': self.equipment.pk,
+            'transferred_to': 'Next Owner',
+            'transferred_to_department': 'Operations',
+            'reason': 'Reassignment',
+        }, format='json')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data['transferred_from'], 'Previous Owner')
+        self.equipment.refresh_from_db()
+        self.assertEqual(self.equipment.assigned_user, 'Next Owner')
+        self.assertEqual(
+            self.manager_client.get(f'/api/equipment-transfers/?equipment={self.equipment.pk}').data[0]['id'],
+            response.data['id'],
+        )
+
+    def test_driver_request_assignment_updates_driver_availability(self):
+        requester = User.objects.create_user(username='workflow-requester', password='requester-pass')
+        UserRole.objects.create(user=requester, role='staff')
+        requester_staff = StaffMember.objects.create(
+            user=requester, staff_id='WF-REQUESTER-1', first_name='Request', last_name='Owner'
+        )
+        driver_user = User.objects.create_user(username='workflow-driver', password='driver-pass')
+        UserRole.objects.create(user=driver_user, role='driver')
+        driver = StaffMember.objects.create(
+            user=driver_user, staff_id='WF-DRIVER-1', first_name='Available', last_name='Driver'
+        )
+        requester_client = APIClient()
+        requester_client.force_authenticate(requester)
+
+        create_response = requester_client.post('/api/driver-requests/', {
+            'details': 'Pickup support', 'preferred_date': '2026-10-10',
+        }, format='json')
+        self.assertEqual(create_response.status_code, 201)
+        self.assertEqual(create_response.data['status'], 'requested')
+        self.assertEqual(create_response.data['requested_by'], requester_staff.pk)
+
+        list_response = requester_client.get('/api/driver-requests/')
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(list_response.data[0]['id'], create_response.data['id'])
+
+        assign_response = self.manager_client.post(
+            f"/api/driver-requests/{create_response.data['id']}/assign/",
+            {'assigned_driver': driver.pk, 'notes': 'Confirmed'},
+            format='json',
+        )
+        self.assertEqual(assign_response.status_code, 200)
+        self.assertEqual(assign_response.data['status'], 'assigned')
+        driver.refresh_from_db()
+        self.assertEqual(driver.driver_status, 'unavailable')
+
+    def test_non_manager_cannot_assign_driver_request(self):
+        staff_user = User.objects.create_user(username='workflow-staff-2', password='staff-pass')
+        UserRole.objects.create(user=staff_user, role='staff')
+        staff_client = APIClient()
+        staff_client.force_authenticate(staff_user)
+        driver_request = DriverRequest.objects.create(requester_user=staff_user, details='Test request')
+
+        response = staff_client.post(
+            f'/api/driver-requests/{driver_request.pk}/assign/', {'assigned_driver': 1}, format='json'
+        )
+        self.assertEqual(response.status_code, 403)

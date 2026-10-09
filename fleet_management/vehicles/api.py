@@ -5,8 +5,23 @@ from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 from django.contrib.auth.forms import PasswordResetForm
 from django.contrib.auth.models import User
+from django.db import transaction
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
-from .models import Vehicle, OfficeEquipment, EquipmentWorkOrder, Asset, StaffMember, CompanyDocument, OfficeEquipmentMaintenance
+from django.utils import timezone
+from .models import (
+    Vehicle,
+    OfficeEquipment,
+    EquipmentWorkOrder,
+    EquipmentTransfer,
+    Asset,
+    AuditLog,
+    DriverRequest,
+    MaintenanceItem,
+    StaffMember,
+    CompanyDocument,
+    OfficeEquipmentMaintenance,
+)
 from .permissions import get_user_role, is_admin, is_manager
 from .serializers import (
     VehicleSerializer,
@@ -16,6 +31,10 @@ from .serializers import (
     CompanyDocumentSerializer,
     OfficeEquipmentMaintenanceSerializer,
     EquipmentWorkOrderSerializer,
+    VehicleMaintenanceSerializer,
+    EquipmentTransferSerializer,
+    DriverRequestSerializer,
+    DriverAssignmentSerializer,
 )
 from . import views
 
@@ -311,6 +330,189 @@ def equipment_maintenance_detail_api(request, pk):
 
     maintenance.delete()
     return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+def can_access_vehicle_maintenance(user, maintenance):
+    if is_manager(user):
+        return True
+    staff_profile = getattr(user, 'staff_profile', None)
+    return bool(staff_profile and maintenance.vehicle.assigned_staff_id == staff_profile.pk)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([permissions.IsAuthenticated])
+def vehicle_maintenance_api(request):
+    role = get_user_role(request.user)
+    if role not in {'admin', 'manager', 'staff', 'driver'}:
+        return Response({'detail': 'Access denied.'}, status=status.HTTP_403_FORBIDDEN)
+
+    if request.method == 'GET':
+        queryset = MaintenanceItem.objects.select_related('vehicle').order_by('-date_performed')
+        if not is_manager(request.user):
+            staff_profile = getattr(request.user, 'staff_profile', None)
+            queryset = queryset.filter(vehicle__assigned_staff=staff_profile) if staff_profile else queryset.none()
+        vehicle_id = request.query_params.get('vehicle')
+        if vehicle_id:
+            queryset = queryset.filter(vehicle_id=vehicle_id)
+        return Response(VehicleMaintenanceSerializer(queryset, many=True).data)
+
+    serializer = VehicleMaintenanceSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    vehicle = serializer.validated_data.get('vehicle')
+    staff_profile = getattr(request.user, 'staff_profile', None)
+    if not is_manager(request.user) and (not staff_profile or vehicle.assigned_staff_id != staff_profile.pk):
+        return Response({'detail': 'You may only report maintenance for a vehicle assigned to you.'}, status=status.HTTP_403_FORBIDDEN)
+    serializer.save()
+    return Response(VehicleMaintenanceSerializer(serializer.instance).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
+@permission_classes([permissions.IsAuthenticated])
+def vehicle_maintenance_detail_api(request, pk):
+    maintenance = get_object_or_404(MaintenanceItem.objects.select_related('vehicle'), pk=pk)
+    if not can_access_vehicle_maintenance(request.user, maintenance):
+        return Response({'detail': 'Access denied.'}, status=status.HTTP_403_FORBIDDEN)
+    if request.method == 'GET':
+        return Response(VehicleMaintenanceSerializer(maintenance).data)
+    if not is_manager(request.user):
+        return Response({'detail': 'Manager or admin access required.'}, status=status.HTTP_403_FORBIDDEN)
+    if request.method in {'PUT', 'PATCH'}:
+        serializer = VehicleMaintenanceSerializer(
+            maintenance,
+            data=request.data,
+            partial=request.method == 'PATCH',
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    maintenance.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([permissions.IsAuthenticated])
+def equipment_transfers_api(request):
+    if request.method == 'GET':
+        queryset = EquipmentTransfer.objects.select_related('equipment').all()
+        equipment_id = request.query_params.get('equipment')
+        if equipment_id:
+            queryset = queryset.filter(equipment_id=equipment_id)
+        return Response(EquipmentTransferSerializer(queryset, many=True).data)
+
+    serializer = EquipmentTransferSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    equipment = serializer.validated_data['equipment']
+    with transaction.atomic():
+        transfer = serializer.save(
+            transferred_from=equipment.assigned_user or 'Unassigned',
+            recorded_by=request.user,
+        )
+        equipment.assigned_user = transfer.transferred_to
+        equipment.save(update_fields=['assigned_user', 'updated_at'])
+    return Response(EquipmentTransferSerializer(transfer).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def equipment_transfer_detail_api(request, pk):
+    transfer = get_object_or_404(EquipmentTransfer.objects.select_related('equipment'), pk=pk)
+    return Response(EquipmentTransferSerializer(transfer).data)
+
+
+def can_view_driver_request(user, driver_request):
+    if is_manager(user):
+        return True
+    staff_profile = getattr(user, 'staff_profile', None)
+    return bool(
+        driver_request.requester_user_id == user.pk
+        or (staff_profile and driver_request.assigned_driver_id == staff_profile.pk)
+    )
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([permissions.IsAuthenticated])
+def driver_requests_api(request):
+    role = get_user_role(request.user)
+    if role not in {'admin', 'manager', 'staff', 'driver'}:
+        return Response({'detail': 'Access denied.'}, status=status.HTTP_403_FORBIDDEN)
+
+    if request.method == 'GET':
+        queryset = DriverRequest.objects.select_related('requested_by', 'requester_user', 'assigned_driver')
+        if not is_manager(request.user):
+            staff_profile = getattr(request.user, 'staff_profile', None)
+            queryset = queryset.filter(
+                Q(requester_user=request.user) | Q(assigned_driver=staff_profile)
+            ) if staff_profile else queryset.filter(requester_user=request.user)
+        if request.query_params.get('status'):
+            queryset = queryset.filter(status=request.query_params['status'])
+        return Response(DriverRequestSerializer(queryset, many=True).data)
+
+    serializer = DriverRequestSerializer(data=request.data)
+    if serializer.is_valid():
+        driver_request = serializer.save(
+            requester_user=request.user,
+            requested_by=getattr(request.user, 'staff_profile', None),
+        )
+        AuditLog.objects.create(
+            user=request.user,
+            action='create',
+            model_name='driverrequest',
+            object_id=driver_request.pk,
+            description='Created driver request',
+        )
+        return Response(DriverRequestSerializer(driver_request).data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def driver_request_detail_api(request, pk):
+    driver_request = get_object_or_404(
+        DriverRequest.objects.select_related('requested_by', 'requester_user', 'assigned_driver'),
+        pk=pk,
+    )
+    if not can_view_driver_request(request.user, driver_request):
+        return Response({'detail': 'Access denied.'}, status=status.HTTP_403_FORBIDDEN)
+    return Response(DriverRequestSerializer(driver_request).data)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def driver_request_assign_api(request, pk):
+    if not is_manager(request.user):
+        return Response({'detail': 'Manager or admin access required.'}, status=status.HTTP_403_FORBIDDEN)
+    driver_request = get_object_or_404(DriverRequest, pk=pk)
+    if driver_request.status == 'cancelled':
+        return Response({'detail': 'Cannot assign a cancelled request.'}, status=status.HTTP_400_BAD_REQUEST)
+    serializer = DriverAssignmentSerializer(data=request.data, instance=driver_request)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    assigned_driver = serializer.validated_data['assigned_driver']
+    previous_driver = driver_request.assigned_driver
+    if previous_driver and previous_driver.pk != assigned_driver.pk:
+        previous_driver.driver_status = 'available'
+        previous_driver.save(update_fields=['driver_status'])
+    assigned_driver.driver_status = 'unavailable'
+    assigned_driver.save(update_fields=['driver_status'])
+    driver_request.assigned_driver = assigned_driver
+    driver_request.assigned_by = request.user
+    driver_request.assigned_at = timezone.now()
+    driver_request.status = 'assigned'
+    if 'notes' in serializer.validated_data:
+        driver_request.notes = serializer.validated_data['notes']
+    driver_request.save()
+    AuditLog.objects.create(
+        user=request.user,
+        action='update',
+        model_name='driverrequest',
+        object_id=driver_request.pk,
+        description=f'Assigned driver {assigned_driver} to request',
+    )
+    return Response(DriverRequestSerializer(driver_request).data)
 
 
 @api_view(['GET'])

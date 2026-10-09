@@ -3,8 +3,11 @@ from django.contrib.auth.models import User
 from .models import (
     Asset,
     CompanyDocument,
+    DriverRequest,
+    EquipmentTransfer,
     EmailRecipient,
     EquipmentWorkOrder,
+    MaintenanceItem,
     OfficeEquipment,
     OfficeEquipmentMaintenance,
     StaffMember,
@@ -47,6 +50,66 @@ class OfficeEquipmentMaintenanceSerializer(serializers.ModelSerializer):
     class Meta:
         model = OfficeEquipmentMaintenance
         fields = '__all__'
+
+
+class VehicleMaintenanceSerializer(serializers.ModelSerializer):
+    vehicle_name = serializers.CharField(source='vehicle.name', read_only=True)
+
+    class Meta:
+        model = MaintenanceItem
+        fields = ['id', 'vehicle', 'vehicle_name', 'description', 'date_performed', 'cost', 'notes']
+
+
+class EquipmentTransferSerializer(serializers.ModelSerializer):
+    equipment_name = serializers.CharField(source='equipment.name', read_only=True)
+
+    class Meta:
+        model = EquipmentTransfer
+        fields = [
+            'id', 'equipment', 'equipment_name', 'transferred_from',
+            'transferred_from_department', 'transferred_from_email',
+            'transferred_to', 'transferred_to_department', 'transferred_to_email',
+            'transfer_date', 'reason', 'notes', 'recorded_by', 'created_at', 'updated_at',
+        ]
+        read_only_fields = [
+            'id', 'equipment_name', 'transferred_from', 'transfer_date', 'recorded_by',
+            'created_at', 'updated_at',
+        ]
+
+
+class DriverRequestSerializer(serializers.ModelSerializer):
+    requested_by_name = serializers.CharField(source='requested_by.full_name', read_only=True)
+    assigned_driver_name = serializers.CharField(source='assigned_driver.full_name', read_only=True)
+
+    class Meta:
+        model = DriverRequest
+        fields = [
+            'id', 'requested_by', 'requested_by_name', 'requester_user', 'details',
+            'preferred_date', 'status', 'assigned_driver', 'assigned_driver_name',
+            'assigned_by', 'assigned_at', 'notes', 'created_at', 'updated_at',
+        ]
+        read_only_fields = [
+            'id', 'requested_by', 'requested_by_name', 'requester_user', 'status',
+            'assigned_driver', 'assigned_driver_name', 'assigned_by', 'assigned_at',
+            'created_at', 'updated_at',
+        ]
+
+
+class DriverAssignmentSerializer(serializers.Serializer):
+    assigned_driver = serializers.PrimaryKeyRelatedField(queryset=StaffMember.objects.none())
+    notes = serializers.CharField(required=False, allow_blank=True)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        drivers = StaffMember.objects.filter(
+            user__role__role='driver',
+            driver_status='available',
+            is_active=True,
+        )
+        instance = kwargs.get('instance')
+        if instance and instance.assigned_driver_id:
+            drivers = drivers | StaffMember.objects.filter(pk=instance.assigned_driver_id)
+        self.fields['assigned_driver'].queryset = drivers.distinct()
 
 
 class EquipmentWorkOrderSerializer(serializers.ModelSerializer):

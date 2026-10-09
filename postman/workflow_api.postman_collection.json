@@ -1,0 +1,284 @@
+{
+  "info": {
+    "name": "Live Workflow API",
+    "description": "Exercises vehicle maintenance, equipment transfers, and driver request assignment against the configured API. Set a valid token and dedicated test record IDs before running; transfers and driver assignments change record state.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://207.180.246.69:8038" },
+    { "key": "token", "value": "" },
+    { "key": "vehicle_id", "value": "" },
+    { "key": "equipment_id", "value": "" },
+    { "key": "driver_id", "value": "" },
+    { "key": "maintenance_id", "value": "" },
+    { "key": "transfer_id", "value": "" },
+    { "key": "driver_request_id", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Vehicle maintenance",
+      "item": [
+        {
+          "name": "Create vehicle maintenance record",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Token {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vehicle\": {{vehicle_id}},\n  \"description\": \"API workflow check\",\n  \"cost\": \"25.00\",\n  \"notes\": \"Created by Local Workflow API collection\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{base_url}}/api/vehicle-maintenance/"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('maintenance record is created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('id');",
+                  "    pm.expect(body.vehicle_name).to.be.a('string');",
+                  "    pm.expect(body.description).to.eql('API workflow check');",
+                  "    pm.collectionVariables.set('maintenance_id', body.id);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List maintenance for vehicle",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Token {{token}}" }],
+            "url": "{{base_url}}/api/vehicle-maintenance/?vehicle={{vehicle_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('vehicle maintenance list includes created record', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "    pm.expect(pm.response.json().some(function (item) { return item.id === Number(pm.collectionVariables.get('maintenance_id')); })).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update maintenance notes",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Token {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Updated by API collection\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{base_url}}/api/vehicle-maintenance/{{maintenance_id}}/"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('maintenance notes are updated', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().notes).to.eql('Updated by API collection');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Equipment transfer",
+      "item": [
+        {
+          "name": "Create equipment transfer",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Token {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"equipment\": {{equipment_id}},\n  \"transferred_to\": \"API Workflow Recipient\",\n  \"transferred_to_department\": \"Operations\",\n  \"reason\": \"API workflow verification\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{base_url}}/api/equipment-transfers/"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('transfer is recorded', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.transferred_to).to.eql('API Workflow Recipient');",
+                  "    pm.expect(body).to.have.property('transferred_from');",
+                  "    pm.collectionVariables.set('transfer_id', body.id);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Read transfer history",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Token {{token}}" }],
+            "url": "{{base_url}}/api/equipment-transfers/?equipment={{equipment_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('transfer appears in equipment history', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().some(function (item) { return item.id === Number(pm.collectionVariables.get('transfer_id')); })).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Confirm equipment assignee changed",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Token {{token}}" }],
+            "url": "{{base_url}}/api/equipment/{{equipment_id}}/"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('equipment now reflects the transfer recipient', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().assigned_user).to.eql('API Workflow Recipient');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Driver request",
+      "item": [
+        {
+          "name": "Create driver request",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Token {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"details\": \"API workflow driver request\",\n  \"preferred_date\": \"2026-10-10\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{base_url}}/api/driver-requests/"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('driver request is created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.status).to.eql('requested');",
+                  "    pm.expect(body.details).to.eql('API workflow driver request');",
+                  "    pm.collectionVariables.set('driver_request_id', body.id);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Assign an available driver",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Token {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assigned_driver\": {{driver_id}},\n  \"notes\": \"Assigned by API workflow collection\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{base_url}}/api/driver-requests/{{driver_request_id}}/assign/"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('driver is assigned to request', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().status).to.eql('assigned');",
+                  "    pm.expect(pm.response.json().assigned_driver).to.eql(Number(pm.collectionVariables.get('driver_id')));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Read assigned driver request",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Token {{token}}" }],
+            "url": "{{base_url}}/api/driver-requests/{{driver_request_id}}/"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('assigned request is readable', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().assigned_driver_name).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
