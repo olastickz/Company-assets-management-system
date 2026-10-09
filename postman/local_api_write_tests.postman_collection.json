@@ -1,0 +1,152 @@
+{
+  "info": {
+    "name": "Local API Write Tests",
+    "description": "Stateful Postman tests for local Django APIs. Run only against an isolated development/test database. Set username/password for an admin account; requests create uniquely named records and delete them later in this sequence. Do not run against production.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://127.0.0.1:8000" },
+    { "key": "username", "value": "" },
+    { "key": "password", "value": "" },
+    { "key": "token", "value": "" },
+    { "key": "run_id", "value": "" },
+    { "key": "staff_id", "value": "" },
+    { "key": "vehicle_id", "value": "" },
+    { "key": "asset_id", "value": "" },
+    { "key": "equipment_id", "value": "" },
+    { "key": "work_order_id", "value": "" },
+    { "key": "maintenance_id", "value": "" }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.collectionVariables.get('run_id')) {",
+          "    pm.collectionVariables.set('run_id', pm.variables.replaceIn('{{$guid}}').replace(/-/g, '').slice(0, 12));",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Get Admin Token",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{base_url}}/api/get-token/"
+      },
+      "response": [{ "name": "200 OK - Test fixture", "originalRequest": { "method": "POST", "url": "{{base_url}}/api/get-token/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [], "cookie": [], "body": "{\"token\":\"<admin-token>\"}" }],
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('admin token is returned', function () {", "    pm.response.to.have.status(200);", "    const token = pm.response.json().token;", "    pm.expect(token).to.be.a('string').and.not.empty;", "    pm.collectionVariables.set('token', token);", "});"] } }]
+    },
+    {
+      "name": "Create Staff",
+      "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Token {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"staff_id\": \"PM-{{run_id}}\",\n  \"first_name\": \"Postman\",\n  \"last_name\": \"Test Staff\",\n  \"is_active\": true\n}", "options": { "raw": { "language": "json" } } }, "url": "{{base_url}}/api/staff/" },
+      "response": [{ "name": "201 Created - Test fixture", "originalRequest": { "method": "POST", "url": "{{base_url}}/api/staff/" }, "status": "Created", "code": 201, "_postman_previewlanguage": "json", "header": [], "cookie": [], "body": "{\"id\":5001,\"staff_id\":\"PM-test-run\",\"first_name\":\"Postman\",\"last_name\":\"Test Staff\",\"email\":null,\"department\":null,\"branch\":null,\"driver_status\":\"available\",\"is_active\":true,\"created_at\":\"2026-10-09T12:00:00Z\",\"updated_at\":\"2026-10-09T12:00:00Z\",\"user\":null}" }],
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('staff record is created', function () {", "    pm.response.to.have.status(201);", "    const body = pm.response.json();", "    pm.expect(body.staff_id).to.eql('PM-' + pm.collectionVariables.get('run_id'));", "    pm.collectionVariables.set('staff_id', body.id);", "});"] } }]
+    },
+    {
+      "name": "Create Vehicle",
+      "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Token {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Postman Test Vehicle {{run_id}}\",\n  \"license_plate\": \"PM-{{run_id}}\",\n  \"asset_type\": \"van\"\n}", "options": { "raw": { "language": "json" } } }, "url": "{{base_url}}/api/vehicles/" },
+      "response": [{ "name": "201 Created - Test fixture", "originalRequest": { "method": "POST", "url": "{{base_url}}/api/vehicles/" }, "status": "Created", "code": 201, "_postman_previewlanguage": "json", "header": [], "cookie": [], "body": "{\"id\":5001,\"name\":\"Postman Test Vehicle\",\"license_plate\":\"PM-test-run\",\"vin_number\":null,\"make\":null,\"model\":null,\"asset_type\":\"van\",\"status\":\"active\",\"insurance_expiry\":null,\"roadworthy_expiry\":null,\"license_expiry\":null,\"hackney_permit\":null,\"cost\":null,\"created_at\":\"2026-10-09T12:00:00Z\",\"updated_at\":\"2026-10-09T12:00:00Z\",\"assigned_staff\":null,\"asset\":9001}" }],
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('vehicle is created', function () {", "    pm.response.to.have.status(201);", "    const body = pm.response.json();", "    pm.collectionVariables.set('vehicle_id', body.id);", "    pm.collectionVariables.set('asset_id', body.asset);", "});"] } }]
+    },
+    {
+      "name": "Assign Vehicle Asset",
+      "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Token {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"staff_id\": {{staff_id}}\n}", "options": { "raw": { "language": "json" } } }, "url": "{{base_url}}/api/asset/{{asset_id}}/assign/" },
+      "response": [{ "name": "200 OK - Test fixture", "originalRequest": { "method": "POST", "url": "{{base_url}}/api/asset/{{asset_id}}/assign/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [], "cookie": [], "body": "{\"detail\":\"Asset assigned successfully\",\"asset\":{\"id\":9001,\"name\":\"Postman Test Vehicle (PM-test-run)\",\"asset_type\":\"vehicle\",\"description\":\"Van\",\"status\":\"active\",\"created_at\":\"2026-10-09T12:00:00Z\",\"updated_at\":\"2026-10-09T12:00:00Z\",\"assigned_staff\":5001}}" }],
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('asset assignment succeeds', function () {", "    pm.response.to.have.status(200);", "    pm.expect(pm.response.json().asset.assigned_staff).to.eql(Number(pm.collectionVariables.get('staff_id')));", "});"] } }]
+    },
+    {
+      "name": "Release Vehicle Asset",
+      "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/asset/{{asset_id}}/release/" },
+      "response": [{ "name": "200 OK - Test fixture", "originalRequest": { "method": "POST", "url": "{{base_url}}/api/asset/{{asset_id}}/release/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [], "cookie": [], "body": "{\"detail\":\"Asset assignment released successfully\",\"asset\":{\"id\":9001,\"name\":\"Postman Test Vehicle (PM-test-run)\",\"asset_type\":\"vehicle\",\"description\":\"Van\",\"status\":\"active\",\"created_at\":\"2026-10-09T12:00:00Z\",\"updated_at\":\"2026-10-09T12:05:00Z\",\"assigned_staff\":null}}" }],
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('asset assignment is released', function () {", "    pm.response.to.have.status(200);", "    pm.expect(pm.response.json().asset.assigned_staff).to.eql(null);", "});"] } }]
+    },
+    {
+      "name": "Update Vehicle",
+      "request": { "method": "PATCH", "header": [{ "key": "Authorization", "value": "Token {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Updated Postman Vehicle {{run_id}}\"\n}", "options": { "raw": { "language": "json" } } }, "url": "{{base_url}}/api/vehicles/{{vehicle_id}}/" },
+      "response": [{ "name": "200 OK - Test fixture", "originalRequest": { "method": "PATCH", "url": "{{base_url}}/api/vehicles/{{vehicle_id}}/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [], "cookie": [], "body": "{\"id\":5001,\"name\":\"Updated Postman Vehicle\",\"license_plate\":\"PM-test-run\",\"asset_type\":\"van\",\"status\":\"active\",\"assigned_staff\":null,\"asset\":9001}" }],
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('vehicle can be updated', function () {", "    pm.response.to.have.status(200);", "    pm.expect(pm.response.json().name).to.eql('Updated Postman Vehicle ' + pm.collectionVariables.get('run_id'));", "});"] } }]
+    },
+    {
+      "name": "Delete Vehicle",
+      "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/vehicles/{{vehicle_id}}/" },
+      "response": [{ "name": "204 No Content - Test fixture", "originalRequest": { "method": "DELETE", "url": "{{base_url}}/api/vehicles/{{vehicle_id}}/" }, "status": "No Content", "code": 204, "_postman_previewlanguage": "json", "header": [], "cookie": [], "body": "" }],
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('vehicle test record is deleted', function () {", "    pm.response.to.have.status(204);", "});"] } }]
+    },
+    {
+      "name": "Update Staff",
+      "request": { "method": "PUT", "header": [{ "key": "Authorization", "value": "Token {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"first_name\": \"Updated Postman\"\n}", "options": { "raw": { "language": "json" } } }, "url": "{{base_url}}/api/staff/{{staff_id}}/" },
+      "response": [{ "name": "200 OK - Test fixture", "originalRequest": { "method": "PUT", "url": "{{base_url}}/api/staff/{{staff_id}}/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [], "cookie": [], "body": "{\"id\":5001,\"staff_id\":\"PM-test-run\",\"first_name\":\"Updated Postman\",\"last_name\":\"Test Staff\",\"email\":null,\"department\":null,\"branch\":null,\"driver_status\":\"available\",\"is_active\":true,\"created_at\":\"2026-10-09T12:00:00Z\",\"updated_at\":\"2026-10-09T12:05:00Z\",\"user\":null}" }],
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('staff test record is updated', function () {", "    pm.response.to.have.status(200);", "    pm.expect(pm.response.json().first_name).to.eql('Updated Postman');", "});"] } }]
+    },
+    {
+      "name": "Delete Staff",
+      "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/staff/{{staff_id}}/" },
+      "response": [{ "name": "204 No Content - Test fixture", "originalRequest": { "method": "DELETE", "url": "{{base_url}}/api/staff/{{staff_id}}/" }, "status": "No Content", "code": 204, "_postman_previewlanguage": "json", "header": [], "cookie": [], "body": "" }],
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('staff test record is deleted', function () {", "    pm.response.to.have.status(204);", "});"] } }]
+    },
+    {
+      "name": "Create Equipment",
+      "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Token {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Postman Test Equipment {{run_id}}\",\n  \"equipment_type\": \"laptop\",\n  \"quantity\": 1\n}", "options": { "raw": { "language": "json" } } }, "url": "{{base_url}}/api/equipment/" },
+      "response": [{ "name": "201 Created - Test fixture", "originalRequest": { "method": "POST", "url": "{{base_url}}/api/equipment/" }, "status": "Created", "code": 201, "_postman_previewlanguage": "json", "header": [], "cookie": [], "body": "{\"id\":7001,\"name\":\"Postman Test Equipment\",\"equipment_type\":\"laptop\",\"description\":null,\"purchase_date\":null,\"warranty_expiry\":null,\"status\":\"active\",\"location\":null,\"regional_office\":\"Lagos\",\"cost\":null,\"notes\":null,\"subsidiary\":\"Other\",\"serial_number\":null,\"tag_number\":null,\"assigned_user\":null,\"quantity\":1,\"remarks\":null,\"created_at\":\"2026-10-09T12:00:00Z\",\"updated_at\":\"2026-10-09T12:00:00Z\",\"assigned_staff\":null,\"asset\":9002}" }],
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('equipment test record is created', function () {", "    pm.response.to.have.status(201);", "    const body = pm.response.json();", "    pm.expect(body.name).to.eql('Postman Test Equipment ' + pm.collectionVariables.get('run_id'));", "    pm.collectionVariables.set('equipment_id', body.id);", "});"] } }]
+    },
+    {
+      "name": "Update Equipment",
+      "request": { "method": "PATCH", "header": [{ "key": "Authorization", "value": "Token {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"location\": \"Postman Test Location\"\n}", "options": { "raw": { "language": "json" } } }, "url": "{{base_url}}/api/equipment/{{equipment_id}}/" },
+      "response": [{ "name": "200 OK - Test fixture", "originalRequest": { "method": "PATCH", "url": "{{base_url}}/api/equipment/{{equipment_id}}/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [], "cookie": [], "body": "{\"id\":7001,\"name\":\"Postman Test Equipment\",\"equipment_type\":\"laptop\",\"status\":\"active\",\"location\":\"Postman Test Location\",\"quantity\":1}" }],
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('equipment test record is updated', function () {", "    pm.response.to.have.status(200);", "    pm.expect(pm.response.json().location).to.eql('Postman Test Location');", "});"] } }]
+    },
+    {
+      "name": "Create Equipment Work Order",
+      "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Token {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"equipment\": {{equipment_id}},\n  \"work_type\": \"repair\",\n  \"title\": \"Postman API Test {{run_id}}\",\n  \"description\": \"Temporary Postman work order\",\n  \"priority\": \"low\"\n}", "options": { "raw": { "language": "json" } } }, "url": "{{base_url}}/api/equipment-work-orders/" },
+      "response": [{ "name": "201 Created - Test fixture", "originalRequest": { "method": "POST", "url": "{{base_url}}/api/equipment-work-orders/" }, "status": "Created", "code": 201, "_postman_previewlanguage": "json", "header": [], "cookie": [], "body": "{\"id\":8001,\"equipment\":7001,\"machine_name\":\"Postman Test Equipment\",\"equipment_type\":\"laptop\",\"office_location\":\"Lagos\",\"work_type\":\"repair\",\"title\":\"Postman API Test\",\"report_name\":\"Postman API Test\",\"description\":\"Temporary Postman work order\",\"priority\":\"low\",\"status\":\"open\",\"due_date\":null,\"created_at\":\"2026-10-09T12:00:00Z\",\"updated_at\":\"2026-10-09T12:00:00Z\",\"completed_at\":null}" }],
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('work order is created', function () {", "    pm.response.to.have.status(201);", "    const body = pm.response.json();", "    pm.collectionVariables.set('work_order_id', body.id);", "    pm.expect(body.work_type).to.eql('repair');", "});"] } }]
+    },
+    {
+      "name": "Delete Equipment Work Order",
+      "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/equipment-work-orders/{{work_order_id}}/" },
+      "response": [{ "name": "204 No Content - Test fixture", "originalRequest": { "method": "DELETE", "url": "{{base_url}}/api/equipment-work-orders/{{work_order_id}}/" }, "status": "No Content", "code": 204, "_postman_previewlanguage": "json", "header": [], "cookie": [], "body": "" }],
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('work order test record is deleted', function () {", "    pm.response.to.have.status(204);", "});"] } }]
+    },
+    {
+      "name": "Create Equipment Maintenance",
+      "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Token {{token}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"equipment\": {{equipment_id}},\n  \"description\": \"Postman API Maintenance {{run_id}}\",\n  \"due_date\": \"2027-01-15\",\n  \"cost\": \"100.00\"\n}", "options": { "raw": { "language": "json" } } }, "url": "{{base_url}}/api/equipment-maintenance/" },
+      "response": [{ "name": "201 Created - Test fixture", "originalRequest": { "method": "POST", "url": "{{base_url}}/api/equipment-maintenance/" }, "status": "Created", "code": 201, "_postman_previewlanguage": "json", "header": [], "cookie": [], "body": "{\"id\":9001,\"equipment\":7001,\"description\":\"Postman API Maintenance\",\"maintenance_date\":\"2026-10-09\",\"due_date\":\"2027-01-15\",\"cost\":\"100.00\",\"notes\":null}" }],
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('equipment maintenance record is created', function () {", "    pm.response.to.have.status(201);", "    const body = pm.response.json();", "    pm.collectionVariables.set('maintenance_id', body.id);", "    pm.expect(body.equipment).to.eql(Number(pm.collectionVariables.get('equipment_id')));", "});"] } }]
+    },
+    {
+      "name": "Delete Equipment Maintenance",
+      "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/equipment-maintenance/{{maintenance_id}}/" },
+      "response": [{ "name": "204 No Content - Test fixture", "originalRequest": { "method": "DELETE", "url": "{{base_url}}/api/equipment-maintenance/{{maintenance_id}}/" }, "status": "No Content", "code": 204, "_postman_previewlanguage": "json", "header": [], "cookie": [], "body": "" }],
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('equipment maintenance test record is deleted', function () {", "    pm.response.to.have.status(204);", "});"] } }]
+    },
+    {
+      "name": "Delete Equipment",
+      "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/equipment/{{equipment_id}}/" },
+      "response": [{ "name": "204 No Content - Test fixture", "originalRequest": { "method": "DELETE", "url": "{{base_url}}/api/equipment/{{equipment_id}}/" }, "status": "No Content", "code": 204, "_postman_previewlanguage": "json", "header": [], "cookie": [], "body": "" }],
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('equipment test record is deleted', function () {", "    pm.response.to.have.status(204);", "});"] } }]
+    },
+    {
+      "name": "Bulk Vehicle Upload Rejects Missing File",
+      "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "body": { "mode": "formdata", "formdata": [] }, "url": "{{base_url}}/api/bulk-upload-assets/" },
+      "response": [{ "name": "400 Bad Request - Local API response", "originalRequest": { "method": "POST", "url": "{{base_url}}/api/bulk-upload-assets/" }, "status": "Bad Request", "code": 400, "_postman_previewlanguage": "json", "header": [], "cookie": [], "body": "{\"detail\":\"Upload a CSV, Excel, or Word file.\"}" }],
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('missing vehicle upload is a JSON 400', function () {", "    pm.response.to.have.status(400);", "    pm.expect(pm.response.json()).to.have.property('detail');", "});"] } }]
+    },
+    {
+      "name": "Bulk Equipment Upload Rejects Missing File",
+      "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "body": { "mode": "formdata", "formdata": [] }, "url": "{{base_url}}/api/bulk-upload-equipment/" },
+      "response": [{ "name": "400 Bad Request - Local API response", "originalRequest": { "method": "POST", "url": "{{base_url}}/api/bulk-upload-equipment/" }, "status": "Bad Request", "code": 400, "_postman_previewlanguage": "json", "header": [], "cookie": [], "body": "{\"detail\":\"Upload a CSV or Excel file.\"}" }],
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('missing equipment upload is a JSON 400', function () {", "    pm.response.to.have.status(400);", "    pm.expect(pm.response.json()).to.have.property('detail');", "});"] } }]
+    }
+  ]
+}

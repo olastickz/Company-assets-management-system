@@ -83,7 +83,7 @@
           "_postman_previewlanguage": "json",
           "header": [],
           "cookie": [],
-          "body": "{\"id\": 4, \"schedule_time\": \"10:00:00\", \"alert_days\": 15, \"is_enabled\": true, \"last_sent\": \"2026-07-14T10:41:05.600417Z\", \"updated_at\": \"2026-09-14T17:24:34.989542Z\"}"
+          "body": "{\"id\":4,\"schedule_time\":\"10:00:00\",\"alert_days\":15,\"is_enabled\":true,\"last_sent\":\"2026-07-14T10:41:05.600417Z\",\"updated_at\":\"2026-09-14T17:24:52.378970Z\"}"
         }
       ]
     },
@@ -143,7 +143,7 @@
           "_postman_previewlanguage": "json",
           "header": [],
           "cookie": [],
-          "body": "{\"id\": 4, \"schedule_time\": \"10:00:00\", \"alert_days\": 15, \"is_enabled\": true, \"last_sent\": \"2026-07-14T10:41:05.600417Z\", \"updated_at\": \"2026-09-14T17:24:35.251790Z\"}"
+          "body": "{\"id\":4,\"schedule_time\":\"10:00:00\",\"alert_days\":15,\"is_enabled\":true,\"last_sent\":\"2026-07-14T10:41:05.600417Z\",\"updated_at\":\"2026-09-14T17:24:52.378970Z\"}"
         }
       ]
     },
@@ -161,7 +161,7 @@
       },
       "response": [
         {
-          "name": "200 OK - Get Profile Settings",
+          "name": "200 OK - Local snapshot 2026-10-09",
           "originalRequest": {
             "method": "GET",
             "header": [
@@ -177,7 +177,7 @@
           "_postman_previewlanguage": "json",
           "header": [],
           "cookie": [],
-          "body": "{\"id\": 39, \"username\": \"postman-admin-f0d6f81d\", \"first_name\": \"\", \"last_name\": \"\", \"email\": \"postman-f0d6f81d@example.com\"}"
+          "body": "{\"id\":3,\"username\":\"Olastickz\",\"first_name\":\"\",\"last_name\":\"\",\"email\":\"[redacted]\"}"
         }
       ]
     },
@@ -208,7 +208,7 @@
       },
       "response": [
         {
-          "name": "200 OK - Update Profile Settings",
+          "name": "200 OK - Test fixture",
           "originalRequest": {
             "method": "PATCH",
             "header": [
@@ -237,7 +237,7 @@
           "_postman_previewlanguage": "json",
           "header": [],
           "cookie": [],
-          "body": "{\"id\": 39, \"username\": \"postman-admin-f0d6f81d\", \"first_name\": \"Postman\", \"last_name\": \"Tester\", \"email\": \"postman-f0d6f81d@example.com\"}"
+          "body": "{\"id\":3,\"username\":\"Olastickz\",\"first_name\":\"Postman\",\"last_name\":\"Tester\",\"email\":\"[redacted]\"}"
         }
       ]
     }

@@ -14,6 +14,7 @@ import logging
 from io import StringIO, TextIOWrapper
 from datetime import datetime
 from django.core.exceptions import ValidationError
+from .models import OfficeEquipment
 
 logger = logging.getLogger(__name__)
 
@@ -215,7 +216,7 @@ def validate_equipment_row(row):
         errors['equipment_type'] = 'Equipment type is required'
     
     # Validate type
-    valid_types = ['computer', 'printer', 'scanner', 'copier', 'ac', 'generator', 'furniture', 'other']
+    valid_types = [value for value, _ in OfficeEquipment.EQUIPMENT_TYPE_CHOICES]
     equipment_type = row.get('equipment_type', '').strip().lower()
     if equipment_type and equipment_type not in valid_types:
         errors['equipment_type'] = f'Invalid type. Must be one of: {", ".join(valid_types)}'

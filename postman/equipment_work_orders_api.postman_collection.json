@@ -7,7 +7,7 @@
   "variable": [
     {
       "key": "base_url",
-      "value": "http://207.180.246.69:7038",
+      "value": "http://127.0.0.1:8000",
       "type": "string"
     },
     {
@@ -17,12 +17,12 @@
     },
     {
       "key": "username",
-      "value": "telnet",
+      "value": "",
       "type": "string"
     },
     {
       "key": "password",
-      "value": "paste-admin-password-here",
+      "value": "",
       "type": "secret"
     }
   ],
@@ -51,8 +51,8 @@
           "raw": "{{base_url}}/api/get-token/",
           "protocol": "http",
           "host": [
-            "207.180.246.69",
-            "7038"
+            "127.0.0.1",
+            "8000"
           ],
           "path": [
             "api",
@@ -80,8 +80,8 @@
               "raw": "{{base_url}}/api/get-token/",
               "protocol": "http",
               "host": [
-                "207.180.246.69",
-                "7038"
+                "127.0.0.1",
+                "8000"
               ],
               "path": [
                 "api",
@@ -123,8 +123,8 @@
           "raw": "{{base_url}}/api/equipment-work-orders/",
           "protocol": "http",
           "host": [
-            "207.180.246.69",
-            "7038"
+            "127.0.0.1",
+            "8000"
           ],
           "path": [
             "api",
@@ -135,7 +135,7 @@
       },
       "response": [
         {
-          "name": "200 OK - Example",
+          "name": "200 OK - Local snapshot 2026-10-09",
           "originalRequest": {
             "method": "GET",
             "header": [
@@ -149,8 +149,8 @@
               "raw": "{{base_url}}/api/equipment-work-orders/",
               "protocol": "http",
               "host": [
-                "207.180.246.69",
-                "7038"
+                "127.0.0.1",
+                "8000"
               ],
               "path": [
                 "api",
@@ -167,7 +167,7 @@
               "value": "application/json"
             }
           ],
-          "body": "[\n  {\n    \"id\": 1,\n    \"equipment\": 12,\n    \"equipment_name\": \"Laptop\",\n    \"work_type\": \"repair\",\n    \"status\": \"open\",\n    \"priority\": \"high\",\n    \"due_date\": \"2026-09-30\",\n    \"notes\": \"Damaged unit requires inspection\"\n  }\n]",
+          "body": "[{\"id\":1,\"equipment\":2025,\"machine_name\":\"LG Split Air Conditioner\",\"equipment_type\":\"ac\",\"office_location\":\"Port Harcourt\",\"work_type\":\"repair\",\"title\":\"Repair required: LG Split Air Conditioner\",\"report_name\":\"Repair required: LG Split Air Conditioner\",\"description\":\"Automatically created for existing equipment with status damaged.\",\"priority\":\"high\",\"status\":\"open\",\"due_date\":null,\"created_at\":\"2026-10-08T12:08:11.193919+01:00\",\"updated_at\":\"2026-10-08T12:08:11.193982+01:00\",\"completed_at\":null}]",
           "_postman_previewlanguage": "json"
         }
       ]

@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Notifications API v1",
-    "description": "Notification API requests with tested saved responses.",
+    "description": "Notification API requests. GET examples in this older collection are historical; use Local API Read-Only Smoke for redacted local snapshots captured 2026-10-09. This collection also contains writes: schedule/recipient changes, send-now can email recipients, and retry requeues a delivery. Run writes only against an isolated development/test database. Set delivery_id to a disposable test delivery before retrying.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -15,7 +15,7 @@
     },
     {
       "key": "delivery_id",
-      "value": "1"
+      "value": ""
     }
   ],
   "item": [
@@ -285,7 +285,7 @@
             "value": "Token {{token}}"
           }
         ],
-        "url": "{{base_url}}/api/v1/notifications/deliveries/434/retry/"
+        "url": "{{base_url}}/api/v1/notifications/deliveries/{{delivery_id}}/retry/"
       },
       "response": [
         {
@@ -298,7 +298,7 @@
                 "value": "Token {{token}}"
               }
             ],
-            "url": "{{base_url}}/api/v1/notifications/deliveries/434/retry/"
+            "url": "{{base_url}}/api/v1/notifications/deliveries/{{delivery_id}}/retry/"
           },
           "status": "OK",
           "code": 200,

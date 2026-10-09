@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Reports API v1",
-    "description": "Reports API requests with tested saved responses.",
+    "description": "Report GET requests. For current local database snapshots captured 2026-10-09, use the Local API Read-Only Smoke collection.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [

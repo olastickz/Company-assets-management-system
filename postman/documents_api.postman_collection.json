@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Documents API",
-    "description": "Document CRUD requests, including multipart file upload.",
+    "description": "Document CRUD requests, including multipart file upload. POST, PATCH, and DELETE modify data; run against an isolated development/test database. The list and detail GET examples are current local snapshots captured 2026-10-09.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -73,6 +73,18 @@
           ]
         }
       },
+      "response": [
+        {
+          "name": "201 Created - Test fixture",
+          "originalRequest": { "method": "POST", "url": "{{base_url}}/api/documents/" },
+          "status": "Created",
+          "code": 201,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "cookie": [],
+          "body": "{\"id\":1,\"name\":\"Postman Upload Test\",\"document_type\":\"other\",\"description\":null,\"issuing_authority\":null,\"issue_date\":\"2026-01-01\",\"expiry_date\":\"2027-01-01\",\"renewal_date\":null,\"status\":\"active\",\"document_number\":null,\"related_vehicle\":null,\"related_equipment\":null,\"related_asset\":null,\"notify_days_before\":30,\"location\":null,\"responsible_person\":null,\"responsible_staff\":null,\"notes\":null,\"document_file\":\"/media/company_documents/document-upload.pdf\",\"created_at\":\"2026-10-09T12:00:00Z\",\"updated_at\":\"2026-10-09T12:00:00Z\",\"created_by\":1}"
+        }
+      ],
       "event": [
         {
           "listen": "test",
@@ -101,6 +113,18 @@
         ],
         "url": "{{base_url}}/api/documents/"
       },
+      "response": [
+        {
+          "name": "200 OK - Local snapshot 2026-10-09",
+          "originalRequest": { "method": "GET", "url": "{{base_url}}/api/documents/" },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "cookie": [],
+          "body": "[{\"id\":17,\"name\":\"Toyota Highlander - Insurance Certificate\",\"document_type\":\"insurance\",\"description\":\"Document for Toyota Highlander (KJA 634 JW)\",\"issuing_authority\":\"Insurance Board\",\"issue_date\":\"2025-06-05\",\"expiry_date\":\"2026-06-23\",\"renewal_date\":null,\"status\":\"active\",\"document_number\":\"INSURANCE-KJA 634 JW-2026\",\"notify_days_before\":30,\"location\":\"Office Safe\",\"responsible_person\":null,\"notes\":\"Sample document for testing. Automatically created.\",\"document_file\":null,\"created_at\":\"2026-06-05T15:14:32.137066+01:00\",\"updated_at\":\"2026-06-05T15:14:32.137109+01:00\",\"related_vehicle\":11,\"related_equipment\":null,\"related_asset\":344,\"responsible_staff\":null,\"created_by\":null}]"
+        }
+      ],
       "event": [
         {
           "listen": "test",
@@ -128,6 +152,18 @@
         ],
         "url": "{{base_url}}/api/documents/{{document_id}}/"
       },
+      "response": [
+        {
+          "name": "200 OK - Local snapshot 2026-10-09",
+          "originalRequest": { "method": "GET", "url": "{{base_url}}/api/documents/{{document_id}}/" },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "cookie": [],
+          "body": "{\"id\":17,\"name\":\"Toyota Highlander - Insurance Certificate\",\"document_type\":\"insurance\",\"description\":\"Document for Toyota Highlander (KJA 634 JW)\",\"issuing_authority\":\"Insurance Board\",\"issue_date\":\"2025-06-05\",\"expiry_date\":\"2026-06-23\",\"renewal_date\":null,\"status\":\"active\",\"document_number\":\"INSURANCE-KJA 634 JW-2026\",\"notify_days_before\":30,\"location\":\"Office Safe\",\"responsible_person\":null,\"notes\":\"Sample document for testing. Automatically created.\",\"document_file\":null,\"created_at\":\"2026-06-05T15:14:32.137066+01:00\",\"updated_at\":\"2026-06-05T15:14:32.137109+01:00\",\"related_vehicle\":11,\"related_equipment\":null,\"related_asset\":344,\"responsible_staff\":null,\"created_by\":null}"
+        }
+      ],
       "event": [
         {
           "listen": "test",
@@ -169,6 +205,18 @@
           ]
         }
       },
+      "response": [
+        {
+          "name": "200 OK - Example",
+          "originalRequest": { "method": "PATCH", "url": "{{base_url}}/api/documents/{{document_id}}/" },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "cookie": [],
+          "body": "{\"id\":1,\"name\":\"Postman Updated Document\",\"document_type\":\"other\",\"description\":null,\"issuing_authority\":null,\"issue_date\":\"2026-01-01\",\"expiry_date\":\"2027-01-01\",\"renewal_date\":null,\"status\":\"active\",\"document_number\":null,\"related_vehicle\":null,\"related_equipment\":null,\"related_asset\":null,\"notify_days_before\":30,\"location\":null,\"responsible_person\":null,\"responsible_staff\":null,\"notes\":null,\"document_file\":\"/media/company_documents/document-upload.pdf\",\"created_at\":\"2026-10-09T12:00:00Z\",\"updated_at\":\"2026-10-09T12:05:00Z\",\"created_by\":1}"
+        }
+      ],
       "event": [
         {
           "listen": "test",
@@ -196,6 +244,18 @@
         ],
         "url": "{{base_url}}/api/documents/{{document_id}}/"
       },
+      "response": [
+        {
+          "name": "204 No Content",
+          "originalRequest": { "method": "DELETE", "url": "{{base_url}}/api/documents/{{document_id}}/" },
+          "status": "No Content",
+          "code": 204,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "cookie": [],
+          "body": ""
+        }
+      ],
       "event": [
         {
           "listen": "test",

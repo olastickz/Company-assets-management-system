@@ -1,0 +1,245 @@
+{
+  "info": {
+    "name": "Local API Read-Only Smoke",
+    "description": "Read-only coverage for local Django API routes. Set base_url and token before running. Saved response bodies are representative snapshots from the local database on 2026-10-09; list bodies are shortened to one live row, and email fields are redacted. Mutating requests are intentionally excluded.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://127.0.0.1:8000" },
+    { "key": "token", "value": "" },
+    { "key": "vehicle_id", "value": "17" },
+    { "key": "maintenance_vehicle_id", "value": "15" },
+    { "key": "equipment_id", "value": "2026" },
+    { "key": "staff_id", "value": "1" },
+    { "key": "asset_id", "value": "344" },
+    { "key": "equipment_maintenance_id", "value": "1" },
+    { "key": "vehicle_maintenance_id", "value": "1" },
+    { "key": "driver_request_id", "value": "1" }
+  ],
+  "item": [
+    {
+      "name": "API Root",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Token {{token}}" }],
+        "url": "{{base_url}}/api/"
+      },
+      "response": [{
+        "name": "200 OK - Local snapshot 2026-10-09",
+        "originalRequest": { "method": "GET", "url": "{{base_url}}/api/" },
+        "status": "OK", "code": 200, "_postman_previewlanguage": "json",
+        "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [],
+        "body": "{\"vehicles\":\"{{base_url}}/api/vehicles/\",\"equipment\":\"{{base_url}}/api/equipment/\",\"equipment-work-orders\":\"{{base_url}}/api/equipment-work-orders/\",\"documents\":\"{{base_url}}/api/documents/\",\"get-token\":\"{{base_url}}/api/get-token/\"}"
+      }],
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('API root is available', function () {", "    pm.response.to.have.status(200);", "    pm.expect(pm.response.json()).to.have.property('vehicles');", "});"] } }]
+    },
+    {
+      "name": "List Vehicles",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/vehicles/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/vehicles/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "[{\"id\":17,\"name\":\"Ford Ranger Pickup\",\"license_plate\":\"TLM-003-PH\",\"vin_number\":\"DEMO-TLM-003\",\"make\":\"Ford\",\"model\":\"Ranger\",\"asset_type\":\"truck\",\"status\":\"pending_certification\",\"insurance_expiry\":\"2026-11-30\",\"roadworthy_expiry\":\"2026-10-15\",\"license_expiry\":\"2027-01-31\",\"hackney_permit\":null,\"cost\":\"22000000.00\",\"created_at\":\"2026-08-25T20:54:56.721341+01:00\",\"updated_at\":\"2026-08-25T20:54:59.487824+01:00\",\"assigned_staff\":82,\"asset\":356}]" }],
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('vehicle list returns JSON', function () {", "    pm.response.to.have.status(200);", "    pm.expect(pm.response.json()).to.be.an('array');", "});"] } }]
+    },
+    {
+      "name": "Get Vehicle",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/vehicles/{{vehicle_id}}/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/vehicles/{{vehicle_id}}/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "{\"id\":17,\"name\":\"Ford Ranger Pickup\",\"license_plate\":\"TLM-003-PH\",\"vin_number\":\"DEMO-TLM-003\",\"make\":\"Ford\",\"model\":\"Ranger\",\"asset_type\":\"truck\",\"status\":\"pending_certification\",\"insurance_expiry\":\"2026-11-30\",\"roadworthy_expiry\":\"2026-10-15\",\"license_expiry\":\"2027-01-31\",\"hackney_permit\":null,\"cost\":\"22000000.00\",\"created_at\":\"2026-08-25T20:54:56.721341+01:00\",\"updated_at\":\"2026-08-25T20:54:59.487824+01:00\",\"assigned_staff\":82,\"asset\":356}" }]
+    },
+    {
+      "name": "List Equipment",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/equipment/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/equipment/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "[{\"id\":2026,\"name\":\"Office Desk Set\",\"equipment_type\":\"furniture\",\"description\":\"Demonstration furniture record for frontend integration.\",\"purchase_date\":\"2024-01-15\",\"warranty_expiry\":\"2027-01-15\",\"status\":\"active\",\"location\":\"Lagos HQ - Meeting Room\",\"regional_office\":\"Lagos\",\"cost\":\"250000.00\",\"notes\":null,\"subsidiary\":\"Telnet\",\"serial_number\":\"EQ-DEMO-005\",\"tag_number\":null,\"assigned_user\":\"Fatima Bello\",\"quantity\":1,\"remarks\":null,\"created_at\":\"2026-08-25T20:54:56.759643+01:00\",\"updated_at\":\"2026-08-25T20:54:59.517677+01:00\",\"assigned_staff\":82,\"asset\":361}]" }],
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('equipment list returns JSON', function () {", "    pm.response.to.have.status(200);", "    pm.expect(pm.response.json()).to.be.an('array');", "});"] } }]
+    },
+    {
+      "name": "Get Equipment",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/equipment/{{equipment_id}}/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/equipment/{{equipment_id}}/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "{\"id\":2026,\"name\":\"Office Desk Set\",\"equipment_type\":\"furniture\",\"description\":\"Demonstration furniture record for frontend integration.\",\"purchase_date\":\"2024-01-15\",\"warranty_expiry\":\"2027-01-15\",\"status\":\"active\",\"location\":\"Lagos HQ - Meeting Room\",\"regional_office\":\"Lagos\",\"cost\":\"250000.00\",\"notes\":null,\"subsidiary\":\"Telnet\",\"serial_number\":\"EQ-DEMO-005\",\"tag_number\":null,\"assigned_user\":\"Fatima Bello\",\"quantity\":1,\"remarks\":null,\"created_at\":\"2026-08-25T20:54:56.759643+01:00\",\"updated_at\":\"2026-08-25T20:54:59.517677+01:00\",\"assigned_staff\":82,\"asset\":361}" }]
+    },
+    {
+      "name": "List Equipment Work Orders",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/equipment-work-orders/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/equipment-work-orders/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "[{\"id\":1,\"equipment\":2025,\"machine_name\":\"LG Split Air Conditioner\",\"equipment_type\":\"ac\",\"office_location\":\"Port Harcourt\",\"work_type\":\"repair\",\"title\":\"Repair required: LG Split Air Conditioner\",\"report_name\":\"Repair required: LG Split Air Conditioner\",\"description\":\"Automatically created for existing equipment with status damaged.\",\"priority\":\"high\",\"status\":\"open\",\"due_date\":null,\"created_at\":\"2026-10-08T12:08:11.193919+01:00\",\"updated_at\":\"2026-10-08T12:08:11.193982+01:00\",\"completed_at\":null}]" }]
+    },
+    {
+      "name": "List Staff",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/staff/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/staff/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "[{\"id\":1,\"staff_id\":\"ABAYOMIO-6aea\",\"first_name\":\"Abayomi\",\"last_name\":\"Olomu\",\"email\":null,\"department\":null,\"branch\":null,\"driver_status\":\"available\",\"is_active\":true,\"created_at\":\"2026-05-20T14:14:28.855857+01:00\",\"updated_at\":\"2026-05-20T14:14:28.855894+01:00\",\"user\":null}]" }]
+    },
+    {
+      "name": "List Documents",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/documents/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/documents/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "[{\"id\":17,\"name\":\"Toyota Highlander - Insurance Certificate\",\"document_type\":\"insurance\",\"description\":\"Document for Toyota Highlander (KJA 634 JW)\",\"issuing_authority\":\"Insurance Board\",\"issue_date\":\"2025-06-05\",\"expiry_date\":\"2026-06-23\",\"renewal_date\":null,\"status\":\"active\",\"document_number\":\"INSURANCE-KJA 634 JW-2026\",\"notify_days_before\":30,\"location\":\"Office Safe\",\"responsible_person\":null,\"notes\":\"Sample document for testing. Automatically created.\",\"document_file\":null,\"created_at\":\"2026-06-05T15:14:32.137066+01:00\",\"updated_at\":\"2026-06-05T15:14:32.137109+01:00\",\"related_vehicle\":11,\"related_equipment\":null,\"related_asset\":344,\"responsible_staff\":null,\"created_by\":null}]" }]
+    },
+    {
+      "name": "Get Staff Member",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/staff/{{staff_id}}/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/staff/{{staff_id}}/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "{\"id\":1,\"staff_id\":\"ABAYOMIO-6aea\",\"first_name\":\"Abayomi\",\"last_name\":\"Olomu\",\"email\":\"[redacted]\",\"department\":null,\"branch\":null,\"driver_status\":\"available\",\"is_active\":true,\"created_at\":\"2026-05-20T14:14:28.855857+01:00\",\"updated_at\":\"2026-05-20T14:14:28.855894+01:00\",\"user\":null}" }]
+    },
+    {
+      "name": "Get Asset",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/asset/{{asset_id}}/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/asset/{{asset_id}}/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "{\"id\":344,\"name\":\"Toyota Highlander (KJA 634 JW)\",\"asset_type\":\"vehicle\",\"description\":\"Car\",\"status\":\"active\",\"created_at\":\"2026-05-25T12:03:08.008304+01:00\",\"updated_at\":\"2026-05-25T12:03:08.008331+01:00\",\"assigned_staff\":null}" }]
+    },
+    {
+      "name": "Get Asset Assignment History",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/asset/{{asset_id}}/history/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/asset/{{asset_id}}/history/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "[]" }]
+    },
+    {
+      "name": "List Equipment Maintenance",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/equipment-maintenance/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/equipment-maintenance/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "[{\"id\":1,\"description\":\"API local test maintenance\",\"maintenance_date\":\"2026-08-25\",\"due_date\":\"2026-09-25\",\"cost\":\"100.00\",\"notes\":\"Local API testing record\",\"equipment\":2020}]" }]
+    },
+    {
+      "name": "List Vehicle Maintenance",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/vehicle-maintenance/?vehicle={{maintenance_vehicle_id}}" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/vehicle-maintenance/?vehicle={{maintenance_vehicle_id}}" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "[{\"id\":1,\"vehicle\":15,\"vehicle_name\":\"Toyota Hiace Van\",\"description\":\"Routine engine service\",\"date_performed\":\"2026-08-25\",\"cost\":\"95000.00\",\"notes\":\"Seeded record for frontend development.\"}]" }]
+    },
+    {
+      "name": "List Equipment Transfers",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/equipment-transfers/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/equipment-transfers/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "[]" }]
+    },
+    {
+      "name": "List Driver Requests",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/driver-requests/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/driver-requests/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "[{\"id\":1,\"requested_by\":77,\"requested_by_name\":\"Alice Driver\",\"requester_user\":24,\"details\":\"Smoke: Need driver\",\"preferred_date\":null,\"status\":\"assigned\",\"assigned_driver\":77,\"assigned_driver_name\":\"Alice Driver\",\"assigned_by\":23,\"assigned_at\":\"2026-07-14T13:24:48.009320+01:00\",\"notes\":null,\"created_at\":\"2026-07-14T13:24:47.999694+01:00\",\"updated_at\":\"2026-07-14T13:24:48.009654+01:00\"}]" }]
+    },
+    {
+      "name": "Get Driver Request",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/driver-requests/{{driver_request_id}}/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/driver-requests/{{driver_request_id}}/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "{\"id\":1,\"requested_by\":77,\"requested_by_name\":\"Alice Driver\",\"requester_user\":24,\"details\":\"Smoke: Need driver\",\"preferred_date\":null,\"status\":\"assigned\",\"assigned_driver\":77,\"assigned_driver_name\":\"Alice Driver\",\"assigned_by\":23,\"assigned_at\":\"2026-07-14T13:24:48.009320+01:00\",\"notes\":null,\"created_at\":\"2026-07-14T13:24:47.999694+01:00\",\"updated_at\":\"2026-07-14T13:24:48.009654+01:00\"}" }]
+    },
+    {
+      "name": "Current User",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/me/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/me/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "{\"id\":3,\"username\":\"Olastickz\",\"email\":\"[redacted]\",\"first_name\":\"\",\"last_name\":\"\",\"role\":\"admin\"}" }]
+    },
+    {
+      "name": "Admin Users",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/v1/admin/users/?page_size=1" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/admin/users/?page_size=1" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "{\"count\":30,\"next\":\"{{base_url}}/api/v1/admin/users/?page=2&page_size=1\",\"previous\":null,\"results\":[{\"id\":3,\"username\":\"Olastickz\",\"first_name\":\"\",\"last_name\":\"\",\"email\":\"[redacted]\",\"is_active\":true,\"is_superuser\":true,\"role\":\"admin\",\"department\":\"ABS\"}]}" }]
+    },
+    {
+      "name": "Admin Roles",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/v1/admin/roles/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/admin/roles/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "[{\"value\":\"admin\",\"label\":\"Administrator\"},{\"value\":\"manager\",\"label\":\"Manager\"},{\"value\":\"driver\",\"label\":\"Driver\"},{\"value\":\"staff\",\"label\":\"Staff\"}]" }]
+    },
+    {
+      "name": "Admin Staff Directory",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/v1/admin/staff/?page_size=1" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/admin/staff/?page_size=1" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "{\"count\":80,\"next\":\"{{base_url}}/api/v1/admin/staff/?page=2&page_size=1\",\"previous\":null,\"results\":[{\"id\":1,\"staff_id\":\"ABAYOMIO-6aea\",\"first_name\":\"Abayomi\",\"last_name\":\"Olomu\",\"email\":null,\"department\":null,\"branch\":null,\"driver_status\":\"available\",\"is_active\":true,\"created_at\":\"2026-05-20T14:14:28.855857+01:00\",\"updated_at\":\"2026-05-20T14:14:28.855894+01:00\",\"user\":null}]}" }]
+    },
+    {
+      "name": "Overview Report",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/v1/reports/overview/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/reports/overview/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "{\"generated_at\":\"2026-10-09T13:44:48.476306Z\",\"assets\":{\"total\":359,\"active\":336,\"unassigned\":20},\"vehicles\":15,\"equipment\":6,\"documents\":{\"total\":28,\"expired\":6,\"expiring\":5},\"maintenance\":{\"vehicle_cost\":260000,\"equipment_cost\":128100}}" }]
+    },
+    {
+      "name": "Vehicles Report",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/v1/reports/vehicles/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/reports/vehicles/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "{\"count\":15,\"results\":[{\"id\":17,\"name\":\"Ford Ranger Pickup\",\"license_plate\":\"TLM-003-PH\",\"make\":\"Ford\",\"model\":\"Ranger\",\"asset_type\":\"truck\",\"status\":\"pending_certification\",\"cost\":22000000,\"assigned_staff\":\"Fatima Bello (STF003) - PORT_HARCOURT\",\"insurance_expiry\":\"2026-11-30\",\"roadworthy_expiry\":\"2026-10-15\",\"license_expiry\":\"2027-01-31\"}]}" }]
+    },
+    {
+      "name": "Equipment Report",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/v1/reports/equipment/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/reports/equipment/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "{\"count\":6,\"results\":[{\"id\":2020,\"name\":\"Company Printer\",\"equipment_type\":\"printer\",\"status\":\"active\",\"cost\":null,\"quantity\":1,\"location\":null,\"regional_office\":\"Lagos\",\"subsidiary\":\"Other\",\"assigned_to\":\"someone_else\",\"warranty_expiry\":null}]}" }]
+    },
+    {
+      "name": "Documents Report",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/v1/reports/documents/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/reports/documents/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "{\"count\":28,\"results\":[{\"id\":17,\"name\":\"Toyota Highlander - Insurance Certificate\",\"document_type\":\"insurance\",\"status\":\"active\",\"issue_date\":\"2025-06-05\",\"expiry_date\":\"2026-06-23\",\"renewal_date\":null,\"document_number\":\"INSURANCE-KJA 634 JW-2026\",\"related_asset\":\"Toyota Highlander (KJA 634 JW) (Vehicle)\",\"document_file\":null}]}" }]
+    },
+    {
+      "name": "Maintenance Report",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/v1/reports/maintenance/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/reports/maintenance/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "{\"summary\":{\"vehicle_count\":3,\"equipment_count\":4,\"vehicle_cost\":260000,\"equipment_cost\":128100},\"vehicles\":[{\"id\":1,\"asset_id\":15,\"asset_name\":\"Toyota Hiace (TLM-001-LA) · VIN: DEMO-TLM-001\",\"description\":\"Routine engine service\",\"date\":\"2026-08-25\",\"due_date\":null,\"cost\":95000,\"notes\":\"Seeded record for frontend development.\"}],\"equipment\":[{\"id\":1,\"asset_id\":2020,\"asset_name\":\"Company Printer (printer)\",\"description\":\"API local test maintenance\",\"date\":\"2026-08-25\",\"due_date\":\"2026-09-25\",\"cost\":100,\"notes\":\"Local API testing record\"}]}" }]
+    },
+    {
+      "name": "Transfers Report",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/v1/reports/transfers/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/reports/transfers/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "{\"count\":0,\"results\":[]}" }]
+    },
+    {
+      "name": "Audit Report",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/v1/reports/audit/?page_size=1" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/reports/audit/?page_size=1" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "{\"count\":643,\"next\":\"{{base_url}}/api/v1/reports/audit/?page=2&page_size=1\",\"previous\":null,\"results\":[{\"id\":643,\"user\":\"Olastickz\",\"action\":\"login\",\"model_name\":\"auth\",\"object_id\":null,\"description\":\"User logged in\",\"ip_address\":\"[redacted]\",\"timestamp\":\"2026-10-08T14:22:58.227052Z\"}]}" }]
+    },
+    {
+      "name": "Notification Schedule",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/v1/notifications/schedule/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/notifications/schedule/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "{\"id\":4,\"schedule_time\":\"10:00:00\",\"alert_days\":15,\"is_enabled\":true,\"last_sent\":\"2026-07-14T10:41:05.600417Z\",\"updated_at\":\"2026-09-14T17:24:52.378970Z\"}" }]
+    },
+    {
+      "name": "Notification Recipients",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/v1/notifications/recipients/?page_size=1" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/notifications/recipients/?page_size=1" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "{\"count\":10,\"next\":\"{{base_url}}/api/v1/notifications/recipients/?page=2&page_size=1\",\"previous\":null,\"results\":[{\"id\":5,\"email\":\"[redacted]\",\"full_name\":null,\"is_active\":true,\"created_at\":\"2026-03-27T14:44:41.357140+01:00\"}]}" }]
+    },
+    {
+      "name": "Notification Deliveries",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/v1/notifications/deliveries/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/notifications/deliveries/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "{\"count\":432,\"results\":[{\"id\":435,\"recipient_email\":\"[redacted]\",\"subject\":\"Postman API test\",\"status\":\"failed\",\"message\":null,\"error_message\":\"Test failure\",\"sent_at\":null,\"created_at\":\"2026-09-14T17:24:51.247507Z\"}]}" }]
+    },
+    {
+      "name": "Organization Settings",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/v1/settings/organization/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/settings/organization/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "{\"name\":\"Telnet Asset Management\",\"timezone\":\"UTC\",\"file_upload_max_size_mb\":10}" }]
+    },
+    {
+      "name": "Notification Settings",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/v1/settings/notifications/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/settings/notifications/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "{\"id\":4,\"schedule_time\":\"10:00:00\",\"alert_days\":15,\"is_enabled\":true,\"last_sent\":\"2026-07-14T10:41:05.600417Z\",\"updated_at\":\"2026-09-14T17:24:52.378970Z\"}" }]
+    },
+    {
+      "name": "Profile Settings",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/v1/settings/profile/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/settings/profile/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "{\"id\":3,\"username\":\"Olastickz\",\"first_name\":\"\",\"last_name\":\"\",\"email\":\"[redacted]\"}" }]
+    },
+    {
+      "name": "Get Equipment Work Order",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/equipment-work-orders/1/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/equipment-work-orders/1/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "{\"id\":1,\"equipment\":2025,\"machine_name\":\"LG Split Air Conditioner\",\"equipment_type\":\"ac\",\"office_location\":\"Port Harcourt\",\"work_type\":\"repair\",\"title\":\"Repair required: LG Split Air Conditioner\",\"report_name\":\"Repair required: LG Split Air Conditioner\",\"description\":\"Automatically created for existing equipment with status damaged.\",\"priority\":\"high\",\"status\":\"open\",\"due_date\":null,\"created_at\":\"2026-10-08T12:08:11.193919+01:00\",\"updated_at\":\"2026-10-08T12:08:11.193982+01:00\",\"completed_at\":null}" }]
+    },
+    {
+      "name": "Get Equipment Maintenance",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/equipment-maintenance/{{equipment_maintenance_id}}/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/equipment-maintenance/{{equipment_maintenance_id}}/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "{\"id\":1,\"description\":\"API local test maintenance\",\"maintenance_date\":\"2026-08-25\",\"due_date\":\"2026-09-25\",\"cost\":\"100.00\",\"notes\":\"Local API testing record\",\"equipment\":2020}" }]
+    },
+    {
+      "name": "Get Vehicle Maintenance",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/vehicle-maintenance/{{vehicle_maintenance_id}}/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/vehicle-maintenance/{{vehicle_maintenance_id}}/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "{\"id\":1,\"vehicle\":15,\"vehicle_name\":\"Toyota Hiace Van\",\"description\":\"Routine engine service\",\"date_performed\":\"2026-08-25\",\"cost\":\"95000.00\",\"notes\":\"Seeded record for frontend development.\"}" }]
+    },
+    {
+      "name": "Get Admin User",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/v1/admin/users/3/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/admin/users/3/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "{\"id\":3,\"username\":\"Olastickz\",\"first_name\":\"\",\"last_name\":\"\",\"email\":\"[redacted]\",\"is_active\":true,\"is_superuser\":true,\"role\":\"admin\",\"department\":\"ABS\"}" }]
+    },
+    {
+      "name": "Get Admin Staff Record",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/v1/admin/staff/1/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/admin/staff/1/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "{\"id\":1,\"staff_id\":\"ABAYOMIO-6aea\",\"first_name\":\"Abayomi\",\"last_name\":\"Olomu\",\"email\":null,\"department\":null,\"branch\":null,\"driver_status\":\"available\",\"is_active\":true,\"created_at\":\"2026-05-20T14:14:28.855857+01:00\",\"updated_at\":\"2026-05-20T14:14:28.855894+01:00\",\"user\":null}" }]
+    },
+    {
+      "name": "Get Notification Recipient",
+      "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Token {{token}}" }], "url": "{{base_url}}/api/v1/notifications/recipients/5/" },
+      "response": [{ "name": "200 OK - Local snapshot 2026-10-09", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/notifications/recipients/5/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [{ "key": "Content-Type", "value": "application/json" }], "cookie": [], "body": "{\"id\":5,\"email\":\"[redacted]\",\"full_name\":null,\"is_active\":true,\"created_at\":\"2026-03-27T14:44:41.357140+01:00\"}" }]
+    }
+  ],
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('local API GET succeeds', function () {",
+          "    pm.response.to.have.status(200);",
+          "});",
+          "pm.test('local API response is JSON', function () {",
+          "    pm.response.json();",
+          "});"
+        ]
+      }
+    }
+  ]
+}

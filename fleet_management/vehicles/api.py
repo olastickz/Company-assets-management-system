@@ -1,3 +1,6 @@
+import logging
+
+from django.conf import settings
 from rest_framework import parsers, viewsets, permissions, status
 from rest_framework.decorators import api_view, permission_classes, authentication_classes, parser_classes
 from rest_framework.authentication import BasicAuthentication, TokenAuthentication
@@ -37,6 +40,8 @@ from .serializers import (
     DriverAssignmentSerializer,
 )
 from . import views
+
+logger = logging.getLogger(__name__)
 
 
 class VehicleViewSet(viewsets.ModelViewSet):
@@ -562,16 +567,150 @@ def export_equipment_csv_api(request):
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication, BasicAuthentication])
 @permission_classes([permissions.IsAuthenticated])
+@parser_classes([parsers.MultiPartParser, parsers.FormParser])
 def bulk_upload_assets_api(request):
     if not is_admin(request.user):
         return Response({'detail': 'Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
-    return views.bulk_upload_assets.__wrapped__(request)
+
+    from .bulk_utils import parse_bulk_upload_csv, parse_excel_vehicles, parse_docx_vehicles, validate_vehicle_row
+
+    csv_file = request.FILES.get('csv_file')
+    excel_file = request.FILES.get('excel_file')
+    docx_file = request.FILES.get('docx_file')
+    selected_file = csv_file or excel_file or docx_file
+    if not selected_file:
+        return Response({'detail': 'Upload a CSV, Excel, or Word file.'}, status=status.HTTP_400_BAD_REQUEST)
+    if selected_file.size > settings.FILE_UPLOAD_MAX_SIZE_MB * 1024 * 1024:
+        return Response(
+            {'detail': f'File too large. Maximum size: {settings.FILE_UPLOAD_MAX_SIZE_MB}MB'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if csv_file:
+        rows, error = parse_bulk_upload_csv(csv_file)
+    elif excel_file:
+        rows, error = parse_excel_vehicles(excel_file)
+    else:
+        rows, error = parse_docx_vehicles(docx_file)
+    if error:
+        return Response({'detail': error}, status=status.HTTP_400_BAD_REQUEST)
+
+    created = 0
+    errors = []
+    for row_number, row in enumerate(rows, 1):
+        validation_errors = validate_vehicle_row(row)
+        if validation_errors:
+            errors.append({'row': row_number, 'errors': validation_errors})
+            continue
+
+        vehicle_data = {
+            'name': row.get('name', '').strip(),
+            'make': row.get('make', '').strip() or None,
+            'model': row.get('model', '').strip() or None,
+            'vin_number': row.get('vin_number', '').strip() or None,
+            'license_plate': row.get('license_plate', '').strip(),
+            'asset_type': row.get('vehicle_type', 'car').strip() or 'car',
+            'insurance_expiry': row.get('insurance_expiry') or None,
+            'roadworthy_expiry': row.get('roadworthy_expiry') or None,
+            'license_expiry': row.get('license_expiry') or None,
+            'hackney_permit': row.get('hackney_permit') or None,
+        }
+        if vehicle_data['license_plate'] and Vehicle.objects.filter(
+            license_plate=vehicle_data['license_plate']
+        ).exists():
+            errors.append({'row': row_number, 'errors': {'license_plate': 'This license plate already exists.'}})
+            continue
+        if vehicle_data['vin_number'] and Vehicle.objects.filter(
+            vin_number=vehicle_data['vin_number']
+        ).exists():
+            errors.append({'row': row_number, 'errors': {'vin_number': 'This VIN already exists.'}})
+            continue
+
+        try:
+            Vehicle.objects.create(**vehicle_data)
+            created += 1
+        except Exception as error:
+            logger.exception('Bulk vehicle import failed on row %s', row_number)
+            errors.append({'row': row_number, 'errors': {'detail': str(error)}})
+
+    if created:
+        views.log_audit(request.user, 'bulk_create', 'assets', description=f'Bulk uploaded {created} assets')
+    return Response({'created': created, 'failed': len(errors), 'errors': errors})
 
 
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication, BasicAuthentication])
 @permission_classes([permissions.IsAuthenticated])
+@parser_classes([parsers.MultiPartParser, parsers.FormParser])
 def bulk_upload_equipment_api(request):
     if not is_admin(request.user):
         return Response({'detail': 'Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
-    return views.bulk_upload_equipment.__wrapped__(request)
+
+    from .bulk_utils import parse_bulk_upload_csv, parse_Excel_equipment, validate_equipment_row
+
+    csv_file = request.FILES.get('csv_file')
+    excel_file = request.FILES.get('excel_file')
+    selected_file = csv_file or excel_file
+    if not selected_file:
+        return Response({'detail': 'Upload a CSV or Excel file.'}, status=status.HTTP_400_BAD_REQUEST)
+    if selected_file.size > settings.FILE_UPLOAD_MAX_SIZE_MB * 1024 * 1024:
+        return Response(
+            {'detail': f'File too large. Maximum size: {settings.FILE_UPLOAD_MAX_SIZE_MB}MB'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if csv_file:
+        rows, error = parse_bulk_upload_csv(csv_file)
+    else:
+        rows, error = parse_Excel_equipment(excel_file)
+    if error:
+        return Response({'detail': error}, status=status.HTTP_400_BAD_REQUEST)
+
+    created = 0
+    errors = []
+    for row_number, row in enumerate(rows, 1):
+        validation_errors = validate_equipment_row(row)
+        if validation_errors:
+            errors.append({'row': row_number, 'errors': validation_errors})
+            continue
+
+        purchase_date = row.get('purchase_date') or None
+        year_of_purchase = row.get('year_of_purchase') or None
+        if not purchase_date and year_of_purchase:
+            try:
+                purchase_date = f'{int(year_of_purchase)}-01-01'
+            except (ValueError, TypeError):
+                purchase_date = None
+
+        equipment_data = {
+            'name': row.get('name', '').strip(),
+            'equipment_type': row.get('equipment_type', 'other').strip().lower(),
+            'description': row.get('description', '').strip(),
+            'location': row.get('location', 'Main Office').strip(),
+            'status': row.get('status', 'active').strip().lower(),
+            'purchase_date': purchase_date,
+            'warranty_expiry': row.get('warranty_expiry') or None,
+            'cost': row.get('cost') or None,
+            'notes': row.get('notes', '').strip(),
+            'subsidiary': row.get('subsidiary', 'Other').strip(),
+            'serial_number': row.get('serial_number', '').strip() or None,
+            'tag_number': row.get('tag_number', '').strip() or None,
+            'assigned_user': row.get('assigned_user', '').strip() or None,
+            'quantity': int(row.get('quantity', 1)) if row.get('quantity') else 1,
+            'remarks': row.get('remarks', '').strip(),
+        }
+        try:
+            OfficeEquipment.objects.create(**equipment_data)
+            created += 1
+        except Exception as error:
+            logger.exception('Bulk equipment import failed on row %s', row_number)
+            errors.append({'row': row_number, 'errors': {'detail': str(error)}})
+
+    if created:
+        views.log_audit(
+            request.user,
+            'bulk_create',
+            'office_equipment',
+            description=f'Bulk uploaded {created} equipment items',
+        )
+    return Response({'created': created, 'failed': len(errors), 'errors': errors})

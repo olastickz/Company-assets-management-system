@@ -29,8 +29,20 @@
             "value": "Token {{admin_token}}"
           }
         ],
-        "url": "{{base_url}}/api/v1/admin/users/?page_size=10"
+        "url": "{{base_url}}/api/v1/admin/users/?page_size=1"
       },
+      "response": [
+        {
+          "name": "200 OK - Example",
+          "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/admin/users/?page_size=1" },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "cookie": [],
+          "body": "{\"count\":30,\"next\":\"{{base_url}}/api/v1/admin/users/?page=2&page_size=1\",\"previous\":null,\"results\":[{\"id\":3,\"username\":\"Olastickz\",\"first_name\":\"\",\"last_name\":\"\",\"email\":\"[redacted]\",\"is_active\":true,\"is_superuser\":true,\"role\":\"admin\",\"department\":\"ABS\"}]}"
+        }
+      ],
       "event": [
         {
           "listen": "test",
@@ -65,6 +77,18 @@
         ],
         "url": "{{base_url}}/api/v1/admin/roles/"
       },
+      "response": [
+        {
+          "name": "200 OK - Example",
+          "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/admin/roles/" },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "cookie": [],
+          "body": "[{\"value\":\"admin\",\"label\":\"Administrator\"},{\"value\":\"manager\",\"label\":\"Manager\"},{\"value\":\"driver\",\"label\":\"Driver\"},{\"value\":\"staff\",\"label\":\"Staff\"}]"
+        }
+      ],
       "event": [
         {
           "listen": "test",
@@ -91,8 +115,20 @@
             "value": "Token {{admin_token}}"
           }
         ],
-        "url": "{{base_url}}/api/v1/admin/staff/?page_size=10"
+        "url": "{{base_url}}/api/v1/admin/staff/?page_size=1"
       },
+      "response": [
+        {
+          "name": "200 OK - Example",
+          "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/admin/staff/?page_size=1" },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "cookie": [],
+          "body": "{\"count\":80,\"next\":\"{{base_url}}/api/v1/admin/staff/?page=2&page_size=1\",\"previous\":null,\"results\":[{\"id\":1,\"staff_id\":\"ABAYOMIO-6aea\",\"first_name\":\"Abayomi\",\"last_name\":\"Olomu\",\"email\":null,\"department\":null,\"branch\":null,\"driver_status\":\"available\",\"is_active\":true,\"created_at\":\"2026-05-20T14:14:28.855857+01:00\",\"updated_at\":\"2026-05-20T14:14:28.855894+01:00\",\"user\":null}]}"
+        }
+      ],
       "event": [
         {
           "listen": "test",
@@ -120,8 +156,20 @@
             "value": "Token {{admin_token}}"
           }
         ],
-        "url": "{{base_url}}/api/v1/reports/audit/?page_size=10"
+        "url": "{{base_url}}/api/v1/reports/audit/?page_size=1"
       },
+      "response": [
+        {
+          "name": "200 OK - Example",
+          "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/reports/audit/?page_size=1" },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "cookie": [],
+          "body": "{\"count\":643,\"next\":\"{{base_url}}/api/v1/reports/audit/?page=2&page_size=1\",\"previous\":null,\"results\":[{\"id\":643,\"user\":\"Olastickz\",\"action\":\"login\",\"model_name\":\"auth\",\"object_id\":null,\"description\":\"User logged in\",\"ip_address\":\"[redacted]\",\"timestamp\":\"2026-10-08T14:22:58.227052Z\"}]}"
+        }
+      ],
       "event": [
         {
           "listen": "test",
@@ -150,8 +198,20 @@
             "value": "Token {{admin_token}}"
           }
         ],
-        "url": "{{base_url}}/api/v1/notifications/recipients/?page_size=10"
+        "url": "{{base_url}}/api/v1/notifications/recipients/?page_size=1"
       },
+      "response": [
+        {
+          "name": "200 OK - Example",
+          "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/notifications/recipients/?page_size=1" },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "cookie": [],
+          "body": "{\"count\":10,\"next\":\"{{base_url}}/api/v1/notifications/recipients/?page=2&page_size=1\",\"previous\":null,\"results\":[{\"id\":5,\"email\":\"[redacted]\",\"full_name\":null,\"is_active\":true,\"created_at\":\"2026-03-27T14:44:41.357140+01:00\"}]}"
+        }
+      ],
       "event": [
         {
           "listen": "test",
@@ -181,6 +241,18 @@
         ],
         "url": "{{base_url}}/api/v1/notifications/schedule/"
       },
+      "response": [
+        {
+          "name": "200 OK - Example",
+          "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/notifications/schedule/" },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "cookie": [],
+          "body": "{\"id\":4,\"schedule_time\":\"10:00:00\",\"alert_days\":15,\"is_enabled\":true,\"last_sent\":\"2026-07-14T10:41:05.600417Z\",\"updated_at\":\"2026-09-14T17:24:52.378970Z\"}"
+        }
+      ],
       "event": [
         {
           "listen": "test",
@@ -208,6 +280,18 @@
         ],
         "url": "{{base_url}}/api/v1/settings/organization/"
       },
+      "response": [
+        {
+          "name": "200 OK - Example",
+          "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/settings/organization/" },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "cookie": [],
+          "body": "{\"name\":\"Telnet Asset Management\",\"timezone\":\"Africa/Lagos\",\"file_upload_max_size_mb\":10}"
+        }
+      ],
       "event": [
         {
           "listen": "test",
@@ -237,6 +321,18 @@
         ],
         "url": "{{base_url}}/api/v1/admin/users/"
       },
+      "response": [
+        {
+          "name": "403 Forbidden - Example",
+          "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/admin/users/" },
+          "status": "Forbidden",
+          "code": 403,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "cookie": [],
+          "body": "{\"detail\":\"You do not have permission to perform this action.\"}"
+        }
+      ],
       "event": [
         {
           "listen": "test",
