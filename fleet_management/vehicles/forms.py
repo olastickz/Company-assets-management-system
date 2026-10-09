@@ -1,7 +1,8 @@
 from django import forms
 from django.core import validators
 from django.core.exceptions import ValidationError
-from .models import Asset, CompanyAsset, MaintenanceItem, OfficeEquipment, OfficeEquipmentMaintenance, CompanyDocument, StaffMember, Vehicle, DriverRequest
+from django.contrib.auth.models import User
+from .models import Asset, CompanyAsset, MaintenanceItem, OfficeEquipment, OfficeEquipmentMaintenance, CompanyDocument, StaffApplication, StaffMember, Vehicle, DriverRequest
 
 # Year field removed - use `purchase_date` instead of separate year
 
@@ -361,6 +362,47 @@ class StaffMemberForm(forms.ModelForm):
             'department': forms.Select(attrs={'class': 'form-control'}),
             'branch': forms.Select(attrs={'class': 'form-control'}),
         }
+
+
+class StaffApplicationForm(forms.ModelForm):
+    class Meta:
+        model = StaffApplication
+        fields = ['staff_id', 'first_name', 'last_name', 'email', 'department', 'branch']
+        widgets = {
+            'staff_id': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
+            'first_name': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'given-name'}),
+            'last_name': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'family-name'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control', 'autocomplete': 'email'}),
+            'department': forms.Select(attrs={'class': 'form-control'}),
+            'branch': forms.Select(attrs={'class': 'form-control'}),
+        }
+
+    def clean_email(self):
+        email = self.cleaned_data['email'].strip().lower()
+        if User.objects.filter(email__iexact=email).exists():
+            raise ValidationError('An account already uses this email address. Contact your administrator.')
+        if StaffMember.objects.filter(email__iexact=email).exists():
+            raise ValidationError('This work email is already listed in the staff registry.')
+        if StaffApplication.objects.filter(
+            email__iexact=email,
+            status__in=['pending', 'approved'],
+        ).exclude(pk=self.instance.pk).exists():
+            raise ValidationError('An application for this email is already being reviewed.')
+        return email
+
+    def clean_staff_id(self):
+        staff_id = self.cleaned_data['staff_id'].strip()
+        if StaffMember.objects.filter(staff_id__iexact=staff_id).exists():
+            raise ValidationError('This staff ID is already in the staff registry.')
+        if User.objects.filter(username__iexact=staff_id).exists():
+            raise ValidationError('This staff ID is already used by an account.')
+        if StaffApplication.objects.filter(
+            staff_id__iexact=staff_id,
+            status__in=['pending', 'approved'],
+        ).exclude(pk=self.instance.pk).exists():
+            raise ValidationError('An application for this staff ID is already being reviewed.')
+        return staff_id
+
 
 class CompanyDocumentForm(forms.ModelForm):
     """Form for managing company documents with expiry tracking"""

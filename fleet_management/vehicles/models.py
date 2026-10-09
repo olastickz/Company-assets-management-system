@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import User
@@ -426,6 +428,46 @@ class StaffMember(models.Model):
     def __str__(self):
         branch_info = f" - {self.branch}" if self.branch else ""
         return f"{self.full_name} ({self.staff_id}){branch_info}"
+
+
+class StaffApplication(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending review'),
+        ('approved', 'Approved'),
+        ('declined', 'Declined'),
+    ]
+
+    status_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    staff_id = models.CharField(max_length=50)
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    email = models.EmailField()
+    department = models.CharField(max_length=50, choices=StaffMember.DEPARTMENT_CHOICES)
+    branch = models.CharField(max_length=50, choices=StaffMember.BRANCH_CHOICES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    account = models.OneToOneField(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='staff_application',
+    )
+    reviewed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_staff_applications',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['status', '-created_at'])]
+
+    def __str__(self):
+        return f'{self.staff_id} - {self.first_name} {self.last_name} ({self.get_status_display()})'
 
 
 class Asset(models.Model):

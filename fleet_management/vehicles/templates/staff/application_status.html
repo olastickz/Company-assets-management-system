@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+
+{% block title %}Staff Application Status{% endblock %}
+
+{% block content %}
+<main style="max-width: 680px; margin: 36px auto; padding: 24px;">
+    <h1>Application status</h1>
+    <p>Application for {{ application.first_name }} {{ application.last_name }} ({{ application.staff_id }})</p>
+
+    {% if application.status == 'pending' %}
+        <div class="message">Your application is awaiting administrator review.</div>
+    {% elif application.status == 'approved' %}
+        <div class="message">Your application is approved. Check your work email for the secure password setup link before signing in.</div>
+    {% else %}
+        <div class="message" style="background:#f8d7da; border-color:#f1aeb5; color:#842029;">Your application was not approved. Please contact your administrator if you need more information.</div>
+    {% endif %}
+
+    <p><a class="link" href="{% url 'login' %}">Return to login</a></p>
+</main>
+{% endblock %}

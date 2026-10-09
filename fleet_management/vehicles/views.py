@@ -1,9 +1,10 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse as django_reverse
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.views import LoginView
+from django.contrib.auth.views import LoginView, PasswordResetConfirmView
 from django.contrib.auth import logout
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.http import HttpResponse, HttpResponseForbidden
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
@@ -18,11 +19,12 @@ import logging
 from openpyxl import Workbook
 import uuid
 from urllib.parse import urlencode, urlparse, parse_qs
-from .models import CompanyAsset, Vehicle, MaintenanceItem, OfficeEquipment, OfficeEquipmentMaintenance, AuditLog, CompanyDocument, EquipmentTransfer, StaffMember, Asset, AssetRelationship, DriverRequest
+from .models import CompanyAsset, Vehicle, MaintenanceItem, OfficeEquipment, OfficeEquipmentMaintenance, AuditLog, CompanyDocument, EquipmentTransfer, StaffApplication, StaffMember, Asset, AssetRelationship, DriverRequest
 
 # Logger for application events
 logger = logging.getLogger(__name__)
 from .forms import CompanyAssetForm, VehicleForm, MaintenanceItemForm, OfficeEquipmentForm, OfficeEquipmentMaintenanceForm, EquipmentTransferForm, CompanyDocumentForm, StaffMemberForm, DriverRequestForm, DriverAssignmentForm
+from .staff_onboarding import provision_staff_account
 from .permissions import (
     require_admin, require_manager, require_role, is_admin, is_manager, is_driver,
     get_user_role, log_audit, get_client_ip,
@@ -56,6 +58,45 @@ class CustomLoginView(LoginView):
             logger.warning(f"Failed to log login event: {e}")
         
         return super().form_valid(form)
+
+
+class StaffPasswordSetupView(PasswordResetConfirmView):
+    template_name = 'registration/password_reset_confirm.html'
+    success_url = '/reset/done/'
+
+    def form_valid(self, form):
+        user = form.user
+        try:
+            application = user.staff_application
+        except StaffApplication.DoesNotExist:
+            application = None
+
+        try:
+            staff_profile = user.staff_profile
+        except StaffMember.DoesNotExist:
+            staff_profile = None
+
+        application_approved = bool(application and application.status == 'approved')
+        first_staff_password = bool(
+            staff_profile and not staff_profile.is_active and not user.has_usable_password()
+        )
+        response = super().form_valid(form)
+        if application_approved or first_staff_password:
+            user.is_active = True
+            user.save(update_fields=['is_active'])
+            StaffMember.objects.filter(user=user).update(is_active=True)
+        return response
+
+
+@login_required(login_url='login')
+@require_admin
+def staff_apply(request):
+    return redirect('staff_create')
+
+
+def staff_application_status(request, status_token):
+    application = get_object_or_404(StaffApplication, status_token=status_token)
+    return render(request, 'staff/application_status.html', {'application': application})
 
 
 # ----------------------------
@@ -2798,14 +2839,41 @@ def staff_list(request):
 def staff_create(request):
     if request.method == 'POST':
         form = StaffMemberForm(request.POST)
+        form.fields['email'].required = True
+        form.fields['email'].help_text = 'Required. A single-use password setup link will be sent to this address.'
+        form.fields.pop('is_active', None)
         back_url = request.POST.get('back_url') or get_back_url(request, django_reverse('staff_list'))
         if form.is_valid():
-            staff = form.save()
-            log_audit(request.user, 'create', 'staffmember', object_id=staff.pk, description=f'Created staff {staff.staff_id}')
-            messages.success(request, 'Staff member created')
-            return redirect('staff_list')
+            staff = form.save(commit=False)
+            try:
+                provision_staff_account(staff, request)
+            except ValidationError as error:
+                if hasattr(error, 'message_dict'):
+                    for field, field_errors in error.message_dict.items():
+                        if field in form.fields:
+                            form.add_error(field, field_errors)
+                        else:
+                            form.add_error(None, field_errors)
+                else:
+                    form.add_error(None, error.messages)
+            except Exception:
+                logger.exception('Could not create staff account or send password setup link')
+                form.add_error(None, 'The staff account could not be created or its setup email could not be sent.')
+            else:
+                log_audit(
+                    request.user,
+                    'create',
+                    'staffmember',
+                    object_id=staff.pk,
+                    description=f'Created staff account and sent password setup link for {staff.staff_id}',
+                )
+                messages.success(request, 'Staff account created. A password setup link was sent to the staff email.')
+                return redirect('staff_list')
     else:
         form = StaffMemberForm()
+        form.fields['email'].required = True
+        form.fields['email'].help_text = 'Required. A single-use password setup link will be sent to this address.'
+        form.fields.pop('is_active', None)
         back_url = request.GET.get('back_url') or get_back_url(request, django_reverse('staff_list'))
     return render(request, 'staff/form.html', {'form': form, 'action': 'Add', 'back_url': back_url})
 

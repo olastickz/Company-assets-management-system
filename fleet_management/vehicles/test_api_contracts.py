@@ -57,11 +57,23 @@ class AdminApiContractTests(TestCase):
         self.client = APIClient()
         self.client.force_authenticate(self.admin)
 
+    def test_admin_staff_creation_requires_email_for_setup_link(self):
+        response = self.client.post('/api/v1/admin/staff/', {
+            'staff_id': 'API-V1-NO-EMAIL',
+            'first_name': 'No',
+            'last_name': 'Email',
+        }, format='json')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('email', response.data)
+        self.assertFalse(StaffMember.objects.filter(staff_id='API-V1-NO-EMAIL').exists())
+
     def test_admin_can_create_read_update_and_delete_staff_directory_record(self):
         create_response = self.client.post('/api/v1/admin/staff/', {
             'staff_id': 'API-V1-STAFF',
             'first_name': 'Directory',
             'last_name': 'Entry',
+            'email': 'api-v1-staff@example.invalid',
             'is_active': True,
         }, format='json')
         self.assertEqual(create_response.status_code, 201)

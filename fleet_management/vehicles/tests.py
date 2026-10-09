@@ -1,17 +1,110 @@
 from django.contrib.auth.models import User
+from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, Client, override_settings
+from django.test import TestCase, Client, RequestFactory, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 from asset_management import settings as app_settings
-from .models import Asset, Vehicle, CompanyDocument, UserRole, StaffMember, OfficeEquipment, EquipmentWorkOrder, DriverRequest
+from .models import Asset, Vehicle, CompanyDocument, StaffApplication, UserRole, StaffMember, OfficeEquipment, EquipmentWorkOrder, DriverRequest, EquipmentTransfer, MaintenanceItem
+from .staff_onboarding import review_staff_application
 
 
 class DatabaseConfigurationTests(TestCase):
     def test_placeholder_database_url_is_detected(self):
         self.assertTrue(app_settings._is_placeholder_database_url('postgresql://USER:PASSWORD@HOST:5432/DB_NAME'))
         self.assertFalse(app_settings._is_placeholder_database_url('postgresql://fleet:secret@db.internal:5432/fleetdb'))
+
+
+@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend', DEFAULT_FROM_EMAIL='noreply@example.com')
+class StaffOnboardingTests(TestCase):
+    def application_data(self, **overrides):
+        data = {
+            'staff_id': 'TEL-4821',
+            'first_name': 'Ada',
+            'last_name': 'Okafor',
+            'email': 'ada.okafor@example.com',
+            'department': 'ABS',
+            'branch': 'LAGOS',
+        }
+        data.update(overrides)
+        return data
+
+    def test_public_staff_application_redirects_to_login_without_creating_application(self):
+        response = self.client.post(reverse('staff_apply'), self.application_data())
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(StaffApplication.objects.exists())
+        self.assertEqual(mail.outbox, [])
+
+    def test_approved_staff_must_set_password_before_login(self):
+        application = StaffApplication.objects.create(**self.application_data())
+        reviewer = User.objects.create_superuser(
+            username='onboarding-admin',
+            email='admin@example.com',
+            password='Admin!Password_9021',
+        )
+        request = RequestFactory().get('/', HTTP_HOST='testserver')
+
+        review_staff_application(application, 'approved', reviewer, request)
+        application.refresh_from_db()
+        user = application.account
+
+        self.assertEqual(application.status, 'approved')
+        self.assertFalse(user.is_active)
+        self.assertFalse(user.has_usable_password())
+        self.assertFalse(self.client.login(username='TEL-4821', password='anything'))
+        self.assertEqual(user.role.role, 'staff')
+        self.assertFalse(user.staff_profile.is_active)
+
+        setup_url = mail.outbox[-1].body.split('secure link:\n', 1)[1].splitlines()[0]
+        setup_path = setup_url.replace('http://testserver', '')
+        setup_response = self.client.get(setup_path, follow=True)
+        self.assertEqual(setup_response.status_code, 200)
+        password_path = setup_response.request['PATH_INFO']
+        response = self.client.post(password_path, {
+            'new_password1': 'Complex!Password_9402',
+            'new_password2': 'Complex!Password_9402',
+        }, follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        user.refresh_from_db()
+        self.assertTrue(user.is_active)
+        self.assertTrue(user.staff_profile.is_active)
+        self.assertTrue(self.client.login(username='TEL-4821', password='Complex!Password_9402'))
+
+    def test_declined_applicant_can_see_the_decision(self):
+        application = StaffApplication.objects.create(**self.application_data())
+        reviewer = User.objects.create_superuser(
+            username='decline-admin',
+            email='admin@example.com',
+            password='Admin!Password_9021',
+        )
+        request = RequestFactory().get('/', HTTP_HOST='testserver')
+
+        review_staff_application(application, 'declined', reviewer, request)
+        response = self.client.get(
+            reverse('staff_application_status', kwargs={'status_token': application.status_token})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'was not approved')
+        self.assertEqual(application.account, None)
+        self.assertIn('not approved', mail.outbox[-1].body)
+
+    def test_only_superusers_can_review_applications_in_admin(self):
+        application = StaffApplication.objects.create(**self.application_data())
+        staff_admin = User.objects.create_user(
+            username='staff-admin',
+            email='staff-admin@example.com',
+            password='Staff!Password_9021',
+            is_staff=True,
+        )
+        self.client.force_login(staff_admin)
+        response = self.client.get(reverse('admin:vehicles_staffapplication_changelist'))
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(application.status, 'pending')
 
 
 class VehicleModelTests(TestCase):
@@ -106,7 +199,6 @@ class EquipmentWorkOrderTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data[0]['machine_name'], equipment.name)
         self.assertEqual(response.data[0]['work_type'], 'repair')
-
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class AdminApiTests(TestCase):
@@ -229,7 +321,7 @@ class AdminApiTests(TestCase):
         )
         self.assertEqual(delete_response.status_code, 204)
 
-
+@override_settings(SECURE_SSL_REDIRECT=False)
 class ViewsTests(TestCase):
     def setUp(self):
         self.client = Client()
@@ -1492,7 +1584,6 @@ class WorkflowApiTests(TestCase):
         list_response = requester_client.get('/api/driver-requests/')
         self.assertEqual(list_response.status_code, 200)
         self.assertEqual(list_response.data[0]['id'], create_response.data['id'])
-
         assign_response = self.manager_client.post(
             f"/api/driver-requests/{create_response.data['id']}/assign/",
             {'assigned_driver': driver.pk, 'notes': 'Confirmed'},

@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+
+{% block title %}Staff Account Application{% endblock %}
+
+{% block content %}
+<main style="max-width: 720px; margin: 36px auto; padding: 24px;">
+    <h1>Staff Account Application</h1>
+    <p>Submit your work details for administrator review. You will create your password after approval.</p>
+
+    {% if messages %}
+        {% for message in messages %}<div class="message">{{ message }}</div>{% endfor %}
+    {% endif %}
+
+    <form method="post" novalidate style="display: grid; gap: 16px;">
+        {% csrf_token %}
+        {% for field in form %}
+            <div>
+                <label for="{{ field.id_for_label }}" style="display:block; font-weight:600; margin-bottom:6px;">{{ field.label }}</label>
+                {{ field }}
+                {% for error in field.errors %}<div style="color:#a52834; margin-top:5px;">{{ error }}</div>{% endfor %}
+            </div>
+        {% endfor %}
+        {% for error in form.non_field_errors %}<div class="message">{{ error }}</div>{% endfor %}
+        <button type="submit" class="button">Submit application</button>
+    </form>
+</main>
+<style>
+    main input, main select { width:100%; padding:10px 12px; border:1px solid #c3cee0; border-radius:4px; }
+    main input:focus, main select:focus { outline:2px solid #2b6ef0; outline-offset:1px; }
+</style>
+{% endblock %}

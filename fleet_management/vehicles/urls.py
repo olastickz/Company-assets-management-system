@@ -61,6 +61,10 @@ urlpatterns = [
     # Email alerts
     path('send-expiry-alerts/', views.send_expiry_alerts_view, name='send_expiry_alerts_view'),
 
+    # Staff account applications
+    path('staff/apply/', views.staff_apply, name='staff_apply'),
+    path('staff/application/<uuid:status_token>/', views.staff_application_status, name='staff_application_status'),
+
     # Company Documents routes
     path('documents/', views.company_documents_list, name='company_documents_list'),
     path('documents/counts/', views.company_documents_counts, name='company_documents_counts'),

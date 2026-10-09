@@ -1,0 +1,73 @@
+{
+  "info": {
+    "name": "Admin Staff Password Setup",
+    "description": "Admin-only write workflow: create an inactive staff login and send a one-time password setup link. Run only against an isolated test database configured with Django's locmem email backend. Staff records and emails are created; use a disposable database for cleanup.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://127.0.0.1:8000" },
+    { "key": "username", "value": "" },
+    { "key": "password", "value": "" },
+    { "key": "token", "value": "" },
+    { "key": "run_id", "value": "" },
+    { "key": "staff_record_id", "value": "" }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.collectionVariables.get('run_id')) {",
+          "    pm.collectionVariables.set('run_id', pm.variables.replaceIn('{{$guid}}').replace(/-/g, '').slice(0, 12));",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Get Admin Token",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{base_url}}/api/get-token/"
+      },
+      "response": [{ "name": "200 OK - Test fixture", "originalRequest": { "method": "POST", "url": "{{base_url}}/api/get-token/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [], "cookie": [], "body": "{\"token\":\"<admin-token>\"}" }],
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('admin token is returned', function () {", "    pm.response.to.have.status(200);", "    const token = pm.response.json().token;", "    pm.expect(token).to.be.a('string').and.not.empty;", "    pm.collectionVariables.set('token', token);", "});"] } }]
+    },
+    {
+      "name": "Create Staff Account",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Token {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"staff_id\": \"PM-{{run_id}}\",\n  \"first_name\": \"Postman\",\n  \"last_name\": \"Setup Test\",\n  \"email\": \"pm-{{run_id}}@example.invalid\",\n  \"department\": \"ABS\",\n  \"branch\": \"LAGOS\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{base_url}}/api/v1/admin/staff/"
+      },
+      "response": [{ "name": "201 Created - Test fixture", "originalRequest": { "method": "POST", "url": "{{base_url}}/api/v1/admin/staff/" }, "status": "Created", "code": 201, "_postman_previewlanguage": "json", "header": [], "cookie": [], "body": "{\"id\":1,\"staff_id\":\"PM-test-run\",\"first_name\":\"Postman\",\"last_name\":\"Setup Test\",\"email\":\"[redacted]\",\"department\":\"ABS\",\"branch\":\"LAGOS\",\"driver_status\":\"available\",\"is_active\":false,\"user\":2,\"account_status\":\"pending_password\",\"setup_email_sent\":true}" }],
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('admin creates a pending staff login and sends setup link', function () {", "    pm.response.to.have.status(201);", "    const body = pm.response.json();", "    pm.expect(body.staff_id).to.eql('PM-' + pm.collectionVariables.get('run_id'));", "    pm.expect(body.is_active).to.eql(false);", "    pm.expect(body.account_status).to.eql('pending_password');", "    pm.expect(body.setup_email_sent).to.eql(true);", "    pm.expect(body).not.to.have.property('password');", "    pm.collectionVariables.set('staff_record_id', body.id);", "});"] } }]
+    },
+    {
+      "name": "Read Created Staff Account",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Token {{token}}" }],
+        "url": "{{base_url}}/api/v1/admin/staff/{{staff_record_id}}/"
+      },
+      "response": [{ "name": "200 OK - Test fixture", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/admin/staff/{{staff_record_id}}/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [], "cookie": [], "body": "{\"id\":1,\"staff_id\":\"PM-test-run\",\"first_name\":\"Postman\",\"last_name\":\"Setup Test\",\"email\":\"[redacted]\",\"department\":\"ABS\",\"branch\":\"LAGOS\",\"driver_status\":\"available\",\"is_active\":false,\"user\":2}" }],
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('created staff account is linked but inactive until setup', function () {", "    pm.response.to.have.status(200);", "    const body = pm.response.json();", "    pm.expect(body.staff_id).to.eql('PM-' + pm.collectionVariables.get('run_id'));", "    pm.expect(body.user).to.be.a('number');", "    pm.expect(body.is_active).to.eql(false);", "});"] } }]
+    }
+  ]
+}

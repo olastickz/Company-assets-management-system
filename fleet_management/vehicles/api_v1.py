@@ -1,7 +1,9 @@
 from datetime import datetime
+import logging
 
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -30,6 +32,9 @@ from .models import (
 )
 from .permissions import get_user_role
 from .serializers import AdminUserSerializer, NotificationRecipientSerializer, StaffMemberSerializer
+from .staff_onboarding import provision_staff_account
+
+logger = logging.getLogger(__name__)
 
 
 class ManagerPermission(IsAuthenticated):
@@ -144,6 +149,32 @@ class AdminStaffListView(generics.ListCreateAPIView):
         if active in ('true', 'false'):
             staff = staff.filter(is_active=(active == 'true'))
         return staff
+
+    def create(self, request, *args, **kwargs):
+        staff_data = request.data.copy()
+        staff_data.pop('user', None)
+        staff_data.pop('is_active', None)
+        serializer = self.get_serializer(data=staff_data)
+        serializer.is_valid(raise_exception=True)
+        staff = StaffMember(**serializer.validated_data)
+
+        try:
+            provision_staff_account(staff, request)
+        except ValidationError as error:
+            if hasattr(error, 'message_dict'):
+                return Response(error.message_dict, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': error.messages}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            logger.exception('Failed to create an admin-provisioned staff account')
+            return Response(
+                {'detail': 'The staff account could not be created or its setup email could not be sent.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        response_data = self.get_serializer(staff).data
+        response_data['account_status'] = 'pending_password'
+        response_data['setup_email_sent'] = True
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
 
 class AdminStaffDetailView(generics.RetrieveUpdateDestroyAPIView):

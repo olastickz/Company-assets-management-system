@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Asset, AssetAssignmentHistory, AssetRelationship, CompanyAsset, MaintenanceItem, OfficeEquipment, OfficeEquipmentMaintenance, UserRole, StaffMember, AuditLog, EmailRecipient, EmailDeliveryLog, EmailSchedule, EquipmentTransfer, CompanyDocument, DriverRequest
+from .models import Asset, AssetAssignmentHistory, AssetRelationship, CompanyAsset, MaintenanceItem, OfficeEquipment, OfficeEquipmentMaintenance, UserRole, StaffApplication, StaffMember, AuditLog, EmailRecipient, EmailDeliveryLog, EmailSchedule, EquipmentTransfer, CompanyDocument, DriverRequest
 from .permissions import is_admin
 from django import forms
 from django.utils.safestring import mark_safe
@@ -454,6 +454,76 @@ admin.site.register(StaffMember)
 admin.site.register(AuditLog)
 admin.site.register(EmailRecipient)
 admin.site.register(EmailDeliveryLog)
+
+
+@admin.register(StaffApplication, site=admin.site)
+class StaffApplicationAdmin(admin.ModelAdmin):
+    list_display = ('staff_id', 'first_name', 'last_name', 'email', 'department', 'branch', 'status', 'created_at')
+    list_filter = ('status', 'department', 'branch', 'created_at')
+    search_fields = ('staff_id', 'first_name', 'last_name', 'email')
+    readonly_fields = ('status_token', 'account', 'reviewed_by', 'created_at', 'reviewed_at')
+    actions = ('approve_applications', 'decline_applications', 'resend_application_emails')
+
+    def has_module_permission(self, request):
+        return request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    @admin.action(description='Approve selected staff applications')
+    def approve_applications(self, request, queryset):
+        from .staff_onboarding import review_staff_application
+
+        approved = 0
+        for application in queryset:
+            try:
+                review_staff_application(application, 'approved', request.user, request)
+                approved += 1
+            except Exception:
+                self.message_user(
+                    request,
+                    f'Could not approve {application.staff_id}. Check for duplicate details or email configuration.',
+                    level='ERROR',
+                )
+        if approved:
+            self.message_user(request, f'Approved {approved} application(s).')
+
+    @admin.action(description='Decline selected staff applications')
+    def decline_applications(self, request, queryset):
+        from .staff_onboarding import review_staff_application
+
+        declined = 0
+        for application in queryset:
+            try:
+                review_staff_application(application, 'declined', request.user, request)
+                declined += 1
+            except Exception:
+                self.message_user(request, f'Could not decline {application.staff_id}.', level='ERROR')
+        if declined:
+            self.message_user(request, f'Declined {declined} application(s).')
+
+    @admin.action(description='Resend status or password-setup email')
+    def resend_application_emails(self, request, queryset):
+        from .staff_onboarding import send_application_notification
+
+        sent = 0
+        for application in queryset:
+            try:
+                send_application_notification(application, request)
+                sent += 1
+            except Exception:
+                self.message_user(request, f'Could not email {application.email}.', level='ERROR')
+        if sent:
+            self.message_user(request, f'Sent {sent} email(s).')
 
 @admin.register(Asset)
 class AssetAdmin(admin.ModelAdmin):
