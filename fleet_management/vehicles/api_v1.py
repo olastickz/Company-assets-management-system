@@ -2,7 +2,9 @@ from datetime import datetime
 import logging
 
 from django.conf import settings
+from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404
@@ -152,14 +154,17 @@ class AdminStaffListView(generics.ListCreateAPIView):
 
     def create(self, request, *args, **kwargs):
         staff_data = request.data.copy()
+        password = staff_data.pop('password', None)
         staff_data.pop('user', None)
         staff_data.pop('is_active', None)
+        if not password:
+            return Response({'password': 'This field is required.'}, status=status.HTTP_400_BAD_REQUEST)
         serializer = self.get_serializer(data=staff_data)
         serializer.is_valid(raise_exception=True)
         staff = StaffMember(**serializer.validated_data)
 
         try:
-            provision_staff_account(staff, request)
+            provision_staff_account(staff, password)
         except ValidationError as error:
             if hasattr(error, 'message_dict'):
                 return Response(error.message_dict, status=status.HTTP_400_BAD_REQUEST)
@@ -172,9 +177,40 @@ class AdminStaffListView(generics.ListCreateAPIView):
             )
 
         response_data = self.get_serializer(staff).data
-        response_data['account_status'] = 'pending_password'
-        response_data['setup_email_sent'] = True
+        response_data['account_status'] = 'active'
         return Response(response_data, status=status.HTTP_201_CREATED)
+
+
+class PasswordChangeAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        current_password = request.data.get('current_password', '')
+        new_password = request.data.get('new_password', '')
+        password_confirm = request.data.get('password_confirm', '')
+
+        if not user.check_password(current_password):
+            return Response(
+                {'current_password': 'Current password is incorrect.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not new_password:
+            return Response({'new_password': 'This field is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        if new_password != password_confirm:
+            return Response(
+                {'password_confirm': 'The passwords do not match.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            validate_password(new_password, user=user)
+        except ValidationError as error:
+            return Response({'new_password': error.messages}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.set_password(new_password)
+        user.save(update_fields=['password'])
+        update_session_auth_hash(request._request, user)
+        return Response({'detail': 'Password changed successfully.'})
 
 
 class AdminStaffDetailView(generics.RetrieveUpdateDestroyAPIView):

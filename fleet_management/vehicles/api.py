@@ -6,7 +6,6 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.authentication import BasicAuthentication, TokenAuthentication
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
-from django.contrib.auth.forms import PasswordResetForm
 from django.contrib.auth.models import User
 from django.db import transaction
 from django.db.models import Q
@@ -578,21 +577,6 @@ def me_api(request):
         'last_name': request.user.last_name,
         'role': get_user_role(request.user),
     })
-
-
-@api_view(['POST'])
-@permission_classes([permissions.AllowAny])
-def password_reset_api(request):
-    email = request.data.get('email', '').strip()
-    if not email:
-        return Response({'detail': 'email is required'}, status=status.HTTP_400_BAD_REQUEST)
-
-    form = PasswordResetForm(data={'email': email})
-    if form.is_valid():
-        form.save(request=request, use_https=request.is_secure(), email_template_name='registration/password_reset_email.html')
-        return Response({'detail': 'Password reset email sent if the account exists.'})
-
-    return Response(form.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(['GET'])

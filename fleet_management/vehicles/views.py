@@ -62,7 +62,7 @@ class CustomLoginView(LoginView):
 
 class StaffPasswordSetupView(PasswordResetConfirmView):
     template_name = 'registration/password_reset_confirm.html'
-    success_url = '/reset/done/'
+    success_url = '/staff/password-setup/done/'
 
     def form_valid(self, form):
         user = form.user
@@ -2858,13 +2858,13 @@ def staff_create(request):
     if request.method == 'POST':
         form = StaffMemberForm(request.POST)
         form.fields['email'].required = True
-        form.fields['email'].help_text = 'Required. A single-use password setup link will be sent to this address.'
+        form.fields['email'].help_text = 'Required for the staff record.'
         form.fields.pop('is_active', None)
         back_url = request.POST.get('back_url') or get_back_url(request, django_reverse('staff_list'))
         if form.is_valid():
             staff = form.save(commit=False)
             try:
-                provision_staff_account(staff, request)
+                provision_staff_account(staff, form.cleaned_data['password'])
             except ValidationError as error:
                 if hasattr(error, 'message_dict'):
                     for field, field_errors in error.message_dict.items():
@@ -2875,22 +2875,22 @@ def staff_create(request):
                 else:
                     form.add_error(None, error.messages)
             except Exception:
-                logger.exception('Could not create staff account or send password setup link')
-                form.add_error(None, 'The staff account could not be created or its setup email could not be sent.')
+                logger.exception('Could not create staff account')
+                form.add_error(None, 'The staff account could not be created.')
             else:
                 log_audit(
                     request.user,
                     'create',
                     'staffmember',
                     object_id=staff.pk,
-                    description=f'Created staff account and sent password setup link for {staff.staff_id}',
+                    description=f'Created staff account for {staff.staff_id}',
                 )
-                messages.success(request, 'Staff account created. A password setup link was sent to the staff email.')
+                messages.success(request, 'Staff account created and activated.')
                 return redirect('staff_list')
     else:
         form = StaffMemberForm()
         form.fields['email'].required = True
-        form.fields['email'].help_text = 'Required. A single-use password setup link will be sent to this address.'
+        form.fields['email'].help_text = 'Required for the staff record.'
         form.fields.pop('is_active', None)
         back_url = request.GET.get('back_url') or get_back_url(request, django_reverse('staff_list'))
     return render(request, 'staff/form.html', {'form': form, 'action': 'Add', 'back_url': back_url})

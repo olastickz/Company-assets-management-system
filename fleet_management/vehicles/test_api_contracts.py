@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, override_settings
+from django.test import Client, TestCase, override_settings
 from rest_framework.test import APIClient
 
 from .models import (
@@ -57,11 +57,12 @@ class AdminApiContractTests(TestCase):
         self.client = APIClient()
         self.client.force_authenticate(self.admin)
 
-    def test_admin_staff_creation_requires_email_for_setup_link(self):
+    def test_admin_staff_creation_requires_email(self):
         response = self.client.post('/api/v1/admin/staff/', {
             'staff_id': 'API-V1-NO-EMAIL',
             'first_name': 'No',
             'last_name': 'Email',
+            'password': 'Initial!StaffPassword_2026',
         }, format='json')
 
         self.assertEqual(response.status_code, 400)
@@ -74,6 +75,7 @@ class AdminApiContractTests(TestCase):
             'first_name': 'Directory',
             'last_name': 'Entry',
             'email': 'api-v1-staff@example.invalid',
+            'password': 'Initial!StaffPassword_2026',
             'is_active': True,
         }, format='json')
         self.assertEqual(create_response.status_code, 201)
@@ -280,7 +282,7 @@ class CoreResourceApiContractTests(TestCase):
         self.assertEqual(equipment_response.data, {'created': 1, 'failed': 0, 'errors': []})
         self.assertTrue(OfficeEquipment.objects.filter(serial_number='API-IMPORT-SN').exists())
 
-    def test_token_password_reset_and_export_routes(self):
+    def test_token_and_export_routes_without_email_password_reset(self):
         token_user = User.objects.create_user(
             username='token-api-user', password='token-pass', email='token-api@example.com'
         )
@@ -294,8 +296,8 @@ class CoreResourceApiContractTests(TestCase):
         reset_response = APIClient().post(
             '/api/password-reset/', {'email': 'missing-user@example.com'}, format='json'
         )
-        self.assertEqual(reset_response.status_code, 200)
-        self.assertIn('detail', reset_response.data)
+        self.assertEqual(reset_response.status_code, 404)
+        self.assertEqual(Client().get('/password_reset/').status_code, 404)
 
         self.assertTrue(self.client.get('/api/export/vehicles/csv/')['Content-Type'].startswith('text/csv'))
         self.assertTrue(self.client.get('/api/export/equipment/csv/')['Content-Type'].startswith('text/csv'))

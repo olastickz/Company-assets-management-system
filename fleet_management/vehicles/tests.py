@@ -237,10 +237,11 @@ class AdminApiTests(TestCase):
             'email': 'managed-api-user@example.com',
             'role': 'manager',
             'department': 'Operations',
+            'password': 'Initial!ManagerPassword_2026',
         }, format='json')
         self.assertEqual(create_response.status_code, 201)
         user = User.objects.get(username='managed-api-user')
-        self.assertFalse(user.has_usable_password())
+        self.assertTrue(user.check_password('Initial!ManagerPassword_2026'))
         self.assertFalse(user.is_staff)
         self.assertFalse(user.is_superuser)
         self.assertEqual(user.role.role, 'manager')

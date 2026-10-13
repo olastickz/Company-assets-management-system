@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from .models import (
     Asset,
     CompanyDocument,
@@ -156,13 +158,14 @@ class EquipmentWorkOrderSerializer(serializers.ModelSerializer):
 class AdminUserSerializer(serializers.ModelSerializer):
     role = serializers.ChoiceField(choices=UserRole.ROLE_CHOICES, required=False, write_only=True)
     department = serializers.CharField(max_length=100, allow_blank=True, allow_null=True, required=False, write_only=True)
+    password = serializers.CharField(write_only=True, required=False, trim_whitespace=False)
     is_superuser = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = User
         fields = [
             'id', 'username', 'first_name', 'last_name', 'email', 'is_active',
-            'is_superuser', 'role', 'department',
+            'is_superuser', 'role', 'department', 'password',
         ]
         read_only_fields = ['id', 'is_superuser']
 
@@ -176,11 +179,26 @@ class AdminUserSerializer(serializers.ModelSerializer):
             data['department'] = None
         return data
 
+    def validate(self, attrs):
+        password = attrs.get('password')
+        if self.instance is None and not password:
+            raise serializers.ValidationError({'password': 'This field is required.'})
+        if self.instance is not None and password:
+            raise serializers.ValidationError({'password': 'Password can only be set when creating an account.'})
+        if password:
+            user = User(username=attrs.get('username'), email=attrs.get('email', ''))
+            try:
+                validate_password(password, user=user)
+            except DjangoValidationError as error:
+                raise serializers.ValidationError({'password': error.messages}) from error
+        return attrs
+
     def create(self, validated_data):
         role = validated_data.pop('role', 'staff')
         department = validated_data.pop('department', None)
+        password = validated_data.pop('password')
         user = User(**validated_data)
-        user.set_unusable_password()
+        user.set_password(password)
         user.save()
         UserRole.objects.create(user=user, role=role, department=department)
         return user

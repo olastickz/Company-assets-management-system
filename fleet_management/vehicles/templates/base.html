@@ -660,6 +660,7 @@
             </button>
             {% if request.user.is_authenticated %}
             <span>Hi {{ request.user.username }}</span>
+            <a href="{% url 'password_change' %}" style="color: var(--header-text); text-decoration:none; font-weight:600;">Change password</a>
             {% if can_access_admin_tools %}
             <a href="{% url 'admin:index' %}" style="color: var(--header-text); text-decoration:none; margin-left:14px; font-weight:600;">🔧 Admin</a>
             <span style="color: var(--header-text); margin-left:8px; margin-right:8px;">/</span>

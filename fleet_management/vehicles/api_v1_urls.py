@@ -18,6 +18,7 @@ from .api_v1 import (
     NotificationSettingsView,
     OrganizationSettingsView,
     OverviewReportView,
+    PasswordChangeAPIView,
     ProfileSettingsView,
     SendNotificationNowView,
     TransferReportView,
@@ -46,4 +47,5 @@ urlpatterns = [
     path('settings/organization/', OrganizationSettingsView.as_view(), name='api-v1-settings-organization'),
     path('settings/notifications/', NotificationSettingsView.as_view(), name='api-v1-settings-notifications'),
     path('settings/profile/', ProfileSettingsView.as_view(), name='api-v1-settings-profile'),
+    path('settings/password/', PasswordChangeAPIView.as_view(), name='api-v1-settings-password'),
 ]

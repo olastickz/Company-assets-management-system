@@ -2,6 +2,7 @@ from django import forms
 from django.core import validators
 from django.core.exceptions import ValidationError
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
 from .models import Asset, CompanyAsset, MaintenanceItem, MaintenanceRequest, OfficeEquipment, OfficeEquipmentMaintenance, CompanyDocument, StaffApplication, StaffMember, Vehicle, DriverRequest
 
 # Year field removed - use `purchase_date` instead of separate year
@@ -365,12 +366,35 @@ class EquipmentTransferForm(forms.Form):
 
 class StaffMemberForm(forms.ModelForm):
     """Form for creating and editing staff registry entries."""
+    password = forms.CharField(
+        label='Initial password',
+        validators=[validate_password],
+        widget=forms.PasswordInput(attrs={'class': 'form-control', 'autocomplete': 'new-password'}),
+    )
+    password_confirm = forms.CharField(
+        label='Confirm initial password',
+        widget=forms.PasswordInput(attrs={'class': 'form-control', 'autocomplete': 'new-password'}),
+    )
     is_active = forms.TypedChoiceField(
         choices=[(True, 'Yes'), (False, 'No')],
         coerce=lambda x: x == 'True',
         widget=forms.Select(attrs={'class': 'form-control'}),
         label='Active Staff Member',
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk:
+            self.fields.pop('password')
+            self.fields.pop('password_confirm')
+
+    def clean(self):
+        cleaned_data = super().clean()
+        password = cleaned_data.get('password')
+        password_confirm = cleaned_data.get('password_confirm')
+        if password and password != password_confirm:
+            self.add_error('password_confirm', 'The passwords do not match.')
+        return cleaned_data
 
     class Meta:
         model = StaffMember

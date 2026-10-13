@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
@@ -16,7 +17,7 @@ def send_staff_password_setup_link(user, request, status_url=None):
     uid = urlsafe_base64_encode(force_bytes(user.pk))
     token = default_token_generator.make_token(user)
     setup_url = request.build_absolute_uri(
-        reverse('password_reset_confirm', kwargs={'uidb64': uid, 'token': token})
+        reverse('staff_password_setup', kwargs={'uidb64': uid, 'token': token})
     )
     body = (
         f'Hello {user.first_name},\n\n'
@@ -40,7 +41,7 @@ def send_staff_password_setup_link(user, request, status_url=None):
     return setup_url
 
 
-def provision_staff_account(staff, request):
+def provision_staff_account(staff, password):
     email = (staff.email or '').strip().lower()
     if not email:
         raise ValidationError({'email': 'A staff email is required to send the password setup link.'})
@@ -50,10 +51,14 @@ def provision_staff_account(staff, request):
         raise ValidationError({'email': 'An account already uses this email address.'})
     if StaffMember.objects.filter(email__iexact=email).exclude(pk=staff.pk).exists():
         raise ValidationError({'email': 'This email address is already listed in the staff registry.'})
+    try:
+        validate_password(password, user=User(username=staff.staff_id, email=email))
+    except ValidationError as error:
+        raise ValidationError({'password': error.messages}) from error
 
     with transaction.atomic():
         staff.email = email
-        staff.is_active = False
+        staff.is_active = True
         staff.save()
 
         user = User(
@@ -61,15 +66,14 @@ def provision_staff_account(staff, request):
             email=email,
             first_name=staff.first_name,
             last_name=staff.last_name,
-            is_active=False,
+            is_active=True,
         )
-        user.set_unusable_password()
+        user.set_password(password)
         user.save()
         UserRole.objects.create(user=user, role='staff', department=staff.department)
 
         staff.user = user
         staff.save(update_fields=['user', 'email', 'is_active'])
-        send_staff_password_setup_link(user, request)
 
     return staff
 
