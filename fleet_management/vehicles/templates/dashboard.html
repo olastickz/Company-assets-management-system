@@ -621,6 +621,12 @@
     </div>
 
     <div class="status-grid">
+        {% if user_role == 'staff' or user_role == 'driver' %}
+        <a href="{% url 'maintenance_request_create' %}" class="status-card warning">
+            <strong>Report a maintenance issue</strong>
+            <small>Submit an urgent repair request for any vehicle or equipment.</small>
+        </a>
+        {% endif %}
         {% if can_view_company_documents %}
         <a href="{% url 'company_documents_list' %}" class="status-card secondary">
             <strong>{{ expiring_documents_count|default:'0' }} docs expiring soon</strong>

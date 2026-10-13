@@ -373,13 +373,22 @@ class EmailAdminSite(admin.AdminSite):
     def maintenance_overview_view(self, request):
         """Custom admin view for maintenance management overview."""
         from django.utils import timezone
-        from vehicles.models import MaintenanceItem, OfficeEquipmentMaintenance
+        from vehicles.models import CompanyAsset, MaintenanceItem, MaintenanceRequest, OfficeEquipment, OfficeEquipmentMaintenance
 
         context = self.each_context(request)
         today = timezone.now().date()
 
         vehicle_maintenance = MaintenanceItem.objects.select_related('vehicle').order_by('-date_performed')[:10]
         equipment_maintenance = OfficeEquipmentMaintenance.objects.select_related('equipment').order_by('-maintenance_date')[:10]
+        due_assets = [
+            {'asset': asset, 'asset_type': 'Vehicle', 'due_date': asset.maintenance_due_date}
+            for asset in CompanyAsset.objects.exclude(maintenance_due_date__isnull=True)
+        ] + [
+            {'asset': asset, 'asset_type': 'Equipment', 'due_date': asset.maintenance_due_date}
+            for asset in OfficeEquipment.objects.exclude(maintenance_due_date__isnull=True)
+        ]
+        due_assets.sort(key=lambda item: item['due_date'])
+        maintenance_requests = MaintenanceRequest.objects.select_related('submitted_by').all()
 
         context.update({
             'title': 'Maintenance Overview',
@@ -388,6 +397,10 @@ class EmailAdminSite(admin.AdminSite):
             'equipment_maintenance': equipment_maintenance,
             'total_vehicle_maintenance': MaintenanceItem.objects.count(),
             'total_equipment_maintenance': OfficeEquipmentMaintenance.objects.count(),
+            'due_assets': due_assets,
+            'total_due_maintenance': len(due_assets),
+            'maintenance_requests': maintenance_requests,
+            'total_emergency_requests': maintenance_requests.count(),
         })
 
         return render(request, 'admin/maintenance_overview.html', context)

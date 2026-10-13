@@ -117,39 +117,39 @@
 {% block content %}
 {% include 'partials/back_to_dashboard.html' %}
 <div class="content-shell">
-    <h1>Equipment Maintenance</h1>
-    <p>Review upcoming and overdue equipment maintenance records. Click any equipment name to open its details.</p>
+    <h1>Maintenance Due</h1>
+    <p>Review tracked assets with a maintenance due date and emergency requests submitted by staff or drivers.</p>
 
     <div class="summary-row">
         <div class="summary-card">
-            <h3>Pending maintenance</h3>
+            <h3>Upcoming maintenance</h3>
             <div class="value">{{ pending_count }}</div>
-            <p>Records with due dates today or later.</p>
+            <p>Tracked assets due today or later.</p>
         </div>
         <div class="summary-card">
             <h3>Overdue</h3>
             <div class="value">{{ overdue_count }}</div>
-            <p>Records with due dates in the past.</p>
+            <p>Tracked assets past their due date.</p>
         </div>
     </div>
 
     <table class="maintenance-table">
         <thead>
             <tr>
-                <th>Equipment</th>
-                <th>Description</th>
+                <th>Asset</th>
+                <th>Type</th>
                 <th>Due Date</th>
                 <th>Status</th>
             </tr>
         </thead>
         <tbody>
-            {% for record in maintenance_items %}
+            {% for item in due_items %}
             <tr>
-                <td><a href="/equipment/{{ record.equipment.pk }}/">{{ record.equipment.name }}</a></td>
-                <td>{{ record.description }}</td>
-                <td>{{ record.due_date|date:"M j, Y" }}</td>
+                <td><a href="{{ item.url }}">{{ item.asset.name }}</a></td>
+                <td>{{ item.asset_type }}</td>
+                <td>{{ item.due_date|date:"M j, Y" }}</td>
                 <td>
-                    {% if record.due_date < today %}
+                    {% if item.due_date < today %}
                         <span class="pill overdue">Overdue</span>
                     {% else %}
                         <span class="pill due">Due soon</span>
@@ -158,10 +158,38 @@
             </tr>
             {% empty %}
             <tr>
-                <td colspan="4" style="text-align:center; padding: 24px; color:#64748B;">No maintenance records found.</td>
+                <td colspan="4" style="text-align:center; padding: 24px; color:#64748B;">No tracked assets have a maintenance due date.</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+
+    {% if is_admin %}
+    <h2 style="margin-top:32px;">Emergency Maintenance Requests</h2>
+    <table class="maintenance-table">
+        <thead>
+            <tr>
+                <th>Asset / Equipment</th>
+                <th>Issue Description</th>
+                <th>Submitted By</th>
+                <th>Submitted</th>
+                <th>Photo</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for request in maintenance_requests %}
+            <tr>
+                <td>{{ request.asset_description }}<br><span class="pill overdue">Emergency Maintenance Request</span></td>
+                <td>{{ request.issue_description|linebreaksbr }}</td>
+                <td>{{ request.submitted_by.get_full_name|default:request.submitted_by.username|default:"Former user" }}</td>
+                <td>{{ request.created_at|date:"M j, Y H:i" }}</td>
+                <td>{% if request.photo %}<a href="{{ request.photo.url }}" target="_blank" rel="noopener">View photo</a>{% else %}—{% endif %}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" style="text-align:center; padding:24px; color:#64748B;">No emergency maintenance requests.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
 </div>
 {% endblock %}

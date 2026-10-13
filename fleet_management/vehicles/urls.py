@@ -16,8 +16,9 @@ urlpatterns = [
     path('asset/<int:pk>/delete/', views.vehicle_delete, name='asset_delete'),
 
     # Maintenance CRUD
-    path('asset/<int:asset_pk>/maintenance/add/', views.maintenance_create, name='maintenance_create'),
+    path('asset/<int:vehicle_pk>/maintenance/add/', views.maintenance_create, name='maintenance_create'),
     path('equipment-maintenance/', views.equipment_maintenance_list, name='equipment_maintenance_list'),
+    path('maintenance-requests/new/', views.maintenance_request_create, name='maintenance_request_create'),
     path('maintenance/<int:pk>/edit/', views.maintenance_update, name='maintenance_update'),
     path('maintenance/<int:pk>/delete/', views.maintenance_delete, name='maintenance_delete'),
 

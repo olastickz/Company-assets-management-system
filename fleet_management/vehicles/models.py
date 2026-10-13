@@ -3,6 +3,7 @@ import uuid
 from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import User
+from django.core.validators import FileExtensionValidator
 
 
 class CompanyAsset(models.Model):
@@ -36,6 +37,7 @@ class CompanyAsset(models.Model):
     roadworthy_expiry = models.DateField(blank=True, null=True)
     license_expiry = models.DateField(blank=True, null=True)
     hackney_permit = models.DateField(blank=True, null=True)
+    maintenance_due_date = models.DateField(blank=True, null=True)
 
     # Cost field
     cost = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
@@ -178,6 +180,7 @@ class OfficeEquipment(models.Model):
     description = models.TextField(blank=True, null=True)
     purchase_date = models.DateField(blank=True, null=True)
     warranty_expiry = models.DateField(blank=True, null=True)
+    maintenance_due_date = models.DateField(blank=True, null=True)
     status = models.CharField(max_length=50, default='active', choices=[('active', 'Active'), ('pending_certification', 'Pending Certification'), ('inactive', 'Inactive'), ('damaged', 'Damaged')])
     location = models.CharField(max_length=100, blank=True, null=True, help_text='Specific office/building/room location')
     regional_office = models.CharField(max_length=50, choices=REGIONAL_OFFICE_CHOICES, default='Lagos', help_text='Main regional Telnet office')
@@ -255,6 +258,25 @@ class OfficeEquipmentMaintenance(models.Model):
 
     def __str__(self):
         return f"{self.equipment.name} - {self.description} ({self.maintenance_date})"
+
+
+class MaintenanceRequest(models.Model):
+    submitted_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='maintenance_requests')
+    asset_description = models.CharField(max_length=255)
+    issue_description = models.TextField()
+    photo = models.FileField(
+        upload_to='maintenance_requests/',
+        blank=True,
+        null=True,
+        validators=[FileExtensionValidator(['jpg', 'jpeg', 'png', 'gif', 'webp'])],
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Emergency maintenance request: {self.asset_description}"
 
 
 class EquipmentWorkOrder(models.Model):

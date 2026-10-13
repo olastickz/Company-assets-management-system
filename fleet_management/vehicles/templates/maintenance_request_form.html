@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+
+{% block title %}Emergency Maintenance Request{% endblock %}
+
+{% block content %}
+{% include 'partials/back_to_dashboard.html' %}
+<div class="form-card" style="max-width:720px; margin:24px auto;">
+    <h1>Emergency Maintenance Request</h1>
+    <p>Describe the vehicle or equipment and the maintenance issue. You can report an item that is not in the asset register.</p>
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        {% for field in form %}
+        <div class="form-item" style="margin-bottom:18px;">
+            {{ field.label_tag }}
+            {{ field }}
+            {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+            {% for error in field.errors %}<p class="errorlist">{{ error }}</p>{% endfor %}
+        </div>
+        {% endfor %}
+        <button type="submit" class="button">Submit Request</button>
+    </form>
+</div>
+{% endblock %}

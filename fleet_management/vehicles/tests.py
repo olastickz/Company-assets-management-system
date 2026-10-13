@@ -4,9 +4,10 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, Client, RequestFactory, override_settings
 from django.urls import reverse
 from django.utils import timezone
+import tempfile
 from rest_framework.test import APIClient
 from asset_management import settings as app_settings
-from .models import Asset, Vehicle, CompanyDocument, StaffApplication, UserRole, StaffMember, OfficeEquipment, EquipmentWorkOrder, DriverRequest, EquipmentTransfer, MaintenanceItem
+from .models import Asset, Vehicle, CompanyDocument, StaffApplication, UserRole, StaffMember, OfficeEquipment, EquipmentWorkOrder, DriverRequest, EquipmentTransfer, MaintenanceItem, MaintenanceRequest
 from .staff_onboarding import review_staff_application
 
 
@@ -357,10 +358,23 @@ class ViewsTests(TestCase):
         self.assertContains(response, 'Assets Dashboard')
 
     def test_admin_maintenance_route_exists(self):
+        Vehicle.objects.create(
+            name='Admin due vehicle',
+            license_plate='ADMIN-DUE',
+            maintenance_due_date=timezone.now().date(),
+        )
+        MaintenanceRequest.objects.create(
+            submitted_by=self.user,
+            asset_description='Untracked office fan',
+            issue_description='Making a loud noise.',
+        )
         self.client.login(username='testuser', password='testpass')
         response = self.client.get('/admin/maintenance/')
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Maintenance Overview')
+        self.assertContains(response, 'Admin due vehicle')
+        self.assertContains(response, 'Untracked office fan')
+        self.assertContains(response, 'Emergency Maintenance Request')
 
     def test_equipment_list_loads_with_login(self):
         self.client.login(username='testuser', password='testpass')
@@ -440,7 +454,7 @@ class ViewsTests(TestCase):
         self.client.login(username='driver4', password='dpass4')
         response = self.client.get(reverse('equipment_detail', args=[equipment.pk]))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Report Fault / Request Maintenance')
+        self.assertContains(response, 'Report Maintenance Issue')
         self.assertNotContains(response, '+ Add Maintenance Record')
 
     def test_assigned_user_can_report_equipment_maintenance_via_username(self):
@@ -455,7 +469,7 @@ class ViewsTests(TestCase):
         self.client.login(username='driver5', password='dpass5')
         response = self.client.get(reverse('equipment_detail', args=[equipment.pk]))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Report Fault / Request Maintenance')
+        self.assertContains(response, 'Report Maintenance Issue')
         self.assertNotContains(response, '+ Add Maintenance Record')
 
     def test_assigned_user_can_report_equipment_maintenance_via_full_name(self):
@@ -470,7 +484,7 @@ class ViewsTests(TestCase):
         self.client.login(username='driver6', password='dpass6')
         response = self.client.get(reverse('equipment_detail', args=[equipment.pk]))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Report Fault / Request Maintenance')
+        self.assertContains(response, 'Report Maintenance Issue')
         self.assertNotContains(response, '+ Add Maintenance Record')
 
     def test_non_admin_document_form_hides_quick_actions(self):
@@ -1493,6 +1507,75 @@ class VersionedApiTests(TestCase):
         self.assertEqual(response.data['last_name'], 'Manager')
 
 
+class MaintenanceRequestWorkflowTests(TestCase):
+    def setUp(self):
+        self.staff_user = User.objects.create_user(username='maintenance-staff', password='staff-pass')
+        UserRole.objects.create(user=self.staff_user, role='staff')
+        self.driver_user = User.objects.create_user(username='maintenance-driver', password='driver-pass')
+        UserRole.objects.create(user=self.driver_user, role='driver')
+        self.admin = User.objects.create_superuser(username='maintenance-admin', password='admin-pass')
+
+    def test_staff_can_submit_untracked_asset_request_with_photo(self):
+        with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            self.client.login(username='maintenance-staff', password='staff-pass')
+            response = self.client.post(reverse('maintenance_request_create'), {
+                'asset_description': 'Unregistered generator in the rear office',
+                'issue_description': 'It is overheating and needs inspection.',
+                'photo': SimpleUploadedFile('generator.png', b'image-data', content_type='image/png'),
+            })
+
+        self.assertRedirects(response, reverse('dashboard'))
+        request = MaintenanceRequest.objects.get()
+        self.assertEqual(request.submitted_by, self.staff_user)
+        self.assertEqual(request.asset_description, 'Unregistered generator in the rear office')
+        self.assertTrue(request.photo.name.endswith('generator.png'))
+
+    def test_driver_can_open_request_form_without_an_assigned_asset(self):
+        self.client.login(username='maintenance-driver', password='driver-pass')
+        response = self.client.get(reverse('maintenance_request_create'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Emergency Maintenance Request')
+        self.assertContains(response, 'Describe the vehicle, equipment, or location')
+
+    def test_manager_cannot_submit_staff_or_driver_request(self):
+        manager = User.objects.create_user(username='maintenance-manager', password='manager-pass')
+        UserRole.objects.create(user=manager, role='manager')
+        self.client.login(username='maintenance-manager', password='manager-pass')
+
+        response = self.client.get(reverse('maintenance_request_create'))
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_admin_list_shows_due_assets_and_emergency_requests_separately(self):
+        due_date = timezone.now().date() - timezone.timedelta(days=1)
+        Vehicle.objects.create(name='Due van', license_plate='DUE-VAN', maintenance_due_date=due_date)
+        OfficeEquipment.objects.create(name='Due printer', maintenance_due_date=due_date)
+        MaintenanceRequest.objects.create(
+            submitted_by=self.staff_user,
+            asset_description='Untracked air conditioner',
+            issue_description='Not cooling.',
+        )
+        self.client.login(username='maintenance-admin', password='admin-pass')
+
+        response = self.client.get(reverse('equipment_maintenance_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Due van')
+        self.assertContains(response, 'Due printer')
+        self.assertContains(response, 'Emergency Maintenance Request')
+        self.assertContains(response, 'Untracked air conditioner')
+        self.assertEqual(response.context['overdue_count'], 2)
+
+    def test_staff_cannot_create_completed_maintenance_records(self):
+        vehicle = Vehicle.objects.create(name='Pool car', license_plate='POOL-CAR')
+        self.client.login(username='maintenance-staff', password='staff-pass')
+
+        response = self.client.get(reverse('maintenance_create', args=[vehicle.pk]))
+
+        self.assertEqual(response.status_code, 403)
+
+
 class WorkflowApiTests(TestCase):
     def setUp(self):
         self.manager = User.objects.create_user(username='workflow-manager', password='manager-pass')
@@ -1524,7 +1607,7 @@ class WorkflowApiTests(TestCase):
         self.assertEqual(update_response.data['notes'], 'Completed')
         self.assertEqual(self.manager_client.delete(f'/api/vehicle-maintenance/{maintenance_id}/').status_code, 204)
 
-    def test_assigned_staff_can_report_but_cannot_edit_vehicle_maintenance(self):
+    def test_assigned_staff_cannot_create_vehicle_maintenance_history(self):
         staff_user = User.objects.create_user(username='workflow-staff', password='staff-pass')
         UserRole.objects.create(user=staff_user, role='staff')
         staff = StaffMember.objects.create(
@@ -1538,11 +1621,8 @@ class WorkflowApiTests(TestCase):
         response = staff_client.post('/api/vehicle-maintenance/', {
             'vehicle': self.vehicle.pk, 'description': 'Reported issue',
         }, format='json')
-        self.assertEqual(response.status_code, 201)
-        self.assertEqual(
-            staff_client.patch(f"/api/vehicle-maintenance/{response.data['id']}/", {'notes': 'Not allowed'}, format='json').status_code,
-            403,
-        )
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(MaintenanceItem.objects.exists())
 
     def test_equipment_transfer_records_previous_owner_and_updates_equipment(self):
         response = self.manager_client.post('/api/equipment-transfers/', {

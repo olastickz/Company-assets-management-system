@@ -2,7 +2,7 @@ from django import forms
 from django.core import validators
 from django.core.exceptions import ValidationError
 from django.contrib.auth.models import User
-from .models import Asset, CompanyAsset, MaintenanceItem, OfficeEquipment, OfficeEquipmentMaintenance, CompanyDocument, StaffApplication, StaffMember, Vehicle, DriverRequest
+from .models import Asset, CompanyAsset, MaintenanceItem, MaintenanceRequest, OfficeEquipment, OfficeEquipmentMaintenance, CompanyDocument, StaffApplication, StaffMember, Vehicle, DriverRequest
 
 # Year field removed - use `purchase_date` instead of separate year
 
@@ -84,7 +84,8 @@ class CompanyAssetForm(forms.ModelForm):
             'insurance_expiry',
             'roadworthy_expiry',
             'license_expiry',
-            'hackney_permit'
+            'hackney_permit',
+            'maintenance_due_date',
         ]
         widgets = {
             'name': forms.TextInput(attrs={'maxlength': '100', 'placeholder': 'Vehicle name'}),
@@ -92,6 +93,7 @@ class CompanyAssetForm(forms.ModelForm):
             'roadworthy_expiry': forms.DateInput(attrs={'type': 'date'}),
             'license_expiry': forms.DateInput(attrs={'type': 'date'}),
             'hackney_permit': forms.DateInput(attrs={'type': 'date'}),
+            'maintenance_due_date': forms.DateInput(attrs={'type': 'date'}),
         }
 
 
@@ -182,6 +184,7 @@ class OfficeEquipmentForm(forms.ModelForm):
             'description',
             'purchase_date',
             'warranty_expiry',
+            'maintenance_due_date',
             'status',
             'location',
             'regional_office',
@@ -219,6 +222,7 @@ class OfficeEquipmentForm(forms.ModelForm):
             }),
             'purchase_date': forms.DateInput(attrs={'type': 'date'}),
             'warranty_expiry': forms.DateInput(attrs={'type': 'date'}),
+            'maintenance_due_date': forms.DateInput(attrs={'type': 'date'}),
             'subsidiary': forms.Select(attrs={'style': 'width:100%;'}),
             'equipment_type': forms.Select(attrs={'style': 'width:100%;'}),
             'status': forms.Select(attrs={'style': 'width:100%;'}),
@@ -232,6 +236,23 @@ class OfficeEquipmentMaintenanceForm(forms.ModelForm):
         widgets = {
             'maintenance_date': forms.DateInput(attrs={'type': 'date'}),
             'due_date': forms.DateInput(attrs={'type': 'date'}),
+        }
+
+
+class MaintenanceRequestForm(forms.ModelForm):
+    class Meta:
+        model = MaintenanceRequest
+        fields = ['asset_description', 'issue_description', 'photo']
+        widgets = {
+            'asset_description': forms.TextInput(attrs={
+                'placeholder': 'Describe the vehicle, equipment, or location',
+                'maxlength': '255',
+            }),
+            'issue_description': forms.Textarea(attrs={
+                'rows': 5,
+                'placeholder': 'Describe the maintenance or repair needed',
+            }),
+            'photo': forms.ClearableFileInput(attrs={'accept': 'image/*'}),
         }
 
 

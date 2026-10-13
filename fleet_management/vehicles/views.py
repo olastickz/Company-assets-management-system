@@ -19,11 +19,11 @@ import logging
 from openpyxl import Workbook
 import uuid
 from urllib.parse import urlencode, urlparse, parse_qs
-from .models import CompanyAsset, Vehicle, MaintenanceItem, OfficeEquipment, OfficeEquipmentMaintenance, AuditLog, CompanyDocument, EquipmentTransfer, StaffApplication, StaffMember, Asset, AssetRelationship, DriverRequest
+from .models import CompanyAsset, Vehicle, MaintenanceItem, MaintenanceRequest, OfficeEquipment, OfficeEquipmentMaintenance, AuditLog, CompanyDocument, EquipmentTransfer, StaffApplication, StaffMember, Asset, AssetRelationship, DriverRequest
 
 # Logger for application events
 logger = logging.getLogger(__name__)
-from .forms import CompanyAssetForm, VehicleForm, MaintenanceItemForm, OfficeEquipmentForm, OfficeEquipmentMaintenanceForm, EquipmentTransferForm, CompanyDocumentForm, StaffMemberForm, DriverRequestForm, DriverAssignmentForm
+from .forms import CompanyAssetForm, VehicleForm, MaintenanceItemForm, MaintenanceRequestForm, OfficeEquipmentForm, OfficeEquipmentMaintenanceForm, EquipmentTransferForm, CompanyDocumentForm, StaffMemberForm, DriverRequestForm, DriverAssignmentForm
 from .staff_onboarding import provision_staff_account
 from .permissions import (
     require_admin, require_manager, require_role, is_admin, is_manager, is_driver,
@@ -554,13 +554,18 @@ def dashboard(request):
             separator = '&' if '?' in asset['detail_url'] else '?'
             asset['detail_url'] += separator + query_string
 
-    maintenance_items = OfficeEquipmentMaintenance.objects.select_related('equipment').order_by('-maintenance_date')
-    m_expired = maintenance_items.filter(due_date__lt=today)
-    m_expiring = maintenance_items.filter(due_date__gte=today, due_date__lte=expiring_threshold)
-    pending_maintenance_count = maintenance_items.filter(due_date__gte=today).count()
+    vehicle_due_dates = CompanyAsset.objects.exclude(maintenance_due_date__isnull=True)
+    equipment_due_dates = OfficeEquipment.objects.exclude(maintenance_due_date__isnull=True)
+    pending_maintenance_count = (
+        vehicle_due_dates.filter(maintenance_due_date__gte=today).count()
+        + equipment_due_dates.filter(maintenance_due_date__gte=today).count()
+    )
     maintenance_status_text = 'No maintenance due' if pending_maintenance_count == 0 else f'{pending_maintenance_count} due soon'
     maintenance_fill_percent = min(int((pending_maintenance_count / total_assets_all) * 100), 100) if total_assets_all else 0
-    next_maintenance = maintenance_items.filter(due_date__gte=today).order_by('due_date').first()
+    next_vehicle_maintenance = vehicle_due_dates.filter(maintenance_due_date__gte=today).order_by('maintenance_due_date').values_list('maintenance_due_date', flat=True).first()
+    next_equipment_maintenance = equipment_due_dates.filter(maintenance_due_date__gte=today).order_by('maintenance_due_date').values_list('maintenance_due_date', flat=True).first()
+    next_maintenance_dates = [item for item in (next_vehicle_maintenance, next_equipment_maintenance) if item]
+    next_maintenance = min(next_maintenance_dates) if next_maintenance_dates else None
 
     active_equipment_count = sum(
         1 for equipment in equipments
@@ -699,12 +704,33 @@ def dashboard(request):
 @login_required
 def equipment_maintenance_list(request):
     today = timezone.now().date()
-    maintenance_items = OfficeEquipmentMaintenance.objects.select_related('equipment').order_by('due_date')
-    pending_count = maintenance_items.filter(due_date__gte=today).count()
-    overdue_count = maintenance_items.filter(due_date__lt=today).count()
+    due_items = []
+    for vehicle in CompanyAsset.objects.exclude(maintenance_due_date__isnull=True):
+        due_items.append({
+            'asset': vehicle,
+            'asset_type': 'Vehicle',
+            'due_date': vehicle.maintenance_due_date,
+            'url': django_reverse('asset_detail', args=[vehicle.pk]),
+        })
+    for equipment in OfficeEquipment.objects.exclude(maintenance_due_date__isnull=True):
+        due_items.append({
+            'asset': equipment,
+            'asset_type': 'Equipment',
+            'due_date': equipment.maintenance_due_date,
+            'url': django_reverse('equipment_detail', args=[equipment.pk]),
+        })
+    due_items.sort(key=lambda item: item['due_date'])
+    pending_count = sum(item['due_date'] >= today for item in due_items)
+    overdue_count = sum(item['due_date'] < today for item in due_items)
+    maintenance_requests = (
+        MaintenanceRequest.objects.select_related('submitted_by').all()
+        if is_admin(request.user)
+        else MaintenanceRequest.objects.none()
+    )
 
     return render(request, 'equipment_maintenance_list.html', {
-        'maintenance_items': maintenance_items,
+        'due_items': due_items,
+        'maintenance_requests': maintenance_requests,
         'pending_count': pending_count,
         'overdue_count': overdue_count,
         'today': today,
@@ -924,11 +950,7 @@ def vehicle_detail(request, pk):
         else:
             related_documents = CompanyDocument.objects.none()
 
-    can_report_maintenance = False
-    if current_role in ['admin', 'manager']:
-        can_report_maintenance = True
-    elif staff_profile and vehicle.assigned_staff == staff_profile:
-        can_report_maintenance = True
+    can_report_maintenance = current_role in ['staff', 'driver']
 
     return render(request, 'asset_detail.html', {
         'vehicle': vehicle,
@@ -1025,16 +1047,7 @@ def vehicle_delete(request, pk):
 def maintenance_create(request, vehicle_pk):
     vehicle = get_object_or_404(Vehicle, pk=vehicle_pk)
     current_role = get_user_role(request.user)
-    staff_profile = getattr(request.user, 'staff_profile', None)
-
-    if current_role in ['staff', 'driver']:
-        if not staff_profile or (
-            vehicle.assigned_staff != staff_profile and
-            not _assigned_user_matches_current_user(vehicle, request.user)
-        ):
-            return HttpResponseForbidden('Access denied')
-
-    elif current_role not in ['admin', 'manager']:
+    if current_role not in ['admin', 'manager']:
         return HttpResponseForbidden('Access denied')
 
     if request.method == 'POST':
@@ -1509,15 +1522,7 @@ def equipment_delete(request, pk):
 def equipment_maintenance_create(request, equipment_pk):
     equipment = get_object_or_404(OfficeEquipment, pk=equipment_pk)
     current_role = get_user_role(request.user)
-    staff_profile = getattr(request.user, 'staff_profile', None)
-
-    if current_role in ['staff', 'driver']:
-        if not staff_profile or (
-            equipment.assigned_staff != staff_profile and
-            not _assigned_user_matches_current_user(equipment, request.user)
-        ):
-            return HttpResponseForbidden('Access denied')
-    elif current_role not in ['admin', 'manager']:
+    if current_role not in ['admin', 'manager']:
         return HttpResponseForbidden('Access denied')
 
     if request.method == 'POST':
@@ -1533,6 +1538,25 @@ def equipment_maintenance_create(request, equipment_pk):
         back_url = request.GET.get('back_url') or get_back_url(request, django_reverse('equipment_detail', args=[equipment_pk]))
 
     return render(request, 'equipment_maintenance_form.html', {'form': form, 'equipment': equipment, 'title': 'Add Maintenance', 'back_url': back_url})
+
+
+@login_required
+def maintenance_request_create(request):
+    if get_user_role(request.user) not in ['staff', 'driver']:
+        return HttpResponseForbidden('Only staff and drivers can submit maintenance requests.')
+
+    if request.method == 'POST':
+        form = MaintenanceRequestForm(request.POST, request.FILES)
+        if form.is_valid():
+            maintenance_request = form.save(commit=False)
+            maintenance_request.submitted_by = request.user
+            maintenance_request.save()
+            messages.success(request, 'Emergency maintenance request submitted.')
+            return redirect('dashboard')
+    else:
+        form = MaintenanceRequestForm()
+
+    return render(request, 'maintenance_request_form.html', {'form': form})
 
 @require_manager
 def equipment_maintenance_update(request, pk):
@@ -2269,13 +2293,7 @@ def equipment_detail(request, pk):
     if current_role in ['staff', 'driver']:
         related_documents = CompanyDocument.objects.none()
 
-    can_report_maintenance = False
-    if current_role in ['admin', 'manager']:
-        can_report_maintenance = True
-    elif staff_profile and equipment.assigned_staff == staff_profile:
-        can_report_maintenance = True
-    elif current_role in ['staff', 'driver'] and _assigned_user_matches_current_user(equipment, request.user):
-        can_report_maintenance = True
+    can_report_maintenance = current_role in ['staff', 'driver']
 
     return render(request, 'equipment_detail.html', {
         'equipment': equipment,

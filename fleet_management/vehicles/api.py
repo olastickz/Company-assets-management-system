@@ -350,6 +350,8 @@ def vehicle_maintenance_api(request):
     role = get_user_role(request.user)
     if role not in {'admin', 'manager', 'staff', 'driver'}:
         return Response({'detail': 'Access denied.'}, status=status.HTTP_403_FORBIDDEN)
+    if request.method == 'POST' and not is_manager(request.user):
+        return Response({'detail': 'Manager or admin access required to create maintenance history.'}, status=status.HTTP_403_FORBIDDEN)
 
     if request.method == 'GET':
         queryset = MaintenanceItem.objects.select_related('vehicle').order_by('-date_performed')
@@ -364,10 +366,6 @@ def vehicle_maintenance_api(request):
     serializer = VehicleMaintenanceSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    vehicle = serializer.validated_data.get('vehicle')
-    staff_profile = getattr(request.user, 'staff_profile', None)
-    if not is_manager(request.user) and (not staff_profile or vehicle.assigned_staff_id != staff_profile.pk):
-        return Response({'detail': 'You may only report maintenance for a vehicle assigned to you.'}, status=status.HTTP_403_FORBIDDEN)
     serializer.save()
     return Response(VehicleMaintenanceSerializer(serializer.instance).data, status=status.HTTP_201_CREATED)
 

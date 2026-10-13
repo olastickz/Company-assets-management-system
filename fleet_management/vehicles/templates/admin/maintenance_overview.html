@@ -6,72 +6,70 @@
 {% block content %}
 <div class="module">
     <h2>Maintenance Overview</h2>
-    <p>Track recent vehicle and equipment maintenance activity across the Telnet asset portfolio.</p>
+    <p>Review tracked assets due for maintenance and emergency issues reported by staff or drivers.</p>
 
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 20px 0;">
         <div class="module" style="padding: 16px; border-radius: 8px; background: #f8fafc;">
-            <h3 style="margin-top: 0;">Vehicle Maintenance</h3>
-            <div style="font-size: 2rem; font-weight: 700;">{{ total_vehicle_maintenance }}</div>
-            <small>records logged</small>
+            <h3 style="margin-top: 0;">Tracked assets due</h3>
+            <div style="font-size: 2rem; font-weight: 700;">{{ total_due_maintenance }}</div>
+            <small>maintenance due dates set on assets</small>
         </div>
         <div class="module" style="padding: 16px; border-radius: 8px; background: #f8fafc;">
-            <h3 style="margin-top: 0;">Equipment Maintenance</h3>
-            <div style="font-size: 2rem; font-weight: 700;">{{ total_equipment_maintenance }}</div>
-            <small>records logged</small>
+            <h3 style="margin-top: 0;">Emergency requests</h3>
+            <div style="font-size: 2rem; font-weight: 700;">{{ total_emergency_requests }}</div>
+            <small>submitted by staff and drivers</small>
         </div>
     </div>
 
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 24px;">
         <div class="module">
-            <h3>Recent Vehicle Maintenance</h3>
-            {% if vehicle_maintenance %}
+            <h3>Assets due for maintenance</h3>
             <table style="width: 100%; border-collapse: collapse;">
                 <thead>
                     <tr style="background: #f8f8f8;">
                         <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Asset</th>
-                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Description</th>
-                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Date</th>
+                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Type</th>
+                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Due date</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for item in vehicle_maintenance %}
+                    {% for item in due_assets %}
                     <tr>
-                        <td style="border: 1px solid #ddd; padding: 8px;">{{ item.vehicle.name }}</td>
-                        <td style="border: 1px solid #ddd; padding: 8px;">{{ item.description }}</td>
-                        <td style="border: 1px solid #ddd; padding: 8px;">{{ item.date_performed|date:"Y-m-d" }}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">{% if item.asset_type == 'Vehicle' %}<a href="{% url 'asset_detail' item.asset.pk %}">{{ item.asset.name }}</a>{% else %}<a href="{% url 'equipment_detail' item.asset.pk %}">{{ item.asset.name }}</a>{% endif %}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">{{ item.asset_type }}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">{{ item.due_date|date:"Y-m-d" }}{% if item.due_date < today %} <strong>(Overdue)</strong>{% endif %}</td>
                     </tr>
+                    {% empty %}
+                    <tr><td colspan="3" style="border: 1px solid #ddd; padding: 16px; text-align: center;">No tracked assets have a maintenance due date.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
-            {% else %}
-            <p>No recent vehicle maintenance records found.</p>
-            {% endif %}
         </div>
 
         <div class="module">
-            <h3>Recent Equipment Maintenance</h3>
-            {% if equipment_maintenance %}
+            <h3>Emergency Maintenance Requests</h3>
             <table style="width: 100%; border-collapse: collapse;">
                 <thead>
                     <tr style="background: #f8f8f8;">
-                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Equipment</th>
-                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Description</th>
-                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Date</th>
+                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Asset / equipment</th>
+                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Issue</th>
+                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Submitted by</th>
+                        <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Photo</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for item in equipment_maintenance %}
+                    {% for item in maintenance_requests %}
                     <tr>
-                        <td style="border: 1px solid #ddd; padding: 8px;">{{ item.equipment.name }}</td>
-                        <td style="border: 1px solid #ddd; padding: 8px;">{{ item.description }}</td>
-                        <td style="border: 1px solid #ddd; padding: 8px;">{{ item.maintenance_date|date:"Y-m-d" }}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">{{ item.asset_description }}<br><strong>Emergency Maintenance Request</strong></td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">{{ item.issue_description|linebreaksbr }}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">{{ item.submitted_by.get_full_name|default:item.submitted_by.username|default:"Former user" }}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">{% if item.photo %}<a href="{{ item.photo.url }}" target="_blank" rel="noopener">View photo</a>{% else %}—{% endif %}</td>
                     </tr>
+                    {% empty %}
+                    <tr><td colspan="4" style="border: 1px solid #ddd; padding: 16px; text-align: center;">No emergency maintenance requests.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
-            {% else %}
-            <p>No recent equipment maintenance records found.</p>
-            {% endif %}
         </div>
     </div>
 </div>
