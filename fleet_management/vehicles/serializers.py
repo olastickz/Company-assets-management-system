@@ -8,6 +8,7 @@ from .models import (
     EmailRecipient,
     EquipmentWorkOrder,
     MaintenanceItem,
+    MaintenanceRequest,
     OfficeEquipment,
     OfficeEquipmentMaintenance,
     StaffMember,
@@ -58,6 +59,18 @@ class VehicleMaintenanceSerializer(serializers.ModelSerializer):
     class Meta:
         model = MaintenanceItem
         fields = ['id', 'vehicle', 'vehicle_name', 'description', 'date_performed', 'cost', 'notes']
+
+
+class MaintenanceRequestSerializer(serializers.ModelSerializer):
+    submitted_by_name = serializers.CharField(source='submitted_by.get_full_name', read_only=True)
+
+    class Meta:
+        model = MaintenanceRequest
+        fields = [
+            'id', 'asset_description', 'issue_description', 'photo',
+            'submitted_by_name', 'created_at',
+        ]
+        read_only_fields = ['id', 'submitted_by_name', 'created_at']
 
 
 class EquipmentTransferSerializer(serializers.ModelSerializer):

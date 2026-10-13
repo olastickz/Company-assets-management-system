@@ -1575,6 +1575,62 @@ class MaintenanceRequestWorkflowTests(TestCase):
 
         self.assertEqual(response.status_code, 403)
 
+    def test_staff_can_submit_multipart_emergency_request_and_admin_can_list_it(self):
+        with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            staff_client = APIClient()
+            staff_client.force_authenticate(self.staff_user)
+            create_response = staff_client.post('/api/maintenance/requests/', {
+                'asset_description': 'Untracked office generator',
+                'issue_description': 'The generator is overheating.',
+                'photo': SimpleUploadedFile('generator.jpg', b'image-data', content_type='image/jpeg'),
+            }, format='multipart')
+
+            self.assertEqual(create_response.status_code, 201)
+            self.assertEqual(create_response.data['asset_description'], 'Untracked office generator')
+            self.assertTrue(create_response.data['photo'].endswith('generator.jpg'))
+
+            admin_client = APIClient()
+            admin_client.force_authenticate(self.admin)
+            list_response = admin_client.get('/api/maintenance/requests/')
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(len(list_response.data), 1)
+        self.assertEqual(list_response.data[0]['submitted_by_name'], '')
+
+    def test_only_admin_can_list_due_assets_and_due_dates_are_serialized(self):
+        due_date = timezone.now().date() - timezone.timedelta(days=1)
+        vehicle = Vehicle.objects.create(
+            name='API due vehicle',
+            license_plate='API-DUE',
+            maintenance_due_date=due_date,
+        )
+        admin_client = APIClient()
+        admin_client.force_authenticate(self.admin)
+
+        response = admin_client.get('/api/maintenance/due/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(response.data['results'][0]['asset_id'], vehicle.pk)
+        self.assertEqual(response.data['results'][0]['status'], 'overdue')
+
+        staff_client = APIClient()
+        staff_client.force_authenticate(self.staff_user)
+        self.assertEqual(staff_client.get('/api/maintenance/due/').status_code, 403)
+
+    def test_manager_cannot_submit_emergency_request(self):
+        manager = User.objects.create_user(username='maintenance-api-manager', password='manager-pass')
+        UserRole.objects.create(user=manager, role='manager')
+        manager_client = APIClient()
+        manager_client.force_authenticate(manager)
+
+        response = manager_client.post('/api/maintenance/requests/', {
+            'asset_description': 'Office printer',
+            'issue_description': 'Paper jam.',
+        }, format='multipart')
+
+        self.assertEqual(response.status_code, 403)
+
 
 class WorkflowApiTests(TestCase):
     def setUp(self):

@@ -21,6 +21,7 @@ from .models import (
     AuditLog,
     DriverRequest,
     MaintenanceItem,
+    MaintenanceRequest,
     StaffMember,
     CompanyDocument,
     OfficeEquipmentMaintenance,
@@ -35,6 +36,7 @@ from .serializers import (
     OfficeEquipmentMaintenanceSerializer,
     EquipmentWorkOrderSerializer,
     VehicleMaintenanceSerializer,
+    MaintenanceRequestSerializer,
     EquipmentTransferSerializer,
     DriverRequestSerializer,
     DriverAssignmentSerializer,
@@ -335,6 +337,53 @@ def equipment_maintenance_detail_api(request, pk):
 
     maintenance.delete()
     return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def maintenance_due_api(request):
+    if not is_admin(request.user):
+        return Response({'detail': 'Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
+
+    today = timezone.localdate()
+    due_assets = []
+    asset_sources = (
+        ('vehicle', Vehicle.objects.exclude(maintenance_due_date__isnull=True)),
+        ('equipment', OfficeEquipment.objects.exclude(maintenance_due_date__isnull=True)),
+    )
+    for asset_type, assets in asset_sources:
+        for asset in assets.only('pk', 'name', 'maintenance_due_date'):
+            due_assets.append({
+                'asset_id': asset.pk,
+                'asset_type': asset_type,
+                'asset_name': asset.name,
+                'maintenance_due_date': asset.maintenance_due_date,
+                'status': 'overdue' if asset.maintenance_due_date < today else 'upcoming',
+            })
+
+    due_assets.sort(key=lambda item: item['maintenance_due_date'])
+    return Response({'count': len(due_assets), 'results': due_assets})
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([permissions.IsAuthenticated])
+@parser_classes([parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser])
+def maintenance_requests_api(request):
+    role = get_user_role(request.user)
+
+    if request.method == 'POST':
+        if role not in {'staff', 'driver'}:
+            return Response({'detail': 'Only staff and drivers can submit maintenance requests.'}, status=status.HTTP_403_FORBIDDEN)
+        serializer = MaintenanceRequestSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save(submitted_by=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    if not is_admin(request.user):
+        return Response({'detail': 'Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
+    requests = MaintenanceRequest.objects.select_related('submitted_by').all()
+    return Response(MaintenanceRequestSerializer(requests, many=True, context={'request': request}).data)
 
 
 def can_access_vehicle_maintenance(user, maintenance):
