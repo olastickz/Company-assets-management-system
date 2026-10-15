@@ -5,7 +5,8 @@ from functools import wraps
 from django.http import HttpResponseForbidden
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect
-from .models import UserRole, AuditLog
+from rest_framework.permissions import BasePermission
+from .models import RolePermissionConfiguration, UserRole, AuditLog
 
 
 def get_user_role(user):
@@ -20,6 +21,75 @@ def get_user_role(user):
         # Default to staff if role not set
         UserRole.objects.get_or_create(user=user, defaults={'role': 'staff'})
         return 'staff'
+
+
+def has_role_permission(user, module, action, approval_level=None):
+    if not user.is_authenticated:
+        return False
+    if user.is_superuser or get_user_role(user) == 'admin':
+        return True
+    configuration = RolePermissionConfiguration.objects.filter(
+        role=get_user_role(user)
+    ).only('modules').first()
+    if configuration is None:
+        return False
+    if not configuration.modules.get(module, {}).get(action, False):
+        return False
+    if approval_level:
+        return bool(configuration.approval_authority.get(approval_level, False))
+    return True
+
+
+class RoleMatrixPermission(BasePermission):
+    permission_module = None
+    permission_action_map = {}
+    VIEWSET_ACTIONS = {
+        'list': 'view',
+        'retrieve': 'view',
+        'create': 'create',
+        'update': 'edit',
+        'partial_update': 'edit',
+        'destroy': 'delete',
+    }
+    METHOD_ACTIONS = {
+        'GET': 'view',
+        'HEAD': 'view',
+        'OPTIONS': 'view',
+        'POST': 'create',
+        'PUT': 'edit',
+        'PATCH': 'edit',
+        'DELETE': 'delete',
+    }
+
+    @classmethod
+    def for_module(cls, module, action_map=None):
+        return type(
+            f'{module.title().replace("_", "")}RoleMatrixPermission',
+            (cls,),
+            {
+                'permission_module': module,
+                'permission_action_map': action_map or {},
+            },
+        )
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        module = getattr(view, 'permission_module', self.permission_module)
+        if not module:
+            return True
+        action_map = getattr(view, 'permission_action_map', self.permission_action_map)
+        action = action_map.get(request.method)
+        if action is None:
+            action = self.VIEWSET_ACTIONS.get(getattr(view, 'action', None))
+        if action is None:
+            action = self.METHOD_ACTIONS.get(request.method)
+        approval_level = None
+        if isinstance(action, tuple):
+            action, approval_level = action
+        return bool(action and has_role_permission(
+            request.user, module, action, approval_level=approval_level
+        ))
 
 
 def is_admin(user):

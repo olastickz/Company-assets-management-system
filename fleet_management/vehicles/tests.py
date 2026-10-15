@@ -252,6 +252,79 @@ class AdminApiTests(TestCase):
         self.assertEqual(self.manager_client.get('/api/v1/admin/roles/').status_code, 403)
         self.assertEqual(APIClient().get('/api/v1/admin/users/').status_code, 401)
 
+    def test_admin_can_read_and_update_role_permission_matrix(self):
+        url = '/api/v1/admin/roles/permissions/'
+        initial = self.admin_client.get(f'{url}?role=manager')
+        self.assertEqual(initial.status_code, 200)
+        self.assertTrue(initial.data['modules']['vehicles']['view'])
+
+        response = self.admin_client.patch(url, {
+            'role': 'manager',
+            'modules': {
+                'vehicles': {'view': True, 'edit': True},
+                'reports': {'all': True},
+            },
+            'approval_authority': {'level_1': True},
+        }, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data['modules']['vehicles']['view'])
+        self.assertTrue(response.data['modules']['reports']['all'])
+        self.assertTrue(response.data['approval_authority']['level_1'])
+        self.assertFalse(response.data['approval_authority']['level_2'])
+        self.assertEqual(self.manager_client.get('/api/vehicles/').status_code, 200)
+
+        revoke_response = self.admin_client.patch(url, {
+            'role': 'manager',
+            'modules': {'vehicles': {'view': False}},
+        }, format='json')
+        self.assertEqual(revoke_response.status_code, 200)
+        self.assertEqual(self.manager_client.get('/api/vehicles/').status_code, 403)
+
+        refreshed = self.admin_client.get(f'{url}?role=manager')
+        self.assertEqual(refreshed.data['modules']['vehicles']['edit'], True)
+
+    def test_admin_role_permissions_are_locked_and_updates_are_validated(self):
+        url = '/api/v1/admin/roles/permissions/'
+        admin_matrix = self.admin_client.get(f'{url}?role=admin')
+        self.assertTrue(admin_matrix.data['locked'])
+        self.assertTrue(admin_matrix.data['modules']['vehicles']['all'])
+
+        locked_update = self.admin_client.patch(url, {
+            'role': 'admin', 'modules': {'vehicles': {'view': False}},
+        }, format='json')
+        self.assertEqual(locked_update.status_code, 403)
+
+        invalid_update = self.admin_client.patch(url, {
+            'role': 'staff', 'modules': {'vehicles': {'view': 'yes'}},
+        }, format='json')
+        self.assertEqual(invalid_update.status_code, 400)
+
+        self.assertEqual(self.manager_client.get(url).status_code, 403)
+
+    def test_level_one_approval_authority_gates_request_assignment(self):
+        from .models import DriverRequest
+
+        request = DriverRequest.objects.create(
+            requester_user=self.staff_user,
+            details='Waiting for driver assignment',
+        )
+        config_url = '/api/v1/admin/roles/permissions/'
+        self.admin_client.patch(config_url, {
+            'role': 'manager',
+            'approval_authority': {'level_1': False},
+        }, format='json')
+
+        assignment_url = f'/api/driver-requests/{request.pk}/assign/'
+        denied = self.manager_client.post(assignment_url, {}, format='json')
+        self.assertEqual(denied.status_code, 403)
+
+        self.admin_client.patch(config_url, {
+            'role': 'manager',
+            'approval_authority': {'level_1': True},
+        }, format='json')
+        allowed_to_validate = self.manager_client.post(assignment_url, {}, format='json')
+        self.assertEqual(allowed_to_validate.status_code, 400)
+
     def test_superuser_accounts_cannot_be_changed_through_app_user_api(self):
         root_user = User.objects.create_superuser(
             username='protected-root', email='protected-root@example.com', password='root-pass'

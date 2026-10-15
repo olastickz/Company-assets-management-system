@@ -30,10 +30,11 @@ from .models import (
     MaintenanceItem,
     OfficeEquipment,
     OfficeEquipmentMaintenance,
+    RolePermissionConfiguration,
     StaffMember,
     UserRole,
 )
-from .permissions import get_user_role
+from .permissions import RoleMatrixPermission, get_user_role
 from .serializers import AdminUserSerializer, NotificationRecipientSerializer, StaffMemberSerializer
 from .staff_onboarding import (
     generate_temporary_password,
@@ -42,13 +43,6 @@ from .staff_onboarding import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-class ManagerPermission(IsAuthenticated):
-    def has_permission(self, request, view):
-        return super().has_permission(request, view) and get_user_role(request.user) in {
-            'admin', 'manager'
-        }
 
 
 class AdminPermission(IsAuthenticated):
@@ -138,6 +132,7 @@ class AdminUserDetailView(APIView):
             return Response({'is_active': 'You cannot deactivate your own account.'}, status=status.HTTP_400_BAD_REQUEST)
         serializer = AdminUserSerializer(user, data=request.data, partial=True)
         if serializer.is_valid():
+            requested_active_state = serializer.validated_data.get('is_active')
             assigning_staff_role = (
                 request.data.get('role') == 'staff'
                 and getattr(getattr(user, 'role', None), 'role', None) != 'staff'
@@ -151,6 +146,9 @@ class AdminUserDetailView(APIView):
                         send_staff_temporary_password(
                             user, generate_temporary_password(), request
                         )
+                    if requested_active_state is False:
+                        user.is_active = False
+                        user.save(update_fields=['is_active'])
                     user.refresh_from_db()
             except Exception:
                 logger.exception('Failed to assign staff role or email temporary credentials')
@@ -172,8 +170,157 @@ class AdminRolesView(APIView):
         ])
 
 
-class AdminStaffListView(generics.ListCreateAPIView):
+class AdminRolePermissionsView(APIView):
     permission_classes = [AdminPermission]
+
+    MODULES = {
+        'vehicles': 'Vehicles',
+        'equipment': 'Equipment',
+        'staff': 'Staff',
+        'documents': 'Documents',
+        'maintenance': 'Maintenance',
+        'work_orders': 'Work Orders',
+        'transfers': 'Transfers',
+        'requests': 'Requests',
+        'audits': 'Audits',
+        'reports': 'Reports',
+        'notifications': 'Notifications',
+        'settings': 'Settings',
+    }
+    ACTIONS = ('view', 'create', 'edit', 'delete', 'approve', 'export')
+    APPROVAL_LEVELS = ('level_1', 'level_2')
+
+    @classmethod
+    def _default_modules(cls):
+        return {
+            module: {action: False for action in cls.ACTIONS}
+            for module in cls.MODULES
+        }
+
+    @classmethod
+    def _serialize_role(cls, role, configuration=None):
+        locked = role == 'admin'
+        configured_modules = configuration.modules if configuration else {}
+        modules = {}
+        for module, label in cls.MODULES.items():
+            actions = configured_modules.get(module, {})
+            grants = {
+                action: True if locked else bool(actions.get(action, False))
+                for action in cls.ACTIONS
+            }
+            modules[module] = {
+                'label': label,
+                **grants,
+                'all': all(grants.values()),
+            }
+        configured_approval = configuration.approval_authority if configuration else {}
+        return {
+            'value': role,
+            'label': dict(UserRole.ROLE_CHOICES)[role],
+            'locked': locked,
+            'modules': modules,
+            'approval_authority': {
+                level: True if locked else bool(configured_approval.get(level, False))
+                for level in cls.APPROVAL_LEVELS
+            },
+        }
+
+    def get(self, request):
+        configurations = {
+            configuration.role: configuration
+            for configuration in RolePermissionConfiguration.objects.all()
+        }
+        role = request.query_params.get('role')
+        if role:
+            if role not in dict(UserRole.ROLE_CHOICES):
+                return Response({'role': 'Choose a valid role.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(self._serialize_role(role, configurations.get(role)))
+        return Response([
+            self._serialize_role(role_value, configurations.get(role_value))
+            for role_value, _label in UserRole.ROLE_CHOICES
+        ])
+
+    def patch(self, request):
+        role = request.data.get('role')
+        if role not in dict(UserRole.ROLE_CHOICES):
+            return Response({'role': 'Choose a valid role.'}, status=status.HTTP_400_BAD_REQUEST)
+        if role == 'admin':
+            return Response(
+                {'detail': 'Administrator permissions are immutable.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        configuration = RolePermissionConfiguration.objects.filter(role=role).first()
+        modules = dict(configuration.modules) if configuration else self._default_modules()
+        approval_authority = (
+            dict(configuration.approval_authority)
+            if configuration else {level: False for level in self.APPROVAL_LEVELS}
+        )
+        errors = {}
+
+        module_updates = request.data.get('modules', {})
+        if not isinstance(module_updates, dict):
+            errors['modules'] = 'Expected an object keyed by module.'
+        else:
+            for module, grants in module_updates.items():
+                if module not in self.MODULES:
+                    errors.setdefault('modules', {})[module] = 'Unknown module.'
+                    continue
+                if not isinstance(grants, dict):
+                    errors.setdefault('modules', {})[module] = 'Expected an object of boolean grants.'
+                    continue
+                unknown_actions = set(grants) - set(self.ACTIONS) - {'all'}
+                if unknown_actions:
+                    errors.setdefault('modules', {})[module] = {
+                        action: 'Unknown permission.' for action in sorted(unknown_actions)
+                    }
+                    continue
+                if 'all' in grants:
+                    if not isinstance(grants['all'], bool):
+                        errors.setdefault('modules', {})[module] = {'all': 'Expected a boolean.'}
+                        continue
+                    modules.setdefault(module, {}).update(
+                        {action: grants['all'] for action in self.ACTIONS}
+                    )
+                for action, enabled in grants.items():
+                    if action == 'all':
+                        continue
+                    if not isinstance(enabled, bool):
+                        errors.setdefault('modules', {}).setdefault(module, {})[action] = 'Expected a boolean.'
+                    else:
+                        modules.setdefault(module, {})[action] = enabled
+
+        approval_updates = request.data.get('approval_authority', {})
+        if not isinstance(approval_updates, dict):
+            errors['approval_authority'] = 'Expected an object keyed by approval level.'
+        else:
+            for level, enabled in approval_updates.items():
+                if level not in self.APPROVAL_LEVELS:
+                    errors.setdefault('approval_authority', {})[level] = 'Unknown approval level.'
+                elif not isinstance(enabled, bool):
+                    errors.setdefault('approval_authority', {})[level] = 'Expected a boolean.'
+                else:
+                    approval_authority[level] = enabled
+
+        if errors:
+            return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+
+        is_new_configuration = configuration is None
+        if is_new_configuration:
+            configuration = RolePermissionConfiguration(role=role)
+        configuration.modules = modules
+        configuration.approval_authority = approval_authority
+        configuration.updated_by = request.user
+        if is_new_configuration:
+            configuration.save()
+        else:
+            configuration.save(update_fields=['modules', 'approval_authority', 'updated_by', 'updated_at'])
+        return Response(self._serialize_role(role, configuration))
+
+
+class AdminStaffListView(generics.ListCreateAPIView):
+    permission_classes = [RoleMatrixPermission]
+    permission_module = 'staff'
     serializer_class = StaffMemberSerializer
     pagination_class = AdminPagination
 
@@ -225,7 +372,9 @@ class AdminStaffListView(generics.ListCreateAPIView):
 
 
 class PasswordChangeAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [RoleMatrixPermission]
+    permission_module = 'settings'
+    permission_action_map = {'POST': 'edit'}
 
     def post(self, request):
         user = request.user
@@ -257,7 +406,8 @@ class PasswordChangeAPIView(APIView):
 
 
 class AdminStaffDetailView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [AdminPermission]
+    permission_classes = [RoleMatrixPermission]
+    permission_module = 'staff'
     queryset = StaffMember.objects.select_related('user').all()
     serializer_class = StaffMemberSerializer
 
@@ -334,7 +484,8 @@ def serialize_maintenance(item, equipment=False):
 
 
 class OverviewReportView(APIView):
-    permission_classes = [ManagerPermission]
+    permission_classes = [RoleMatrixPermission]
+    permission_module = 'reports'
 
     def get(self, request):
         today = timezone.now().date()
@@ -363,7 +514,8 @@ class OverviewReportView(APIView):
 
 
 class VehicleReportView(APIView):
-    permission_classes = [ManagerPermission]
+    permission_classes = [RoleMatrixPermission]
+    permission_module = 'reports'
 
     def get(self, request):
         queryset = CompanyAsset.objects.all().order_by('name')
@@ -373,7 +525,8 @@ class VehicleReportView(APIView):
 
 
 class EquipmentReportView(APIView):
-    permission_classes = [ManagerPermission]
+    permission_classes = [RoleMatrixPermission]
+    permission_module = 'reports'
 
     def get(self, request):
         queryset = OfficeEquipment.objects.all().order_by('name')
@@ -385,7 +538,8 @@ class EquipmentReportView(APIView):
 
 
 class DocumentReportView(APIView):
-    permission_classes = [ManagerPermission]
+    permission_classes = [RoleMatrixPermission]
+    permission_module = 'reports'
 
     def get(self, request):
         today = timezone.now().date()
@@ -399,7 +553,8 @@ class DocumentReportView(APIView):
 
 
 class MaintenanceReportView(APIView):
-    permission_classes = [ManagerPermission]
+    permission_classes = [RoleMatrixPermission]
+    permission_module = 'reports'
 
     def get(self, request):
         vehicle_items = MaintenanceItem.objects.select_related('vehicle').all()
@@ -417,7 +572,8 @@ class MaintenanceReportView(APIView):
 
 
 class TransferReportView(APIView):
-    permission_classes = [ManagerPermission]
+    permission_classes = [RoleMatrixPermission]
+    permission_module = 'reports'
 
     def get(self, request):
         transfers = EquipmentTransfer.objects.select_related('equipment').all()
@@ -435,7 +591,8 @@ class TransferReportView(APIView):
 
 
 class AuditReportView(APIView):
-    permission_classes = [ManagerPermission]
+    permission_classes = [RoleMatrixPermission]
+    permission_module = 'audits'
 
     def get(self, request):
         logs = AuditLog.objects.select_related('user').all()
@@ -464,7 +621,8 @@ class AuditReportView(APIView):
 
 
 class NotificationScheduleView(APIView):
-    permission_classes = [AdminPermission]
+    permission_classes = [RoleMatrixPermission]
+    permission_module = 'notifications'
 
     def get_schedule(self):
         schedule, _ = EmailSchedule.objects.get_or_create()
@@ -525,7 +683,8 @@ class NotificationScheduleView(APIView):
 
 
 class NotificationRecipientsView(APIView):
-    permission_classes = [AdminPermission]
+    permission_classes = [RoleMatrixPermission]
+    permission_module = 'notifications'
 
     def get(self, request):
         recipients = EmailRecipient.objects.all().order_by('email')
@@ -555,7 +714,8 @@ class NotificationRecipientsView(APIView):
 
 
 class NotificationRecipientDetailView(APIView):
-    permission_classes = [AdminPermission]
+    permission_classes = [RoleMatrixPermission]
+    permission_module = 'notifications'
 
     def get(self, request, recipient_id):
         recipient = get_object_or_404(EmailRecipient, pk=recipient_id)
@@ -575,7 +735,8 @@ class NotificationRecipientDetailView(APIView):
 
 
 class NotificationDeliveriesView(APIView):
-    permission_classes = [ManagerPermission]
+    permission_classes = [RoleMatrixPermission]
+    permission_module = 'notifications'
 
     def get(self, request):
         logs = EmailDeliveryLog.objects.all()
@@ -597,14 +758,18 @@ class NotificationDeliveriesView(APIView):
 
 
 class SendNotificationNowView(APIView):
-    permission_classes = [AdminPermission]
+    permission_classes = [RoleMatrixPermission]
+    permission_module = 'notifications'
+    permission_action_map = {'POST': 'create'}
 
     def post(self, request):
         return Response(send_expiry_alerts())
 
 
 class NotificationRetryView(APIView):
-    permission_classes = [AdminPermission]
+    permission_classes = [RoleMatrixPermission]
+    permission_module = 'notifications'
+    permission_action_map = {'POST': 'edit'}
 
     def post(self, request, delivery_id):
         delivery = EmailDeliveryLog.objects.get(pk=delivery_id)
@@ -615,7 +780,8 @@ class NotificationRetryView(APIView):
 
 
 class OrganizationSettingsView(APIView):
-    permission_classes = [ManagerPermission]
+    permission_classes = [RoleMatrixPermission]
+    permission_module = 'settings'
 
     def get(self, request):
         return Response({
@@ -630,7 +796,8 @@ class NotificationSettingsView(NotificationScheduleView):
 
 
 class ProfileSettingsView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [RoleMatrixPermission]
+    permission_module = 'settings'
 
     def get(self, request):
         return Response(serialize_user(request.user))

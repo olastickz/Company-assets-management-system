@@ -25,7 +25,7 @@ from .models import (
     CompanyDocument,
     OfficeEquipmentMaintenance,
 )
-from .permissions import get_user_role, is_admin, is_manager
+from .permissions import RoleMatrixPermission, get_user_role, is_admin, is_manager
 from .serializers import (
     VehicleSerializer,
     OfficeEquipmentSerializer,
@@ -48,53 +48,30 @@ logger = logging.getLogger(__name__)
 class VehicleViewSet(viewsets.ModelViewSet):
     queryset = Vehicle.objects.all().order_by('-updated_at')
     serializer_class = VehicleSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_permissions(self):
-        if self.request.method in permissions.SAFE_METHODS:
-            return [permissions.IsAuthenticated()]
-        return [AdminWritePermission()]
+    permission_classes = [RoleMatrixPermission]
+    permission_module = 'vehicles'
 
 
 class OfficeEquipmentViewSet(viewsets.ModelViewSet):
     queryset = OfficeEquipment.objects.all().order_by('-updated_at')
     serializer_class = OfficeEquipmentSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_permissions(self):
-        if self.request.method in permissions.SAFE_METHODS:
-            return [permissions.IsAuthenticated()]
-        return [AdminWritePermission()]
-
-
-class AdminWritePermission(permissions.BasePermission):
-    def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated and is_admin(request.user))
-
-
-class ManagerOrAdminPermission(permissions.BasePermission):
-    def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated and is_manager(request.user))
+    permission_classes = [RoleMatrixPermission]
+    permission_module = 'equipment'
 
 
 class EquipmentWorkOrderViewSet(viewsets.ModelViewSet):
     queryset = EquipmentWorkOrder.objects.select_related('equipment').all()
     serializer_class = EquipmentWorkOrderSerializer
-    permission_classes = [ManagerOrAdminPermission]
+    permission_classes = [RoleMatrixPermission]
+    permission_module = 'work_orders'
 
 
 class CompanyDocumentViewSet(viewsets.ModelViewSet):
     queryset = CompanyDocument.objects.all().order_by('expiry_date')
     serializer_class = CompanyDocumentSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [RoleMatrixPermission]
+    permission_module = 'documents'
     parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
-
-    def get_permissions(self):
-        if self.request.method in permissions.SAFE_METHODS:
-            return [ManagerOrAdminPermission()]
-        if self.action == 'create':
-            return [AdminWritePermission()]
-        return [ManagerOrAdminPermission()]
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
@@ -138,10 +115,8 @@ def get_token(request):
 
 
 @api_view(['GET', 'POST'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([RoleMatrixPermission.for_module('staff')])
 def staff_api(request):
-    if not is_admin(request.user):
-        return Response({'detail': 'Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
     if request.method == 'GET':
         queryset = StaffMember.objects.all().order_by('staff_id')
         serializer = StaffMemberSerializer(queryset, many=True)
@@ -155,10 +130,8 @@ def staff_api(request):
 
 
 @api_view(['GET', 'PUT', 'DELETE'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([RoleMatrixPermission.for_module('staff')])
 def staff_detail_api(request, pk):
-    if not is_admin(request.user):
-        return Response({'detail': 'Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
     staff = get_object_or_404(StaffMember, pk=pk)
 
     if request.method == 'GET':
@@ -177,10 +150,8 @@ def staff_detail_api(request, pk):
 
 
 @api_view(['GET', 'PUT', 'DELETE'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([RoleMatrixPermission.for_module('vehicles')])
 def asset_detail_api(request, pk):
-    if request.method != 'GET' and not is_admin(request.user):
-        return Response({'detail': 'Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
     asset = get_object_or_404(Asset, pk=pk)
 
     if request.method == 'GET':
@@ -199,10 +170,8 @@ def asset_detail_api(request, pk):
 
 
 @api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([RoleMatrixPermission.for_module('vehicles', {'POST': 'edit'})])
 def asset_assign_api(request, pk):
-    if not is_admin(request.user):
-        return Response({'detail': 'Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
     asset = get_object_or_404(Asset, pk=pk)
     staff_id = request.data.get('staff_id') or request.data.get('staff_member_id') or request.data.get('assigned_staff_id')
 
@@ -222,10 +191,8 @@ def asset_assign_api(request, pk):
 
 
 @api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([RoleMatrixPermission.for_module('vehicles', {'POST': 'edit'})])
 def asset_release_api(request, pk):
-    if not is_admin(request.user):
-        return Response({'detail': 'Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
     asset = get_object_or_404(Asset, pk=pk)
     asset.assigned_staff = None
     asset.save(update_fields=['assigned_staff'])
@@ -239,10 +206,8 @@ def asset_release_api(request, pk):
 
 
 @api_view(['GET'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([RoleMatrixPermission.for_module('vehicles')])
 def asset_history_api(request, pk):
-    if not is_manager(request.user):
-        return Response({'detail': 'Manager or admin access required.'}, status=status.HTTP_403_FORBIDDEN)
     asset = get_object_or_404(Asset, pk=pk)
     history = []
     for entry in asset.assignments.all().order_by('-assigned_at'):
@@ -258,13 +223,9 @@ def asset_history_api(request, pk):
 
 
 @api_view(['GET', 'POST'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([RoleMatrixPermission.for_module('documents')])
 @parser_classes([parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser])
 def documents_api(request):
-    if request.method == 'GET' and not is_manager(request.user):
-        return Response({'detail': 'Manager or admin access required.'}, status=status.HTTP_403_FORBIDDEN)
-    if request.method == 'POST' and not is_admin(request.user):
-        return Response({'detail': 'Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
     if request.method == 'GET':
         queryset = CompanyDocument.objects.all().order_by('-created_at')
         serializer = CompanyDocumentSerializer(queryset, many=True)
@@ -278,10 +239,8 @@ def documents_api(request):
 
 
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([RoleMatrixPermission.for_module('documents')])
 def document_detail_api(request, pk):
-    if not is_manager(request.user):
-        return Response({'detail': 'Manager or admin access required.'}, status=status.HTTP_403_FORBIDDEN)
     document = get_object_or_404(CompanyDocument, pk=pk)
 
     if request.method == 'GET':
@@ -300,10 +259,8 @@ def document_detail_api(request, pk):
 
 
 @api_view(['GET', 'POST'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([RoleMatrixPermission.for_module('maintenance')])
 def equipment_maintenance_api(request):
-    if request.method != 'GET' and not is_manager(request.user):
-        return Response({'detail': 'Manager or admin access required.'}, status=status.HTTP_403_FORBIDDEN)
     if request.method == 'GET':
         queryset = OfficeEquipmentMaintenance.objects.all().order_by('-maintenance_date')
         serializer = OfficeEquipmentMaintenanceSerializer(queryset, many=True)
@@ -317,10 +274,8 @@ def equipment_maintenance_api(request):
 
 
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([RoleMatrixPermission.for_module('maintenance')])
 def equipment_maintenance_detail_api(request, pk):
-    if request.method != 'GET' and not is_manager(request.user):
-        return Response({'detail': 'Manager or admin access required.'}, status=status.HTTP_403_FORBIDDEN)
     maintenance = get_object_or_404(OfficeEquipmentMaintenance, pk=pk)
 
     if request.method == 'GET':
@@ -339,7 +294,7 @@ def equipment_maintenance_detail_api(request, pk):
 
 
 @api_view(['GET'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([RoleMatrixPermission.for_module('maintenance')])
 def maintenance_due_api(request):
     if not is_admin(request.user):
         return Response({'detail': 'Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
@@ -365,7 +320,7 @@ def maintenance_due_api(request):
 
 
 @api_view(['GET', 'POST'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([RoleMatrixPermission.for_module('requests')])
 @parser_classes([parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser])
 def maintenance_requests_api(request):
     role = get_user_role(request.user)
@@ -393,14 +348,8 @@ def can_access_vehicle_maintenance(user, maintenance):
 
 
 @api_view(['GET', 'POST'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([RoleMatrixPermission.for_module('maintenance')])
 def vehicle_maintenance_api(request):
-    role = get_user_role(request.user)
-    if role not in {'admin', 'manager', 'staff', 'driver'}:
-        return Response({'detail': 'Access denied.'}, status=status.HTTP_403_FORBIDDEN)
-    if request.method == 'POST' and not is_manager(request.user):
-        return Response({'detail': 'Manager or admin access required to create maintenance history.'}, status=status.HTTP_403_FORBIDDEN)
-
     if request.method == 'GET':
         queryset = MaintenanceItem.objects.select_related('vehicle').order_by('-date_performed')
         if not is_manager(request.user):
@@ -419,7 +368,7 @@ def vehicle_maintenance_api(request):
 
 
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([RoleMatrixPermission.for_module('maintenance')])
 def vehicle_maintenance_detail_api(request, pk):
     maintenance = get_object_or_404(MaintenanceItem.objects.select_related('vehicle'), pk=pk)
     if not can_access_vehicle_maintenance(request.user, maintenance):
@@ -443,7 +392,7 @@ def vehicle_maintenance_detail_api(request, pk):
 
 
 @api_view(['GET', 'POST'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([RoleMatrixPermission.for_module('transfers')])
 def equipment_transfers_api(request):
     if request.method == 'GET':
         queryset = EquipmentTransfer.objects.select_related('equipment').all()
@@ -467,7 +416,7 @@ def equipment_transfers_api(request):
 
 
 @api_view(['GET'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([RoleMatrixPermission.for_module('transfers')])
 def equipment_transfer_detail_api(request, pk):
     transfer = get_object_or_404(EquipmentTransfer.objects.select_related('equipment'), pk=pk)
     return Response(EquipmentTransferSerializer(transfer).data)
@@ -484,12 +433,8 @@ def can_view_driver_request(user, driver_request):
 
 
 @api_view(['GET', 'POST'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([RoleMatrixPermission.for_module('requests')])
 def driver_requests_api(request):
-    role = get_user_role(request.user)
-    if role not in {'admin', 'manager', 'staff', 'driver'}:
-        return Response({'detail': 'Access denied.'}, status=status.HTTP_403_FORBIDDEN)
-
     if request.method == 'GET':
         queryset = DriverRequest.objects.select_related('requested_by', 'requester_user', 'assigned_driver')
         if not is_manager(request.user):
@@ -519,7 +464,7 @@ def driver_requests_api(request):
 
 
 @api_view(['GET'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([RoleMatrixPermission.for_module('requests')])
 def driver_request_detail_api(request, pk):
     driver_request = get_object_or_404(
         DriverRequest.objects.select_related('requested_by', 'requester_user', 'assigned_driver'),
@@ -531,10 +476,8 @@ def driver_request_detail_api(request, pk):
 
 
 @api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([RoleMatrixPermission.for_module('requests', {'POST': ('approve', 'level_1')})])
 def driver_request_assign_api(request, pk):
-    if not is_manager(request.user):
-        return Response({'detail': 'Manager or admin access required.'}, status=status.HTTP_403_FORBIDDEN)
     driver_request = get_object_or_404(DriverRequest, pk=pk)
     if driver_request.status == 'cancelled':
         return Response({'detail': 'Cannot assign a cancelled request.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -580,28 +523,22 @@ def me_api(request):
 
 
 @api_view(['GET'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([RoleMatrixPermission.for_module('vehicles', {'GET': 'export'})])
 def export_vehicles_csv_api(request):
-    if not is_admin(request.user):
-        return Response({'detail': 'Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
     return views.export_vehicles_csv(request)
 
 
 @api_view(['GET'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([RoleMatrixPermission.for_module('equipment', {'GET': 'export'})])
 def export_equipment_csv_api(request):
-    if not is_admin(request.user):
-        return Response({'detail': 'Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
     return views.export_equipment_csv(request)
 
 
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication, BasicAuthentication])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([RoleMatrixPermission.for_module('vehicles')])
 @parser_classes([parsers.MultiPartParser, parsers.FormParser])
 def bulk_upload_assets_api(request):
-    if not is_admin(request.user):
-        return Response({'detail': 'Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
 
     from .bulk_utils import parse_bulk_upload_csv, parse_excel_vehicles, parse_docx_vehicles, validate_vehicle_row
 
@@ -671,11 +608,9 @@ def bulk_upload_assets_api(request):
 
 @api_view(['POST'])
 @authentication_classes([TokenAuthentication, BasicAuthentication])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([RoleMatrixPermission.for_module('equipment')])
 @parser_classes([parsers.MultiPartParser, parsers.FormParser])
 def bulk_upload_equipment_api(request):
-    if not is_admin(request.user):
-        return Response({'detail': 'Admin access required.'}, status=status.HTTP_403_FORBIDDEN)
 
     from .bulk_utils import parse_bulk_upload_csv, parse_Excel_equipment, validate_equipment_row
 

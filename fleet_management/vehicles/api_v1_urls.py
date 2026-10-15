@@ -3,6 +3,7 @@ from django.urls import path
 from .api_v1 import (
     AuditReportView,
     AdminRolesView,
+    AdminRolePermissionsView,
     AdminStaffDetailView,
     AdminStaffListView,
     AdminUserDetailView,
@@ -27,6 +28,7 @@ from .api_v1 import (
 
 urlpatterns = [
     path('admin/roles/', AdminRolesView.as_view(), name='api-v1-admin-roles'),
+    path('admin/roles/permissions/', AdminRolePermissionsView.as_view(), name='api-v1-admin-role-permissions'),
     path('admin/users/', AdminUsersView.as_view(), name='api-v1-admin-users'),
     path('admin/users/<int:user_id>/', AdminUserDetailView.as_view(), name='api-v1-admin-user-detail'),
     path('admin/staff/', AdminStaffListView.as_view(), name='api-v1-admin-staff'),

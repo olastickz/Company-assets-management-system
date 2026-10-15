@@ -377,6 +377,20 @@ class UserRole(models.Model):
         return f"{self.user.username} - {self.get_role_display()}"
 
 
+class RolePermissionConfiguration(models.Model):
+    role = models.CharField(max_length=20, choices=UserRole.ROLE_CHOICES, unique=True)
+    modules = models.JSONField(default=dict)
+    approval_authority = models.JSONField(default=dict)
+    updated_by = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='updated_role_permission_configurations',
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'{self.get_role_display()} permissions'
+
+
 class StaffMember(models.Model):
     """Record staff identities for equipment and document assignment."""
     DEPARTMENT_CHOICES = [
