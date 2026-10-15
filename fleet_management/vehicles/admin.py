@@ -524,7 +524,7 @@ class StaffApplicationAdmin(admin.ModelAdmin):
         if declined:
             self.message_user(request, f'Declined {declined} application(s).')
 
-    @admin.action(description='Resend status or password-setup email')
+    @admin.action(description='Resend status or temporary login email')
     def resend_application_emails(self, request, queryset):
         from .staff_onboarding import send_application_notification
 

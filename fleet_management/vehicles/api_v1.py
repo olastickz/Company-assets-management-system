@@ -6,6 +6,7 @@ from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -34,7 +35,11 @@ from .models import (
 )
 from .permissions import get_user_role
 from .serializers import AdminUserSerializer, NotificationRecipientSerializer, StaffMemberSerializer
-from .staff_onboarding import provision_staff_account
+from .staff_onboarding import (
+    generate_temporary_password,
+    provision_staff_account,
+    send_staff_temporary_password,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -88,14 +93,33 @@ class AdminUsersView(APIView):
         return paginator.get_paginated_response(AdminUserSerializer(page, many=True).data)
 
     def post(self, request):
-        serializer = AdminUserSerializer(data=request.data)
+        user_data = request.data.copy()
+        is_staff = user_data.get('role', 'staff') == 'staff'
+        if is_staff:
+            user_data.pop('password', None)
+            if not (user_data.get('email') or '').strip():
+                return Response({'email': 'An email is required to send staff login details.'}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = AdminUserSerializer(data=user_data)
         if serializer.is_valid():
-            return self._create(serializer)
+            return self._create(serializer, request)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @staticmethod
-    def _create(serializer):
-        user = serializer.save()
+    def _create(serializer, request):
+        try:
+            with transaction.atomic():
+                user = serializer.save()
+                if user.role.role == 'staff':
+                    send_staff_temporary_password(
+                        user, generate_temporary_password(), request
+                    )
+                user.refresh_from_db()
+        except Exception:
+            logger.exception('Failed to create or email an admin-provisioned user account')
+            return Response(
+                {'detail': 'The staff account could not be created or its login email could not be sent.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         return Response(AdminUserSerializer(user).data, status=status.HTTP_201_CREATED)
 
 
@@ -114,7 +138,27 @@ class AdminUserDetailView(APIView):
             return Response({'is_active': 'You cannot deactivate your own account.'}, status=status.HTTP_400_BAD_REQUEST)
         serializer = AdminUserSerializer(user, data=request.data, partial=True)
         if serializer.is_valid():
-            return Response(AdminUserSerializer(serializer.save()).data)
+            assigning_staff_role = (
+                request.data.get('role') == 'staff'
+                and getattr(getattr(user, 'role', None), 'role', None) != 'staff'
+            )
+            if assigning_staff_role and not user.email:
+                return Response({'email': 'An email is required to send staff login details.'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                with transaction.atomic():
+                    user = serializer.save()
+                    if assigning_staff_role:
+                        send_staff_temporary_password(
+                            user, generate_temporary_password(), request
+                        )
+                    user.refresh_from_db()
+            except Exception:
+                logger.exception('Failed to assign staff role or email temporary credentials')
+                return Response(
+                    {'detail': 'The role could not be assigned or its login email could not be sent.'},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+            return Response(AdminUserSerializer(user).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -154,17 +198,16 @@ class AdminStaffListView(generics.ListCreateAPIView):
 
     def create(self, request, *args, **kwargs):
         staff_data = request.data.copy()
-        password = staff_data.pop('password', None)
+        staff_data.pop('password', None)
         staff_data.pop('user', None)
         staff_data.pop('is_active', None)
-        if not password:
-            return Response({'password': 'This field is required.'}, status=status.HTTP_400_BAD_REQUEST)
         serializer = self.get_serializer(data=staff_data)
         serializer.is_valid(raise_exception=True)
         staff = StaffMember(**serializer.validated_data)
 
         try:
-            provision_staff_account(staff, password)
+            provision_staff_account(staff, request=request)
+            staff.refresh_from_db()
         except ValidationError as error:
             if hasattr(error, 'message_dict'):
                 return Response(error.message_dict, status=status.HTTP_400_BAD_REQUEST)
@@ -172,7 +215,7 @@ class AdminStaffListView(generics.ListCreateAPIView):
         except Exception:
             logger.exception('Failed to create an admin-provisioned staff account')
             return Response(
-                {'detail': 'The staff account could not be created or its setup email could not be sent.'},
+                {'detail': 'The staff account could not be created or its login email could not be sent.'},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 

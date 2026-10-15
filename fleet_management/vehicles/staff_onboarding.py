@@ -1,3 +1,5 @@
+import random
+
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
@@ -6,11 +8,57 @@ from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.db import transaction
 from django.urls import reverse
+from django.utils.crypto import get_random_string
 from django.utils import timezone
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
 from .models import StaffApplication, StaffMember, UserRole
+
+
+def generate_temporary_password():
+    characters = [
+        get_random_string(1, 'abcdefghijklmnopqrstuvwxyz'),
+        get_random_string(1, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'),
+        get_random_string(1, '0123456789'),
+        get_random_string(1, '!@#$%^&*'),
+    ]
+    characters.extend(
+        get_random_string(20, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*')
+    )
+    random.SystemRandom().shuffle(characters)
+    return ''.join(characters)
+
+
+def send_staff_temporary_password(user, password, request, status_url=None):
+    login_url = request.build_absolute_uri(reverse('login'))
+    body = (
+        f'Hello {user.first_name},\n\n'
+        'Your Telnet staff account has been approved.\n'
+        f'Username (staff ID): {user.username}\n'
+        f'Temporary password: {password}\n\n'
+        f'Sign in here: {login_url}\n'
+        'After logging in, change your password immediately from the Change Password page.\n'
+    )
+    if status_url:
+        body += f'\nYou can also check your application status here: {status_url}\n'
+
+    with transaction.atomic():
+        user = User.objects.select_for_update().get(pk=user.pk)
+        user.set_password(password)
+        user.save(update_fields=['password'])
+        sent_count = send_mail(
+            'Your Telnet staff account login details',
+            body,
+            settings.DEFAULT_FROM_EMAIL,
+            [user.email],
+            fail_silently=False,
+        )
+        if sent_count != 1:
+            raise RuntimeError('The temporary password email could not be sent.')
+        user.is_active = True
+        user.save(update_fields=['is_active'])
+        StaffMember.objects.filter(user=user).update(is_active=True)
 
 
 def send_staff_password_setup_link(user, request, status_url=None):
@@ -41,24 +89,29 @@ def send_staff_password_setup_link(user, request, status_url=None):
     return setup_url
 
 
-def provision_staff_account(staff, password):
+def provision_staff_account(staff, password=None, request=None):
     email = (staff.email or '').strip().lower()
     if not email:
-        raise ValidationError({'email': 'A staff email is required to send the password setup link.'})
+        raise ValidationError({'email': 'A staff email is required to send login details.'})
     if User.objects.filter(username__iexact=staff.staff_id).exists():
         raise ValidationError({'staff_id': 'An account already uses this staff ID.'})
     if User.objects.filter(email__iexact=email).exists():
         raise ValidationError({'email': 'An account already uses this email address.'})
     if StaffMember.objects.filter(email__iexact=email).exclude(pk=staff.pk).exists():
         raise ValidationError({'email': 'This email address is already listed in the staff registry.'})
-    try:
-        validate_password(password, user=User(username=staff.staff_id, email=email))
-    except ValidationError as error:
-        raise ValidationError({'password': error.messages}) from error
+    if password:
+        try:
+            validate_password(password, user=User(username=staff.staff_id, email=email))
+        except ValidationError as error:
+            raise ValidationError({'password': error.messages}) from error
+    else:
+        password = generate_temporary_password()
+    if request is None:
+        raise ValueError('A request is required to email the staff login URL.')
 
     with transaction.atomic():
         staff.email = email
-        staff.is_active = True
+        staff.is_active = False
         staff.save()
 
         user = User(
@@ -66,7 +119,7 @@ def provision_staff_account(staff, password):
             email=email,
             first_name=staff.first_name,
             last_name=staff.last_name,
-            is_active=True,
+            is_active=False,
         )
         user.set_password(password)
         user.save()
@@ -74,6 +127,7 @@ def provision_staff_account(staff, password):
 
         staff.user = user
         staff.save(update_fields=['user', 'email', 'is_active'])
+        send_staff_temporary_password(user, password, request)
 
     return staff
 
@@ -100,7 +154,8 @@ def send_application_notification(application, request):
             'Please contact your administrator if you need more information.'
         )
     elif application.status == 'approved' and application.account_id:
-        return send_staff_password_setup_link(application.account, request, status_url)
+        password = generate_temporary_password()
+        return send_staff_temporary_password(application.account, password, request, status_url)
     else:
         raise ValueError('This application is not in an emailable state.')
 

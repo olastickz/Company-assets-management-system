@@ -2864,7 +2864,7 @@ def staff_create(request):
         if form.is_valid():
             staff = form.save(commit=False)
             try:
-                provision_staff_account(staff, form.cleaned_data['password'])
+                provision_staff_account(staff, request=request)
             except ValidationError as error:
                 if hasattr(error, 'message_dict'):
                     for field, field_errors in error.message_dict.items():

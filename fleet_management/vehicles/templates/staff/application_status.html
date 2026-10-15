@@ -10,7 +10,7 @@
     {% if application.status == 'pending' %}
         <div class="message">Your application is awaiting administrator review.</div>
     {% elif application.status == 'approved' %}
-        <div class="message">Your application is approved. Check your work email for the secure password setup link before signing in.</div>
+        <div class="message">Your application is approved. Check your work email for your staff ID and temporary password, then change your password after signing in.</div>
     {% else %}
         <div class="message" style="background:#f8d7da; border-color:#f1aeb5; color:#842029;">Your application was not approved. Please contact your administrator if you need more information.</div>
     {% endif %}

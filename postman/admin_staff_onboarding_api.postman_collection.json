@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "Admin Staff Password Setup",
-    "description": "Admin-only write workflow: create an inactive staff login and send a one-time password setup link. Run only against an isolated test database configured with Django's locmem email backend. Staff records and emails are created; use a disposable database for cleanup.",
+    "name": "Admin Staff Account Provisioning",
+    "description": "Admin-only write workflow: create staff without supplying a password and assign a user the staff role. The API emails the staff ID and generated temporary password. Run only against an isolated development or test database; requests create disposable records.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -10,7 +10,8 @@
     { "key": "password", "value": "" },
     { "key": "token", "value": "" },
     { "key": "run_id", "value": "" },
-    { "key": "staff_record_id", "value": "" }
+    { "key": "staff_record_id", "value": "" },
+    { "key": "role_user_id", "value": "" }
   ],
   "event": [
     {
@@ -43,6 +44,7 @@
     },
     {
       "name": "Create Staff Account",
+      "description": "Creates the staff login without a password in the request. The generated staff ID and temporary password are sent to the staff email address.",
       "request": {
         "method": "POST",
         "header": [
@@ -56,8 +58,8 @@
         },
         "url": "{{base_url}}/api/v1/admin/staff/"
       },
-      "response": [{ "name": "201 Created - Test fixture", "originalRequest": { "method": "POST", "url": "{{base_url}}/api/v1/admin/staff/" }, "status": "Created", "code": 201, "_postman_previewlanguage": "json", "header": [], "cookie": [], "body": "{\"id\":1,\"staff_id\":\"PM-test-run\",\"first_name\":\"Postman\",\"last_name\":\"Setup Test\",\"email\":\"[redacted]\",\"department\":\"ABS\",\"branch\":\"LAGOS\",\"driver_status\":\"available\",\"is_active\":false,\"user\":2,\"account_status\":\"pending_password\",\"setup_email_sent\":true}" }],
-      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('admin creates a pending staff login and sends setup link', function () {", "    pm.response.to.have.status(201);", "    const body = pm.response.json();", "    pm.expect(body.staff_id).to.eql('PM-' + pm.collectionVariables.get('run_id'));", "    pm.expect(body.is_active).to.eql(false);", "    pm.expect(body.account_status).to.eql('pending_password');", "    pm.expect(body.setup_email_sent).to.eql(true);", "    pm.expect(body).not.to.have.property('password');", "    pm.collectionVariables.set('staff_record_id', body.id);", "});"] } }]
+      "response": [{ "name": "201 Created - Test fixture", "originalRequest": { "method": "POST", "url": "{{base_url}}/api/v1/admin/staff/" }, "status": "Created", "code": 201, "_postman_previewlanguage": "json", "header": [], "cookie": [], "body": "{\"id\":1,\"staff_id\":\"PM-test-run\",\"first_name\":\"Postman\",\"last_name\":\"Setup Test\",\"email\":\"[redacted]\",\"department\":\"ABS\",\"branch\":\"LAGOS\",\"driver_status\":\"available\",\"is_active\":true,\"created_at\":\"2026-10-13T09:00:00Z\",\"updated_at\":\"2026-10-13T09:00:00Z\",\"user\":2,\"account_status\":\"active\"}" }],
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('admin creates an active staff login without supplying a password', function () {", "    pm.response.to.have.status(201);", "    const body = pm.response.json();", "    pm.expect(body.staff_id).to.eql('PM-' + pm.collectionVariables.get('run_id'));", "    pm.expect(body.is_active).to.eql(true);", "    pm.expect(body.account_status).to.eql('active');", "    pm.expect(body).not.to.have.property('password');", "    pm.expect(body).not.to.have.property('setup_email_sent');", "    pm.collectionVariables.set('staff_record_id', body.id);", "});"] } }]
     },
     {
       "name": "Read Created Staff Account",
@@ -66,8 +68,44 @@
         "header": [{ "key": "Authorization", "value": "Token {{token}}" }],
         "url": "{{base_url}}/api/v1/admin/staff/{{staff_record_id}}/"
       },
-      "response": [{ "name": "200 OK - Test fixture", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/admin/staff/{{staff_record_id}}/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [], "cookie": [], "body": "{\"id\":1,\"staff_id\":\"PM-test-run\",\"first_name\":\"Postman\",\"last_name\":\"Setup Test\",\"email\":\"[redacted]\",\"department\":\"ABS\",\"branch\":\"LAGOS\",\"driver_status\":\"available\",\"is_active\":false,\"user\":2}" }],
-      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('created staff account is linked but inactive until setup', function () {", "    pm.response.to.have.status(200);", "    const body = pm.response.json();", "    pm.expect(body.staff_id).to.eql('PM-' + pm.collectionVariables.get('run_id'));", "    pm.expect(body.user).to.be.a('number');", "    pm.expect(body.is_active).to.eql(false);", "});"] } }]
+      "response": [{ "name": "200 OK - Test fixture", "originalRequest": { "method": "GET", "url": "{{base_url}}/api/v1/admin/staff/{{staff_record_id}}/" }, "status": "OK", "code": 200, "_postman_previewlanguage": "json", "header": [], "cookie": [], "body": "{\"id\":1,\"staff_id\":\"PM-test-run\",\"first_name\":\"Postman\",\"last_name\":\"Setup Test\",\"email\":\"[redacted]\",\"department\":\"ABS\",\"branch\":\"LAGOS\",\"driver_status\":\"available\",\"is_active\":true,\"created_at\":\"2026-10-13T09:00:00Z\",\"updated_at\":\"2026-10-13T09:00:00Z\",\"user\":2}" }],
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('created staff account is active and linked', function () {", "    pm.response.to.have.status(200);", "    const body = pm.response.json();", "    pm.expect(body.staff_id).to.eql('PM-' + pm.collectionVariables.get('run_id'));", "    pm.expect(body.user).to.be.a('number');", "    pm.expect(body.is_active).to.eql(true);", "});"] } }]
+    },
+    {
+      "name": "Create Manager For Staff Role Assignment",
+      "description": "Creates a disposable non-staff user that the next request promotes. This non-staff account still requires an initial password.",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Token {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"PM-manager-{{run_id}}\",\n  \"first_name\": \"Postman\",\n  \"last_name\": \"Role Test\",\n  \"email\": \"pm-manager-{{run_id}}@example.invalid\",\n  \"role\": \"manager\",\n  \"password\": \"Temporary!Manager_2026\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{base_url}}/api/v1/admin/users/"
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('admin creates a manager role test account', function () {", "    pm.response.to.have.status(201);", "    const body = pm.response.json();", "    pm.expect(body.role).to.eql('manager');", "    pm.expect(body.username).to.eql('PM-manager-' + pm.collectionVariables.get('run_id'));", "    pm.collectionVariables.set('role_user_id', body.id);", "});"] } }]
+    },
+    {
+      "name": "Assign Staff Role And Email Temporary Password",
+      "description": "Promotes the disposable manager account to staff. The API generates and emails new temporary login credentials; no password is included in this request.",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Token {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"role\": \"staff\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{base_url}}/api/v1/admin/users/{{role_user_id}}/"
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('staff role assignment succeeds without a password in the request', function () {", "    pm.response.to.have.status(200);", "    const body = pm.response.json();", "    pm.expect(body.role).to.eql('staff');", "    pm.expect(body.username).to.eql('PM-manager-' + pm.collectionVariables.get('run_id'));", "    pm.expect(body.is_active).to.eql(true);", "});"] } }]
     }
   ]
 }

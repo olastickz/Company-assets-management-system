@@ -38,7 +38,7 @@ class StaffOnboardingTests(TestCase):
         self.assertFalse(StaffApplication.objects.exists())
         self.assertEqual(mail.outbox, [])
 
-    def test_approved_staff_must_set_password_before_login(self):
+    def test_approved_staff_receives_temporary_password_and_can_log_in(self):
         application = StaffApplication.objects.create(**self.application_data())
         reviewer = User.objects.create_superuser(
             username='onboarding-admin',
@@ -52,27 +52,17 @@ class StaffOnboardingTests(TestCase):
         user = application.account
 
         self.assertEqual(application.status, 'approved')
-        self.assertFalse(user.is_active)
-        self.assertFalse(user.has_usable_password())
-        self.assertFalse(self.client.login(username='TEL-4821', password='anything'))
-        self.assertEqual(user.role.role, 'staff')
-        self.assertFalse(user.staff_profile.is_active)
-
-        setup_url = mail.outbox[-1].body.split('secure link:\n', 1)[1].splitlines()[0]
-        setup_path = setup_url.replace('http://testserver', '')
-        setup_response = self.client.get(setup_path, follow=True)
-        self.assertEqual(setup_response.status_code, 200)
-        password_path = setup_response.request['PATH_INFO']
-        response = self.client.post(password_path, {
-            'new_password1': 'Complex!Password_9402',
-            'new_password2': 'Complex!Password_9402',
-        }, follow=True)
-
-        self.assertEqual(response.status_code, 200)
-        user.refresh_from_db()
         self.assertTrue(user.is_active)
+        self.assertTrue(user.has_usable_password())
+        self.assertEqual(user.role.role, 'staff')
         self.assertTrue(user.staff_profile.is_active)
-        self.assertTrue(self.client.login(username='TEL-4821', password='Complex!Password_9402'))
+        email_body = mail.outbox[-1].body
+        temporary_password = email_body.split('Temporary password: ', 1)[1].splitlines()[0]
+        self.assertIn('Username (staff ID): TEL-4821', email_body)
+        self.assertIn('change your password immediately', email_body)
+        self.assertTrue(user.check_password(temporary_password))
+        self.assertTrue(user.staff_profile.is_active)
+        self.assertTrue(self.client.login(username='TEL-4821', password=temporary_password))
 
     def test_declined_applicant_can_see_the_decision(self):
         application = StaffApplication.objects.create(**self.application_data())

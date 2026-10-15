@@ -1,4 +1,5 @@
 from django.contrib.auth.models import User
+from django.core import mail
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient
@@ -30,29 +31,82 @@ class AdminStaffOnboardingTests(TestCase):
         data.update(overrides)
         return data
 
-    def test_admin_api_creates_active_staff_login_with_admin_set_password(self):
+    def test_admin_api_creates_staff_login_with_emailed_temporary_password(self):
         api_client = APIClient()
         api_client.force_authenticate(self.admin)
+        data = self.staff_data()
+        data.pop('password')
         response = api_client.post(
-            reverse('api-v1-admin-staff'), self.staff_data(), format='json'
+            reverse('api-v1-admin-staff'), data, format='json'
         )
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data['account_status'], 'active')
+        self.assertTrue(response.data['is_active'])
         staff = StaffMember.objects.get(staff_id='ADMIN-STAFF-001')
         user = User.objects.get(username='ADMIN-STAFF-001')
         self.assertEqual(staff.user_id, user.pk)
         self.assertEqual(user.role.role, 'staff')
         self.assertTrue(user.is_active)
         self.assertTrue(staff.is_active)
-        self.assertTrue(user.check_password('Initial!StaffPassword_2026'))
+        self.assertEqual(len(mail.outbox), 1)
+        email_body = mail.outbox[0].body
+        temporary_password = email_body.split('Temporary password: ', 1)[1].splitlines()[0]
+        self.assertTrue(user.check_password(temporary_password))
+        self.assertIn('Username (staff ID): ADMIN-STAFF-001', email_body)
+        self.assertIn('change your password immediately', email_body)
+        user.refresh_from_db()
 
-    def test_admin_staff_form_creates_login_with_admin_set_password(self):
+    def test_admin_user_api_creates_staff_without_password_and_emails_credentials(self):
+        api_client = APIClient()
+        api_client.force_authenticate(self.admin)
+        response = api_client.post(reverse('api-v1-admin-users'), {
+            'username': 'ADMIN-USER-STAFF-001',
+            'first_name': 'Nia',
+            'last_name': 'Adebayo',
+            'email': 'nia@example.test',
+            'role': 'staff',
+        }, format='json')
+
+        self.assertEqual(response.status_code, 201)
+        user = User.objects.get(username='ADMIN-USER-STAFF-001')
+        email_body = mail.outbox[-1].body
+        temporary_password = email_body.split('Temporary password: ', 1)[1].splitlines()[0]
+        self.assertTrue(user.check_password(temporary_password))
+        self.assertIn('ADMIN-USER-STAFF-001', email_body)
+        user.refresh_from_db()
+
+    def test_assigning_staff_role_emails_new_temporary_password(self):
+        user = User.objects.create_user(
+            username='promoted-user',
+            email='promoted@example.test',
+            password='Initial!StaffPassword_2026',
+        )
+        UserRole.objects.create(user=user, role='manager')
+        api_client = APIClient()
+        api_client.force_authenticate(self.admin)
+
+        response = api_client.patch(
+            reverse('api-v1-admin-user-detail', args=[user.pk]),
+            {'role': 'staff'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        user.refresh_from_db()
+        email_body = mail.outbox[-1].body
+        temporary_password = email_body.split('Temporary password: ', 1)[1].splitlines()[0]
+        self.assertEqual(user.role.role, 'staff')
+        self.assertTrue(user.check_password(temporary_password))
+        self.assertIn('promoted-user', email_body)
+
+    def test_admin_staff_form_creates_login_with_emailed_temporary_password(self):
         client = Client()
         client.force_login(self.admin)
+        data = self.staff_data(staff_id='ADMIN-FORM-001')
+        data.pop('password')
         response = client.post(reverse('staff_create'), {
-            **self.staff_data(staff_id='ADMIN-FORM-001'),
-            'password_confirm': 'Initial!StaffPassword_2026',
+            **data,
         })
 
         self.assertEqual(response.status_code, 302)
@@ -61,7 +115,10 @@ class AdminStaffOnboardingTests(TestCase):
         self.assertEqual(staff.user_id, user.pk)
         self.assertTrue(user.is_active)
         self.assertTrue(staff.is_active)
-        self.assertTrue(user.check_password('Initial!StaffPassword_2026'))
+        email_body = mail.outbox[-1].body
+        temporary_password = email_body.split('Temporary password: ', 1)[1].splitlines()[0]
+        self.assertTrue(user.check_password(temporary_password))
+        self.assertIn('ADMIN-FORM-001', email_body)
 
     def test_staff_can_change_password_after_authenticating(self):
         user = User.objects.create_user(

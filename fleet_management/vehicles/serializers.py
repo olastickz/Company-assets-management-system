@@ -181,7 +181,8 @@ class AdminUserSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         password = attrs.get('password')
-        if self.instance is None and not password:
+        role = attrs.get('role', 'staff')
+        if self.instance is None and not password and role != 'staff':
             raise serializers.ValidationError({'password': 'This field is required.'})
         if self.instance is not None and password:
             raise serializers.ValidationError({'password': 'Password can only be set when creating an account.'})
@@ -196,9 +197,12 @@ class AdminUserSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         role = validated_data.pop('role', 'staff')
         department = validated_data.pop('department', None)
-        password = validated_data.pop('password')
+        password = validated_data.pop('password', None)
         user = User(**validated_data)
-        user.set_password(password)
+        if password:
+            user.set_password(password)
+        else:
+            user.set_unusable_password()
         user.save()
         UserRole.objects.create(user=user, role=role, department=department)
         return user
