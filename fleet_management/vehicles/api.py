@@ -5,6 +5,7 @@ from rest_framework import parsers, viewsets, permissions, status
 from rest_framework.decorators import api_view, permission_classes, authentication_classes, parser_classes
 from rest_framework.authentication import BasicAuthentication, TokenAuthentication
 from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError as APIValidationError
 from rest_framework.authtoken.models import Token
 from django.contrib.auth.models import User
 from django.db import transaction
@@ -25,7 +26,8 @@ from .models import (
     CompanyDocument,
     OfficeEquipmentMaintenance,
 )
-from .permissions import RoleMatrixPermission, get_user_role, is_admin, is_manager
+from .asset_assignment_workflow import AssignmentWorkflowError, submit_assignment_request
+from .permissions import RoleMatrixPermission, get_user_role, has_role_permission, is_admin, is_manager
 from .serializers import (
     VehicleSerializer,
     OfficeEquipmentSerializer,
@@ -45,18 +47,84 @@ from . import views
 logger = logging.getLogger(__name__)
 
 
-class VehicleViewSet(viewsets.ModelViewSet):
+class AssignmentRequestResponseMixin:
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        self.assignment_request = None
+        response = super().create(request, *args, **kwargs)
+        if self.assignment_request:
+            response.data = {
+                'detail': 'Resource created; assignment request is pending approval.',
+                'request_id': self.assignment_request.pk,
+                'resource': response.data,
+            }
+            response.status_code = status.HTTP_202_ACCEPTED
+        return response
+
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        self.assignment_request = None
+        response = super().update(request, *args, **kwargs)
+        if self.assignment_request:
+            response.data = {
+                'detail': 'Resource updated; assignment request is pending approval.',
+                'request_id': self.assignment_request.pk,
+                'resource': response.data,
+            }
+            response.status_code = status.HTTP_202_ACCEPTED
+        return response
+
+
+class VehicleViewSet(AssignmentRequestResponseMixin, viewsets.ModelViewSet):
     queryset = Vehicle.objects.all().order_by('-updated_at')
     serializer_class = VehicleSerializer
     permission_classes = [RoleMatrixPermission]
     permission_module = 'vehicles'
 
+    def perform_create(self, serializer):
+        requested_staff = serializer.validated_data.pop('assigned_staff', None)
+        record = serializer.save(assigned_staff=None)
+        if requested_staff:
+            try:
+                self.assignment_request = submit_assignment_request(record.asset, requested_staff, self.request.user)
+            except AssignmentWorkflowError as error:
+                raise APIValidationError({'assigned_staff': str(error)})
 
-class OfficeEquipmentViewSet(viewsets.ModelViewSet):
+    def perform_update(self, serializer):
+        requested_staff = serializer.validated_data.pop('assigned_staff', serializer.instance.assigned_staff)
+        previous_staff = serializer.instance.assigned_staff
+        record = serializer.save(assigned_staff=previous_staff)
+        if requested_staff and requested_staff.pk != getattr(previous_staff, 'pk', None):
+            try:
+                self.assignment_request = submit_assignment_request(record.asset, requested_staff, self.request.user)
+            except AssignmentWorkflowError as error:
+                raise APIValidationError({'assigned_staff': str(error)})
+
+
+class OfficeEquipmentViewSet(AssignmentRequestResponseMixin, viewsets.ModelViewSet):
     queryset = OfficeEquipment.objects.all().order_by('-updated_at')
     serializer_class = OfficeEquipmentSerializer
     permission_classes = [RoleMatrixPermission]
     permission_module = 'equipment'
+
+    def perform_create(self, serializer):
+        requested_staff = serializer.validated_data.pop('assigned_staff', None)
+        record = serializer.save(assigned_staff=None)
+        if requested_staff:
+            try:
+                self.assignment_request = submit_assignment_request(record.asset, requested_staff, self.request.user)
+            except AssignmentWorkflowError as error:
+                raise APIValidationError({'assigned_staff': str(error)})
+
+    def perform_update(self, serializer):
+        requested_staff = serializer.validated_data.pop('assigned_staff', serializer.instance.assigned_staff)
+        previous_staff = serializer.instance.assigned_staff
+        record = serializer.save(assigned_staff=previous_staff)
+        if requested_staff and requested_staff.pk != getattr(previous_staff, 'pk', None):
+            try:
+                self.assignment_request = submit_assignment_request(record.asset, requested_staff, self.request.user)
+            except AssignmentWorkflowError as error:
+                raise APIValidationError({'assigned_staff': str(error)})
 
 
 class EquipmentWorkOrderViewSet(viewsets.ModelViewSet):
@@ -159,11 +227,35 @@ def asset_detail_api(request, pk):
         return Response(serializer.data)
 
     if request.method == 'PUT':
-        serializer = AssetSerializer(asset, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        payload = request.data.copy()
+        requested_staff_id = payload.get('assigned_staff')
+        payload.pop('assigned_staff', None)
+        payload.pop('assigned_staff_id', None)
+        serializer = AssetSerializer(asset, data=payload, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        assignment_request = None
+        if requested_staff_id not in (None, ''):
+            if isinstance(requested_staff_id, (list, tuple)):
+                requested_staff_id = requested_staff_id[-1] if requested_staff_id else None
+            try:
+                staff_member = StaffMember.objects.get(pk=requested_staff_id, is_active=True)
+                assignment_request = submit_assignment_request(asset, staff_member, request.user)
+            except StaffMember.DoesNotExist:
+                return Response({'detail': 'Selected staff member was not found or is inactive.'}, status=status.HTTP_400_BAD_REQUEST)
+            except AssignmentWorkflowError as error:
+                return Response({'detail': str(error)}, status=status.HTTP_400_BAD_REQUEST)
+            if assignment_request is None:
+                return Response({'detail': 'Asset is already assigned to this staff member.', 'asset': AssetSerializer(asset).data})
+        serializer.save()
+        if assignment_request:
+            return Response({
+                'detail': 'Assignment request submitted for approval.',
+                'request_id': assignment_request.pk,
+                'asset': serializer.data,
+            }, status=status.HTTP_202_ACCEPTED)
+        return Response(serializer.data)
 
     asset.delete()
     return Response(status=status.HTTP_204_NO_CONTENT)
@@ -178,16 +270,17 @@ def asset_assign_api(request, pk):
     if not staff_id:
         return Response({'detail': 'staff_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-    staff = get_object_or_404(StaffMember, pk=staff_id)
-    asset.assigned_staff = staff
-    asset.save(update_fields=['assigned_staff'])
-
-    related_company_asset = getattr(asset, 'company_asset', None)
-    if related_company_asset:
-        related_company_asset.assigned_staff = staff
-        related_company_asset.save(update_fields=['assigned_staff'])
-
-    return Response({'detail': 'Asset assigned successfully', 'asset': AssetSerializer(asset).data})
+    staff = get_object_or_404(StaffMember, pk=staff_id, is_active=True)
+    try:
+        assignment = submit_assignment_request(asset, staff, request.user)
+    except AssignmentWorkflowError as error:
+        return Response({'detail': str(error)}, status=status.HTTP_400_BAD_REQUEST)
+    if assignment is None:
+        return Response({'detail': 'Asset is already assigned to this staff member.', 'asset': AssetSerializer(asset).data})
+    return Response(
+        {'detail': 'Assignment request submitted for approval.', 'request_id': assignment.pk},
+        status=status.HTTP_202_ACCEPTED,
+    )
 
 
 @api_view(['POST'])
@@ -259,7 +352,7 @@ def document_detail_api(request, pk):
 
 
 @api_view(['GET', 'POST'])
-@permission_classes([RoleMatrixPermission.for_module('maintenance')])
+@permission_classes([RoleMatrixPermission.for_module('equipment_maintenance')])
 def equipment_maintenance_api(request):
     if request.method == 'GET':
         queryset = OfficeEquipmentMaintenance.objects.all().order_by('-maintenance_date')
@@ -274,7 +367,7 @@ def equipment_maintenance_api(request):
 
 
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
-@permission_classes([RoleMatrixPermission.for_module('maintenance')])
+@permission_classes([RoleMatrixPermission.for_module('equipment_maintenance')])
 def equipment_maintenance_detail_api(request, pk):
     maintenance = get_object_or_404(OfficeEquipmentMaintenance, pk=pk)
 
@@ -341,18 +434,18 @@ def maintenance_requests_api(request):
 
 
 def can_access_vehicle_maintenance(user, maintenance):
-    if is_manager(user):
+    if has_role_permission(user, 'vehicle_maintenance', 'view'):
         return True
     staff_profile = getattr(user, 'staff_profile', None)
     return bool(staff_profile and maintenance.vehicle.assigned_staff_id == staff_profile.pk)
 
 
 @api_view(['GET', 'POST'])
-@permission_classes([RoleMatrixPermission.for_module('maintenance')])
+@permission_classes([RoleMatrixPermission.for_module('vehicle_maintenance')])
 def vehicle_maintenance_api(request):
     if request.method == 'GET':
         queryset = MaintenanceItem.objects.select_related('vehicle').order_by('-date_performed')
-        if not is_manager(request.user):
+        if not has_role_permission(request.user, 'vehicle_maintenance', 'view'):
             staff_profile = getattr(request.user, 'staff_profile', None)
             queryset = queryset.filter(vehicle__assigned_staff=staff_profile) if staff_profile else queryset.none()
         vehicle_id = request.query_params.get('vehicle')
@@ -368,14 +461,14 @@ def vehicle_maintenance_api(request):
 
 
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
-@permission_classes([RoleMatrixPermission.for_module('maintenance')])
+@permission_classes([RoleMatrixPermission.for_module('vehicle_maintenance')])
 def vehicle_maintenance_detail_api(request, pk):
     maintenance = get_object_or_404(MaintenanceItem.objects.select_related('vehicle'), pk=pk)
     if not can_access_vehicle_maintenance(request.user, maintenance):
         return Response({'detail': 'Access denied.'}, status=status.HTTP_403_FORBIDDEN)
     if request.method == 'GET':
         return Response(VehicleMaintenanceSerializer(maintenance).data)
-    if not is_manager(request.user):
+    if not has_role_permission(request.user, 'vehicle_maintenance', 'edit'):
         return Response({'detail': 'Manager or admin access required.'}, status=status.HTTP_403_FORBIDDEN)
     if request.method in {'PUT', 'PATCH'}:
         serializer = VehicleMaintenanceSerializer(
@@ -423,7 +516,7 @@ def equipment_transfer_detail_api(request, pk):
 
 
 def can_view_driver_request(user, driver_request):
-    if is_manager(user):
+    if is_admin(user) or get_user_role(user) == 'vehicle_manager':
         return True
     staff_profile = getattr(user, 'staff_profile', None)
     return bool(
@@ -437,7 +530,7 @@ def can_view_driver_request(user, driver_request):
 def driver_requests_api(request):
     if request.method == 'GET':
         queryset = DriverRequest.objects.select_related('requested_by', 'requester_user', 'assigned_driver')
-        if not is_manager(request.user):
+        if not (is_admin(request.user) or get_user_role(request.user) == 'vehicle_manager'):
             staff_profile = getattr(request.user, 'staff_profile', None)
             queryset = queryset.filter(
                 Q(requester_user=request.user) | Q(assigned_driver=staff_profile)

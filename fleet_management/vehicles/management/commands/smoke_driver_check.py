@@ -10,7 +10,7 @@ class Command(BaseCommand):
         manager, _ = User.objects.get_or_create(username='smoke_manager')
         manager.set_password('pass')
         manager.save()
-        UserRole.objects.update_or_create(user=manager, defaults={'role': 'manager'})
+        UserRole.objects.update_or_create(user=manager, defaults={'role': 'vehicle_manager'})
 
         u1, _ = User.objects.get_or_create(username='smoke_requester')
         UserRole.objects.update_or_create(user=u1, defaults={'role': 'staff'})

@@ -313,14 +313,14 @@ class DriverAssignmentForm(forms.ModelForm):
 
 class EquipmentTransferForm(forms.Form):
     """Form for transferring equipment between staff members"""
-    transferred_to = forms.CharField(
-        max_length=100,
-        label='Staff Member Name (Receiving)',
-        widget=forms.TextInput(attrs={
+    transferred_to = StaffMemberChoiceField(
+        queryset=StaffMember.objects.filter(is_active=True).order_by('staff_id'),
+        label='Staff Member (Receiving)',
+        empty_label='Select a staff member',
+        widget=forms.Select(attrs={
             'class': 'form-control',
-            'placeholder': 'Full name of the staff member receiving the equipment',
-            'required': True
-        })
+            'data-autocomplete': 'staff',
+        }),
     )
     
     transferred_to_department = forms.CharField(
@@ -374,10 +374,23 @@ class StaffMemberForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        staff_queryset = StaffMember.objects.filter(is_active=True).order_by('staff_id')
+        if self.instance and self.instance.pk:
+            staff_queryset = staff_queryset.exclude(pk=self.instance.pk)
+        for field_name in ('reporting_manager', 'supervisor'):
+            self.fields[field_name].queryset = staff_queryset
+            self.fields[field_name].widget.attrs.update({
+                'class': 'form-control',
+                'data-autocomplete': 'staff',
+            })
+            self.fields[field_name].empty_label = 'Select a staff member'
 
     class Meta:
         model = StaffMember
-        fields = ['staff_id', 'first_name', 'last_name', 'email', 'department', 'branch', 'is_active']
+        fields = [
+            'staff_id', 'first_name', 'last_name', 'email', 'department', 'branch',
+            'reporting_manager', 'supervisor', 'is_active',
+        ]
         widgets = {
             'staff_id': forms.TextInput(attrs={'class': 'form-control'}),
             'first_name': forms.TextInput(attrs={'class': 'form-control'}),
@@ -385,6 +398,8 @@ class StaffMemberForm(forms.ModelForm):
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
             'department': forms.Select(attrs={'class': 'form-control'}),
             'branch': forms.Select(attrs={'class': 'form-control'}),
+            'reporting_manager': forms.Select(attrs={'class': 'form-control', 'data-autocomplete': 'staff'}),
+            'supervisor': forms.Select(attrs={'class': 'form-control', 'data-autocomplete': 'staff'}),
         }
 
 

@@ -263,7 +263,7 @@ class CompanyAssetAdmin(admin.ModelAdmin):
     list_display = ('name', 'make', 'model', 'license_plate', 'vin_number', 'asset_type', 'status', 'get_status_display')
     list_filter = ('asset_type', 'status', 'created_at')
     search_fields = ('name', 'make', 'model', 'license_plate', 'vin_number')
-    readonly_fields = ('created_at', 'updated_at')
+    readonly_fields = ('assigned_staff', 'created_at', 'updated_at')
 
     def get_status_display(self, obj):
         """Display status with color coding"""
@@ -287,7 +287,7 @@ class OfficeEquipmentAdmin(admin.ModelAdmin):
     list_display = ('name', 'equipment_type', 'assigned_to_display', 'status', 'subsidiary', 'regional_office', 'warranty_expiry', 'get_status_display')
     list_filter = ('equipment_type', 'status', 'subsidiary', 'regional_office', 'created_at')
     search_fields = ('name', 'serial_number', 'tag_number', 'assigned_user', 'assigned_staff__staff_id', 'assigned_staff__first_name', 'assigned_staff__last_name')
-    readonly_fields = ('created_at', 'updated_at')
+    readonly_fields = ('assigned_staff', 'created_at', 'updated_at')
 
     def get_status_display(self, obj):
         """Display status with color coding"""
@@ -543,7 +543,7 @@ class AssetAdmin(admin.ModelAdmin):
     list_display = ('name', 'asset_type', 'status', 'assigned_staff', 'created_at')
     list_filter = ('asset_type', 'status')
     search_fields = ('name', 'description', 'assigned_staff__staff_id', 'assigned_staff__first_name', 'assigned_staff__last_name')
-    readonly_fields = ('created_at', 'updated_at')
+    readonly_fields = ('assigned_staff', 'created_at', 'updated_at')
 
 @admin.register(AssetAssignmentHistory)
 class AssetAssignmentHistoryAdmin(admin.ModelAdmin):

@@ -1,21 +1,29 @@
 {
   "info": {
     "name": "Admin API v1",
-    "description": "Read-only admin API checks. Set base_url, admin_token, and manager_token before running. Write workflows are covered by Django API tests to avoid creating test records in a shared database.",
+    "description": "Admin API v1 checks. Set base_url, admin_token, and manager_token before running. The role-permission PATCH example is pinned to localhost and should only be used with a local or disposable test database.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "base_url",
-      "value": "http://127.0.0.1:8000"
+      "value": "http://207.180.246.69:8038"
     },
     {
       "key": "admin_token",
-      "value": ""
+      "value": "{{admin_token}}"
     },
     {
       "key": "manager_token",
-      "value": ""
+      "value": "{{manager_token}}"
+    },
+    {
+      "key": "user_id",
+      "value": "1"
+    },
+    {
+      "key": "staff_id",
+      "value": "1"
     }
   ],
   "item": [
@@ -40,7 +48,7 @@
           "_postman_previewlanguage": "json",
           "header": [],
           "cookie": [],
-          "body": "{\"count\":30,\"next\":\"{{base_url}}/api/v1/admin/users/?page=2&page_size=1\",\"previous\":null,\"results\":[{\"id\":3,\"username\":\"Olastickz\",\"first_name\":\"\",\"last_name\":\"\",\"email\":\"[redacted]\",\"is_active\":true,\"is_superuser\":true,\"role\":\"admin\",\"department\":\"ABS\"}]}"
+          "body": "{\"count\":1,\"next\":null,\"previous\":null,\"results\":[{\"id\":1,\"username\":\"telnet\",\"first_name\":\"\",\"last_name\":\"\",\"email\":\"topafgg@gmail.com\",\"is_active\":true,\"is_superuser\":true,\"role\":\"admin\",\"department\":null}]}"
         }
       ],
       "event": [
@@ -98,7 +106,113 @@
               "pm.test('returns the app role catalog', function () {",
               "    pm.response.to.have.status(200);",
               "    const roles = pm.response.json().map(function (role) { return role.value; });",
-              "    pm.expect(roles).to.include.members(['admin', 'manager', 'driver', 'staff']);",
+              "    pm.expect(roles).to.include.members(['admin', 'document_manager', 'vehicle_manager', 'equipment_manager', 'driver', 'staff']);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin Role Permission Matrix",
+      "description": "Read the role permission matrix for all roles. Administrator permissions are locked and always full access.",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token {{admin_token}}"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/admin/roles/permissions/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('admin can read role permission matrix', function () {",
+              "    pm.response.to.have.status(200);",
+              "    const roles = pm.response.json();",
+              "    pm.expect(roles).to.be.an('array');",
+              "    pm.expect(roles).to.have.length(6);",
+              "    pm.expect(roles.find(function (role) { return role.value === 'admin'; }).locked).to.eql(true);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Read Vehicle Manager Permission Matrix",
+      "description": "Read one role's module permissions and approval authority.",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token {{admin_token}}"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/admin/roles/permissions/?role=vehicle_manager"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('admin can read a single role matrix', function () {",
+              "    pm.response.to.have.status(200);",
+              "    const body = pm.response.json();",
+              "    pm.expect(body.value).to.eql('vehicle_manager');",
+              "    pm.expect(body.modules.vehicles).to.have.property('view');",
+              "    pm.expect(body.approval_authority).to.have.property('level_1');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "PATCH Role Permissions (Localhost Only)",
+      "description": "Changes effective permissions. This request is pinned to localhost to avoid changing the hosted server. Run only against a local or disposable test database.",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token {{admin_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"role\": \"vehicle_manager\",\n  \"modules\": {\n    \"vehicles\": {\"view\": true, \"edit\": true}\n  },\n  \"approval_authority\": {\n    \"level_1\": true,\n    \"level_2\": false\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "http://127.0.0.1:8000/api/v1/admin/roles/permissions/"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('local role permission update is saved', function () {",
+              "    pm.response.to.have.status(200);",
+              "    const body = pm.response.json();",
+              "    pm.expect(body.value).to.eql('vehicle_manager');",
+              "    pm.expect(body.modules.vehicles.edit).to.eql(true);",
+              "    pm.expect(body.approval_authority.level_1).to.eql(true);",
               "});"
             ]
           }
@@ -126,7 +240,7 @@
           "_postman_previewlanguage": "json",
           "header": [],
           "cookie": [],
-          "body": "{\"count\":80,\"next\":\"{{base_url}}/api/v1/admin/staff/?page=2&page_size=1\",\"previous\":null,\"results\":[{\"id\":1,\"staff_id\":\"ABAYOMIO-6aea\",\"first_name\":\"Abayomi\",\"last_name\":\"Olomu\",\"email\":null,\"department\":null,\"branch\":null,\"driver_status\":\"available\",\"is_active\":true,\"created_at\":\"2026-05-20T14:14:28.855857+01:00\",\"updated_at\":\"2026-05-20T14:14:28.855894+01:00\",\"user\":null}]}"
+          "body": "{\"count\":4,\"next\":\"http://207.180.246.69/api/v1/admin/staff/?page=2&page_size=1\",\"previous\":null,\"results\":[{\"id\":1,\"staff_id\":\"1221221\",\"first_name\":\"wjjw\",\"last_name\":\"wjjw\",\"email\":\"rotisho@gmail.com\",\"department\":\"ITECO\",\"branch\":\"LAGOS\",\"driver_status\":\"available\",\"is_active\":true,\"created_at\":\"2026-10-08T07:51:09.726923-04:00\",\"updated_at\":\"2026-10-08T07:51:48.052753-04:00\",\"user\":null}]}"
         }
       ],
       "event": [
@@ -303,6 +417,102 @@
               "    const body = pm.response.json();",
               "    pm.expect(body).to.have.property('name');",
               "    pm.expect(body).to.have.property('timezone');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get Admin User Detail",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token {{admin_token}}"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/admin/users/{{user_id}}/"
+      },
+      "response": [
+        {
+          "name": "200 OK - Live 2026-10-10",
+          "originalRequest": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Token {{admin_token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/admin/users/{{user_id}}/"
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "cookie": [],
+          "body": "{\"id\":1,\"username\":\"telnet\",\"first_name\":\"\",\"last_name\":\"\",\"email\":\"topafgg@gmail.com\",\"is_active\":true,\"is_superuser\":true,\"role\":\"admin\",\"department\":null}"
+        }
+      ],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('admin can retrieve a user detail', function () {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.json().id).to.eql(Number(pm.variables.get('user_id')));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get Admin Staff Detail",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token {{admin_token}}"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/admin/staff/{{staff_id}}/"
+      },
+      "response": [
+        {
+          "name": "200 OK - Live 2026-10-10",
+          "originalRequest": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Token {{admin_token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/admin/staff/{{staff_id}}/"
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "cookie": [],
+          "body": "{\"id\":1,\"staff_id\":\"1221221\",\"first_name\":\"wjjw\",\"last_name\":\"wjjw\",\"email\":\"rotisho@gmail.com\",\"department\":\"ITECO\",\"branch\":\"LAGOS\",\"driver_status\":\"available\",\"is_active\":true,\"created_at\":\"2026-10-08T07:51:09.726923-04:00\",\"updated_at\":\"2026-10-08T07:51:48.052753-04:00\",\"user\":null}"
+        }
+      ],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('admin can retrieve a staff detail', function () {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.json().id).to.eql(Number(pm.variables.get('staff_id')));",
               "});"
             ]
           }

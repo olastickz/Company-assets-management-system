@@ -19,15 +19,34 @@ import logging
 from openpyxl import Workbook
 import uuid
 from urllib.parse import urlencode, urlparse, parse_qs
-from .models import CompanyAsset, Vehicle, MaintenanceItem, MaintenanceRequest, OfficeEquipment, OfficeEquipmentMaintenance, AuditLog, CompanyDocument, EquipmentTransfer, StaffApplication, StaffMember, Asset, AssetRelationship, DriverRequest
+from .models import CompanyAsset, Vehicle, MaintenanceItem, MaintenanceRequest, OfficeEquipment, OfficeEquipmentMaintenance, AuditLog, CompanyDocument, EquipmentTransfer, StaffApplication, StaffMember, Asset, AssetRelationship, AssetAssignmentRequest, DriverRequest
+from .asset_assignment_workflow import (
+    AssignmentWorkflowError,
+    approve_assignment_request,
+    reject_assignment_request,
+    save_record_with_assignment_request,
+    submit_assignment_request,
+)
 
 # Logger for application events
 logger = logging.getLogger(__name__)
+
+SPECIALIST_MANAGER_ROLES = {'document_manager', 'vehicle_manager', 'equipment_manager'}
+
+
+def _deny_cross_domain_manager(user, allowed_role):
+    role = get_user_role(user)
+    if role in SPECIALIST_MANAGER_ROLES and role != allowed_role:
+        return HttpResponseForbidden('Access denied')
+    return None
+
+
 from .forms import CompanyAssetForm, VehicleForm, MaintenanceItemForm, MaintenanceRequestForm, OfficeEquipmentForm, OfficeEquipmentMaintenanceForm, EquipmentTransferForm, CompanyDocumentForm, StaffMemberForm, DriverRequestForm, DriverAssignmentForm
 from .staff_onboarding import provision_staff_account
 from .permissions import (
     require_admin, require_manager, require_role, is_admin, is_manager, is_driver,
     get_user_role, log_audit, get_client_ip,
+    has_role_permission,
     can_view_company_documents, can_create_company_documents,
     can_edit_company_documents, can_delete_company_documents,
     can_request_driver, can_assign_driver,
@@ -298,6 +317,23 @@ def dashboard(request):
 
     current_role = get_user_role(request.user)
     staff_profile = getattr(request.user, 'staff_profile', None)
+    if current_role in {'document_manager', 'vehicle_manager', 'equipment_manager'}:
+        if not has_role_permission(request.user, 'vehicles', 'view'):
+            vehicles = CompanyAsset.objects.none()
+        if not has_role_permission(request.user, 'equipment', 'view'):
+            equipments = OfficeEquipment.objects.none()
+        if current_role == 'vehicle_manager':
+            documents = documents.filter(
+                Q(related_vehicle__isnull=False)
+                | Q(related_asset__asset_type='vehicle')
+            ).distinct()
+        elif current_role == 'equipment_manager':
+            documents = documents.filter(
+                Q(related_equipment__isnull=False)
+                | Q(related_asset__asset_type='equipment')
+            ).distinct()
+        elif not has_role_permission(request.user, 'documents', 'view'):
+            documents = CompanyDocument.objects.none()
     if current_role == 'staff':
         if staff_profile is not None:
             assigned_staff_id = str(staff_profile.pk)
@@ -556,6 +592,11 @@ def dashboard(request):
 
     vehicle_due_dates = CompanyAsset.objects.exclude(maintenance_due_date__isnull=True)
     equipment_due_dates = OfficeEquipment.objects.exclude(maintenance_due_date__isnull=True)
+    if current_role in {'document_manager', 'vehicle_manager', 'equipment_manager'}:
+        if not has_role_permission(request.user, 'vehicle_maintenance', 'view'):
+            vehicle_due_dates = vehicle_due_dates.none()
+        if not has_role_permission(request.user, 'equipment_maintenance', 'view'):
+            equipment_due_dates = equipment_due_dates.none()
     pending_maintenance_count = (
         vehicle_due_dates.filter(maintenance_due_date__gte=today).count()
         + equipment_due_dates.filter(maintenance_due_date__gte=today).count()
@@ -575,7 +616,12 @@ def dashboard(request):
         1 for equipment in equipments
         if get_equipment_status(equipment, today, expiring_threshold) in ('expired', 'expiring')
     )
-    equipment_transfers = EquipmentTransfer.objects.count()
+    equipment_transfers = (
+        EquipmentTransfer.objects.count()
+        if current_role not in {'document_manager', 'vehicle_manager', 'equipment_manager'}
+        or has_role_permission(request.user, 'transfers', 'view')
+        else 0
+    )
 
     recent_documents_count = documents.filter(created_at__gte=today - timedelta(days=30)).count()
     expiring_documents_count = documents.filter(expiry_date__gte=today, expiry_date__lte=expiring_threshold).count()
@@ -705,14 +751,21 @@ def dashboard(request):
 def equipment_maintenance_list(request):
     today = timezone.now().date()
     due_items = []
-    for vehicle in CompanyAsset.objects.exclude(maintenance_due_date__isnull=True):
+    vehicle_due_items = CompanyAsset.objects.exclude(maintenance_due_date__isnull=True)
+    equipment_due_items = OfficeEquipment.objects.exclude(maintenance_due_date__isnull=True)
+    if get_user_role(request.user) in {'document_manager', 'vehicle_manager', 'equipment_manager'}:
+        if not has_role_permission(request.user, 'vehicle_maintenance', 'view'):
+            vehicle_due_items = vehicle_due_items.none()
+        if not has_role_permission(request.user, 'equipment_maintenance', 'view'):
+            equipment_due_items = equipment_due_items.none()
+    for vehicle in vehicle_due_items:
         due_items.append({
             'asset': vehicle,
             'asset_type': 'Vehicle',
             'due_date': vehicle.maintenance_due_date,
             'url': django_reverse('asset_detail', args=[vehicle.pk]),
         })
-    for equipment in OfficeEquipment.objects.exclude(maintenance_due_date__isnull=True):
+    for equipment in equipment_due_items:
         due_items.append({
             'asset': equipment,
             'asset_type': 'Equipment',
@@ -915,6 +968,9 @@ def import_assets(request):
 # ----------------------------
 @login_required
 def vehicle_detail(request, pk):
+    denied = _deny_cross_domain_manager(request.user, 'vehicle_manager')
+    if denied:
+        return denied
     vehicle = get_object_or_404(Vehicle, pk=pk)
     maintenance_items = vehicle.maintenance_items.all()
     today = timezone.now().date()
@@ -987,36 +1043,44 @@ def release_vehicle_assignment(request, pk):
 # ----------------------------
 # Vehicle CRUD
 # ----------------------------
-@require_admin
+@require_manager(module='vehicles', action='create')
 def vehicle_create(request):
     if request.method == 'POST':
         form = VehicleForm(request.POST)
         back_url = request.POST.get('back_url') or get_back_url(request, django_reverse('dashboard'))
         if form.is_valid():
-            form.save()
-            messages.success(request, 'Asset added successfully.')
-            return redirect('dashboard')
+            try:
+                _, assignment_pending = save_record_with_assignment_request(form, request.user)
+            except AssignmentWorkflowError as error:
+                form.add_error('assigned_staff', str(error))
+            else:
+                messages.success(request, 'Asset added. Assignment is pending approval.' if assignment_pending else 'Asset added successfully.')
+                return redirect('dashboard')
     else:
         form = VehicleForm()
         back_url = get_back_url(request, django_reverse('dashboard'))
     return render(request, 'asset_form.html', {'form': form, 'title': 'Add Asset', 'back_url': back_url})
 
-@require_admin
+@require_manager(module='vehicles', action='edit')
 def vehicle_update(request, pk):
     vehicle = get_object_or_404(Vehicle, pk=pk)
     if request.method == 'POST':
         form = VehicleForm(request.POST, instance=vehicle)
         back_url = request.POST.get('back_url') or get_back_url(request, django_reverse('asset_detail', args=[pk]))
         if form.is_valid():
-            form.save()
-            messages.success(request, 'Asset updated successfully.')
-            return redirect('asset_detail', pk=pk)
+            try:
+                _, assignment_pending = save_record_with_assignment_request(form, request.user)
+            except AssignmentWorkflowError as error:
+                form.add_error('assigned_staff', str(error))
+            else:
+                messages.success(request, 'Asset updated. Assignment is pending approval.' if assignment_pending else 'Asset updated successfully.')
+                return redirect('asset_detail', pk=pk)
     else:
         form = VehicleForm(instance=vehicle)
         back_url = request.GET.get('back_url') or get_back_url(request, django_reverse('asset_detail', args=[pk]))
     return render(request, 'asset_form.html', {'form': form, 'title': 'Edit Asset', 'back_url': back_url})
 
-@require_admin
+@require_manager(module='vehicles', action='edit')
 def vehicle_update_type(request, pk):
     """Update only the asset type via modal quick edit"""
     vehicle = get_object_or_404(Vehicle, pk=pk)
@@ -1029,7 +1093,7 @@ def vehicle_update_type(request, pk):
             log_audit(request.user, 'update', 'vehicle', vehicle, f"Updated asset type to {vehicle.get_vehicle_type_display()}", get_client_ip(request))
     return redirect('asset_detail', pk=pk)
 
-@require_admin
+@require_manager(module='vehicles', action='delete')
 def vehicle_delete(request, pk):
     vehicle = get_object_or_404(Vehicle, pk=pk)
     if request.method == 'POST':
@@ -1046,8 +1110,7 @@ def vehicle_delete(request, pk):
 @login_required
 def maintenance_create(request, vehicle_pk):
     vehicle = get_object_or_404(Vehicle, pk=vehicle_pk)
-    current_role = get_user_role(request.user)
-    if current_role not in ['admin', 'manager']:
+    if not has_role_permission(request.user, 'vehicle_maintenance', 'create'):
         return HttpResponseForbidden('Access denied')
 
     if request.method == 'POST':
@@ -1063,7 +1126,7 @@ def maintenance_create(request, vehicle_pk):
         back_url = request.GET.get('back_url') or get_back_url(request, django_reverse('asset_detail', args=[vehicle_pk]))
     return render(request, 'maintenance_form.html', {'form': form, 'vehicle': vehicle, 'title': 'Add Maintenance', 'back_url': back_url})
 
-@require_manager
+@require_manager(module='vehicle_maintenance', action='edit')
 def maintenance_update(request, pk):
     maintenance = get_object_or_404(MaintenanceItem, pk=pk)
     if request.method == 'POST':
@@ -1077,7 +1140,7 @@ def maintenance_update(request, pk):
         back_url = request.GET.get('back_url') or get_back_url(request, django_reverse('asset_detail', args=[maintenance.vehicle.pk]))
     return render(request, 'maintenance_form.html', {'form': form, 'vehicle': maintenance.vehicle, 'title': 'Edit Maintenance', 'back_url': back_url})
 
-@require_manager
+@require_manager(module='vehicle_maintenance', action='delete')
 def maintenance_delete(request, pk):
     maintenance = get_object_or_404(MaintenanceItem, pk=pk)
     vehicle_pk = maintenance.vehicle.pk
@@ -1091,6 +1154,9 @@ def maintenance_delete(request, pk):
 
 @login_required
 def export_vehicles_excel(request):
+    denied = _deny_cross_domain_manager(request.user, 'vehicle_manager')
+    if denied:
+        return denied
     vehicles = Vehicle.objects.all().order_by('-updated_at')
     workbook = Workbook()
     sheet = workbook.active
@@ -1125,6 +1191,9 @@ def export_vehicles_excel(request):
 
 @login_required
 def export_vehicles_csv(request):
+    denied = _deny_cross_domain_manager(request.user, 'vehicle_manager')
+    if denied:
+        return denied
     vehicles = Vehicle.objects.all().order_by('-updated_at')
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="vehicles_export.csv"'
@@ -1155,6 +1224,9 @@ def export_vehicles_csv(request):
 @login_required
 def export_equipment_csv(request):
     """Export equipment to CSV with optional filtering."""
+    denied = _deny_cross_domain_manager(request.user, 'equipment_manager')
+    if denied:
+        return denied
     # Get filter parameters from request
     search_query = request.GET.get('search', '')
     status_filter = request.GET.getlist('status')
@@ -1310,6 +1382,9 @@ def export_equipment_csv(request):
 @login_required
 def export_equipment_excel(request):
     """Export equipment to Excel with optional filtering."""
+    denied = _deny_cross_domain_manager(request.user, 'equipment_manager')
+    if denied:
+        return denied
     # Use the same filtering logic as CSV export
     search_query = request.GET.get('search', '')
     status_filter = request.GET.getlist('status')
@@ -1467,14 +1542,20 @@ def export_equipment_excel(request):
     return response
 
 
-@require_admin
+@require_manager(module='equipment', action='create')
 def equipment_create(request):
     if request.method == 'POST':
         form = OfficeEquipmentForm(request.POST)
         back_url = request.POST.get('back_url') or get_back_url(request, django_reverse('equipment_list'))
         if form.is_valid():
-            form.save()
-            return redirect('equipment_list')
+            try:
+                _, assignment_pending = save_record_with_assignment_request(form, request.user)
+            except AssignmentWorkflowError as error:
+                form.add_error('assigned_staff', str(error))
+            else:
+                if assignment_pending:
+                    messages.success(request, 'Equipment added. Assignment is pending approval.')
+                return redirect('equipment_list')
     else:
         form = OfficeEquipmentForm()
         back_url = get_back_url(request, django_reverse('equipment_list'))
@@ -1486,7 +1567,7 @@ def equipment_create(request):
     })
 
 
-@require_admin
+@require_manager(module='equipment', action='edit')
 def equipment_update(request, pk):
     equipment = get_object_or_404(OfficeEquipment, pk=pk)
 
@@ -1494,8 +1575,14 @@ def equipment_update(request, pk):
         form = OfficeEquipmentForm(request.POST, instance=equipment)
         back_url = request.POST.get('back_url') or get_back_url(request, django_reverse('equipment_detail', args=[pk]))
         if form.is_valid():
-            form.save()
-            return redirect('equipment_detail', pk=pk)
+            try:
+                _, assignment_pending = save_record_with_assignment_request(form, request.user)
+            except AssignmentWorkflowError as error:
+                form.add_error('assigned_staff', str(error))
+            else:
+                if assignment_pending:
+                    messages.success(request, 'Equipment updated. Assignment is pending approval.')
+                return redirect('equipment_detail', pk=pk)
     else:
         form = OfficeEquipmentForm(instance=equipment)
         back_url = request.GET.get('back_url') or get_back_url(request, django_reverse('equipment_detail', args=[pk]))
@@ -1507,7 +1594,7 @@ def equipment_update(request, pk):
     })
 
 
-@require_admin
+@require_manager(module='equipment', action='delete')
 def equipment_delete(request, pk):
     equipment = get_object_or_404(OfficeEquipment, pk=pk)
     
@@ -1521,8 +1608,7 @@ def equipment_delete(request, pk):
 @login_required
 def equipment_maintenance_create(request, equipment_pk):
     equipment = get_object_or_404(OfficeEquipment, pk=equipment_pk)
-    current_role = get_user_role(request.user)
-    if current_role not in ['admin', 'manager']:
+    if not has_role_permission(request.user, 'equipment_maintenance', 'create'):
         return HttpResponseForbidden('Access denied')
 
     if request.method == 'POST':
@@ -1558,7 +1644,7 @@ def maintenance_request_create(request):
 
     return render(request, 'maintenance_request_form.html', {'form': form})
 
-@require_manager
+@require_manager(module='equipment_maintenance', action='edit')
 def equipment_maintenance_update(request, pk):
     maintenance = get_object_or_404(OfficeEquipmentMaintenance, pk=pk)
     if request.method == 'POST':
@@ -1572,7 +1658,7 @@ def equipment_maintenance_update(request, pk):
         back_url = request.GET.get('back_url') or get_back_url(request, django_reverse('equipment_detail', args=[maintenance.equipment.pk]))
     return render(request, 'equipment_maintenance_form.html', {'form': form, 'equipment': maintenance.equipment, 'title': 'Edit Maintenance', 'back_url': back_url})
 
-@require_manager
+@require_manager(module='equipment_maintenance', action='delete')
 def equipment_maintenance_delete(request, pk):
     maintenance = get_object_or_404(OfficeEquipmentMaintenance, pk=pk)
     
@@ -1800,6 +1886,7 @@ def bulk_upload_equipment(request):
 
 
 @login_required
+@require_manager(module='transfers', action='create')
 def equipment_transfer(request, pk):
     """Handle equipment transfer/handover to another staff member"""
     equipment = get_object_or_404(OfficeEquipment, pk=pk)
@@ -1807,32 +1894,25 @@ def equipment_transfer(request, pk):
         form = EquipmentTransferForm(request.POST)
         back_url = request.POST.get('back_url') or get_back_url(request, django_reverse('equipment_detail', args=[pk]))
         if form.is_valid():
-            from .models import EquipmentTransfer
-            
-            # Create the transfer record
-            transfer = EquipmentTransfer(
-                equipment=equipment,
-                transferred_from=equipment.assigned_user or 'Unassigned',
-                transferred_from_department='',
-                transferred_to=form.cleaned_data['transferred_to'],
-                transferred_to_department=form.cleaned_data.get('transferred_to_department', ''),
-                transferred_to_email=form.cleaned_data.get('transferred_to_email', ''),
-                reason=form.cleaned_data.get('reason', ''),
-                notes=form.cleaned_data.get('notes', ''),
-                recorded_by=request.user
-            )
-            transfer.save()
-            
-            # Update the equipment's assigned user
-            equipment.assigned_user = form.cleaned_data['transferred_to']
-            equipment.save()
-            
-            # Log the action
-            log_audit(request.user, 'update', 'OfficeEquipment', pk, 
-                     description=f"Transferred {equipment.name} to {form.cleaned_data['transferred_to']}")
-            
-            messages.success(request, f"Equipment '{equipment.name}' has been successfully transferred to {form.cleaned_data['transferred_to']}.")
-            return redirect('equipment_detail', pk=pk)
+            staff_member = form.cleaned_data['transferred_to']
+            try:
+                assignment = submit_assignment_request(
+                    equipment.asset,
+                    staff_member,
+                    request.user,
+                    reason=form.cleaned_data.get('reason', ''),
+                    notes=form.cleaned_data.get('notes', ''),
+                )
+            except AssignmentWorkflowError as error:
+                form.add_error('transferred_to', str(error))
+            else:
+                if assignment is None:
+                    messages.info(request, 'This equipment is already assigned to that staff member.')
+                else:
+                    log_audit(request.user, 'create', 'AssetAssignmentRequest', assignment.pk,
+                              description=f'Requested transfer of {equipment.name} to {staff_member}')
+                    messages.success(request, 'Transfer request submitted for approval. The current assignment has not changed.')
+                return redirect('equipment_detail', pk=pk)
     else:
         form = EquipmentTransferForm()
         back_url = request.GET.get('back_url') or get_back_url(request, django_reverse('equipment_detail', args=[pk]))
@@ -1846,9 +1926,14 @@ def equipment_transfer(request, pk):
 
 
 @login_required
+@require_manager(module='transfers', action='view')
 def equipment_transfer_history(request, pk):
     """Display transfer history for an equipment"""
     from .models import EquipmentTransfer
+
+    denied = _deny_cross_domain_manager(request.user, 'equipment_manager')
+    if denied:
+        return denied
     
     equipment = get_object_or_404(OfficeEquipment, pk=pk)
     transfers = EquipmentTransfer.objects.filter(equipment=equipment).order_by('-transfer_date')
@@ -1877,6 +1962,9 @@ def equipment_transfer_history(request, pk):
 @login_required
 def equipment_list(request):
     """Display all office equipment with advanced filtering and pagination."""
+    denied = _deny_cross_domain_manager(request.user, 'equipment_manager')
+    if denied:
+        return denied
     search_query = request.GET.get('search', '')
     status_filter = request.GET.getlist('status')
     category_filter = request.GET.get('category', '')
@@ -2148,6 +2236,9 @@ def equipment_softworks(request):
 
 def equipment_list_filtered(request, **filters):
     """Helper function to display filtered equipment lists."""
+    denied = _deny_cross_domain_manager(request.user, 'equipment_manager')
+    if denied:
+        return denied
     title = filters.pop('title', 'Equipment')
     search_query = request.GET.get('search', '')
     status_filter = request.GET.getlist('status')
@@ -2273,6 +2364,9 @@ def equipment_list_filtered(request, **filters):
 
 @login_required
 def equipment_detail(request, pk):
+    denied = _deny_cross_domain_manager(request.user, 'equipment_manager')
+    if denied:
+        return denied
     equipment = get_object_or_404(OfficeEquipment, pk=pk)
     maintenance_records = equipment.maintenance_records.all()
     assignment_history = equipment.asset.assignments.all() if equipment.asset else []
@@ -2327,7 +2421,7 @@ def release_equipment_assignment(request, pk):
 # ===== Company Documents Views =====
 
 @login_required(login_url='login')
-@require_manager
+@require_manager(module='documents', action='view')
 def company_documents_list(request):
     """List all company documents with filtering by status, type, scope, and search."""
     status_filter = request.GET.get('status', 'all')
@@ -2476,7 +2570,7 @@ def company_documents_list(request):
     return render(request, 'company_documents/list.html', context)
 
 
-@require_manager
+@require_manager(module='documents', action='view')
 def company_documents_counts(request):
     """Return JSON payload of document counts used by frontend to refresh counts via AJAX."""
     from .models import Asset, AssetRelationship
@@ -2549,11 +2643,10 @@ def _get_available_drivers():
 
 
 @login_required
-@require_role('staff', 'driver', 'manager', 'admin')
+@require_role('staff', 'driver', 'vehicle_manager', 'admin')
 def driver_requests_list(request):
     """List driver requests for managers and the requesting staff/driver."""
-    current_role = get_user_role(request.user)
-    if current_role in ['manager', 'admin']:
+    if is_admin(request.user) or get_user_role(request.user) == 'vehicle_manager':
         requests_qs = DriverRequest.objects.all().order_by('-created_at')
     else:
         staff_profile = getattr(request.user, 'staff_profile', None)
@@ -2583,7 +2676,7 @@ def driver_requests_list(request):
 
 
 @login_required
-@require_role('staff', 'driver', 'manager', 'admin')
+@require_role('staff', 'driver', 'vehicle_manager', 'admin')
 def driver_request_create(request):
     staff_profile = getattr(request.user, 'staff_profile', None)
     if request.method == 'POST':
@@ -2612,14 +2705,13 @@ def driver_request_create(request):
 
 
 @login_required
-@require_role('staff', 'driver', 'manager', 'admin')
+@require_role('staff', 'driver', 'vehicle_manager', 'admin')
 def driver_request_detail(request, pk):
     driver_request = get_object_or_404(DriverRequest, pk=pk)
-    current_role = get_user_role(request.user)
     staff_profile = getattr(request.user, 'staff_profile', None)
 
     if not (
-        current_role in ['manager', 'admin'] or
+        is_admin(request.user) or get_user_role(request.user) == 'vehicle_manager' or
         driver_request.requester_user == request.user or
         (driver_request.assigned_driver and driver_request.assigned_driver == staff_profile)
     ):
@@ -2636,7 +2728,7 @@ def driver_request_detail(request, pk):
 
 
 @login_required
-@require_manager
+@require_manager(module='requests', action='approve')
 def driver_request_assign(request, pk):
     driver_request = get_object_or_404(DriverRequest, pk=pk)
     if request.method != 'POST':
@@ -2691,7 +2783,7 @@ def _my_assets_counts_removed_for_prd(request):
     return JsonResponse({'vehicles': 0, 'equipment': 0, 'documents': 0, 'total': 0})
 
 
-@require_manager
+@require_manager(module='documents', action='view')
 def company_documents_data(request):
     """Return JSON list of documents for current filters/pagination for frontend updates."""
     # Build queryset using similar filters as company_documents_list
@@ -2788,8 +2880,18 @@ def company_documents_data(request):
 
 def _can_view_company_document(user, document):
     current_role = get_user_role(user)
-    if current_role in ['admin', 'manager']:
+    if has_role_permission(user, 'documents', 'view'):
         return True
+    if current_role == 'vehicle_manager':
+        return bool(
+            document.related_vehicle_id
+            or (document.related_asset and document.related_asset.asset_type == 'vehicle')
+        )
+    if current_role == 'equipment_manager':
+        return bool(
+            document.related_equipment_id
+            or (document.related_asset and document.related_asset.asset_type == 'equipment')
+        )
     if current_role == 'driver':
         staff_profile = getattr(user, 'staff_profile', None)
         if not staff_profile:
@@ -2965,10 +3067,14 @@ def staff_import_legacy(request):
                 # Assign to equipment
                 eq_qs = OfficeEquipment.objects.filter(assigned_user__iexact=name)
                 for eq in eq_qs:
-                    eq.assigned_staff = staff
-                    eq.save()
-                    assigned_count += 1
-                    log_audit(request.user, 'update', 'officeequipment', object_id=eq.pk, description=f'Auto-assigned equipment {eq.pk} to staff {staff.staff_id}')
+                    if eq.asset:
+                        try:
+                            assignment = submit_assignment_request(eq.asset, staff, request.user)
+                        except AssignmentWorkflowError:
+                            continue
+                        if assignment:
+                            assigned_count += 1
+                            log_audit(request.user, 'create', 'AssetAssignmentRequest', object_id=assignment.pk, description=f'Requested equipment {eq.pk} assignment to staff {staff.staff_id}')
 
                 # Assign to documents
                 doc_qs = CompanyDocument.objects.filter(responsible_person__iexact=name)
@@ -3014,8 +3120,57 @@ def staff_autocomplete(request):
     return JsonResponse(results, safe=False)
 
 
+@login_required
+def asset_assignment_approvals(request):
+    requests = AssetAssignmentRequest.objects.filter(status='pending').select_related(
+        'asset', 'previous_staff', 'requested_staff', 'requested_by',
+        'supervisor_approver', 'reporting_manager_approver',
+    )
+    if is_admin(request.user):
+        requests = requests.filter(
+            Q(requires_superadmin_approval=True, superadmin_approved_at__isnull=True) |
+            Q(supervisor_approval_required=True, supervisor_approved_at__isnull=True) &
+            (Q(supervisor_approver__isnull=True) | Q(supervisor_approver__is_active=False)) |
+            Q(reporting_manager_approval_required=True, reporting_manager_approved_at__isnull=True) &
+            (Q(reporting_manager_approver__isnull=True) | Q(reporting_manager_approver__is_active=False))
+        )
+    else:
+        requests = requests.filter(
+            Q(supervisor_approver=request.user, supervisor_approved_at__isnull=True) |
+            Q(reporting_manager_approver=request.user, reporting_manager_approved_at__isnull=True)
+        )
+    return render(request, 'asset_assignment_approvals.html', {'assignment_requests': requests})
+
+
+@login_required
+@require_POST
+def asset_assignment_approval_action(request, pk):
+    action = request.POST.get('action')
+    try:
+        if action == 'approve':
+            assignment = approve_assignment_request(pk, request.user)
+            if assignment.status == 'approved':
+                messages.success(request, 'Assignment approved and applied.')
+            elif assignment.status == 'rejected':
+                messages.warning(request, assignment.rejection_note)
+            else:
+                messages.success(request, 'Your approval was recorded. Other approvals are still required.')
+        elif action == 'reject':
+            reject_assignment_request(pk, request.user, request.POST.get('rejection_note', '').strip())
+            messages.success(request, 'Assignment request rejected.')
+        else:
+            return HttpResponseForbidden('Invalid approval action.')
+    except AssetAssignmentRequest.DoesNotExist:
+        return HttpResponseForbidden('Assignment request not found.')
+    except PermissionError as error:
+        return HttpResponseForbidden(str(error))
+    except AssignmentWorkflowError as error:
+        messages.error(request, str(error))
+    return redirect('asset_assignment_approvals')
+
+
 @login_required(login_url='login')
-@require_admin
+@require_manager(module='documents', action='create')
 def company_document_create(request):
     """Create a new company document"""
     related_vehicle_id = request.GET.get('related_vehicle')
@@ -3057,7 +3212,7 @@ def company_document_create(request):
 
 
 @login_required(login_url='login')
-@require_manager
+@require_manager(module='documents', action='edit')
 def company_document_edit(request, pk):
     """Edit an existing company document"""
     document = get_object_or_404(CompanyDocument, pk=pk)
@@ -3092,7 +3247,7 @@ def company_document_edit(request, pk):
 
 
 @login_required(login_url='login')
-@require_manager
+@require_manager(module='documents', action='delete')
 def company_document_delete(request, pk):
     """Delete a company document"""
     document = get_object_or_404(CompanyDocument, pk=pk)

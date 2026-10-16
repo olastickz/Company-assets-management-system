@@ -100,9 +100,56 @@ def is_admin(user):
 
 
 def is_manager(user):
-    """Check if user is a manager or higher"""
-    role = get_user_role(user)
-    return role in ['admin', 'manager']
+    """Check if the user is an administrator."""
+    return is_admin(user)
+
+
+def can_manage_vehicles(user):
+    return has_role_permission(user, 'vehicles', 'edit')
+
+
+def can_view_vehicles(user):
+    return has_role_permission(user, 'vehicles', 'view')
+
+
+def can_manage_equipment(user):
+    return has_role_permission(user, 'equipment', 'edit')
+
+
+def can_view_equipment(user):
+    return has_role_permission(user, 'equipment', 'view')
+
+
+def can_manage_transfers(user):
+    return has_role_permission(user, 'transfers', 'create')
+
+
+def can_view_transfers(user):
+    return has_role_permission(user, 'transfers', 'view')
+
+
+def can_create_vehicle_maintenance(user):
+    return has_role_permission(user, 'vehicle_maintenance', 'create')
+
+
+def can_edit_vehicle_maintenance(user):
+    return has_role_permission(user, 'vehicle_maintenance', 'edit')
+
+
+def can_delete_vehicle_maintenance(user):
+    return has_role_permission(user, 'vehicle_maintenance', 'delete')
+
+
+def can_create_equipment_maintenance(user):
+    return has_role_permission(user, 'equipment_maintenance', 'create')
+
+
+def can_edit_equipment_maintenance(user):
+    return has_role_permission(user, 'equipment_maintenance', 'edit')
+
+
+def can_delete_equipment_maintenance(user):
+    return has_role_permission(user, 'equipment_maintenance', 'delete')
 
 
 def is_driver(user):
@@ -111,33 +158,33 @@ def is_driver(user):
 
 
 def can_view_company_documents(user):
-    """Managers and admins can view the company documents workspace."""
-    return is_manager(user)
+    """Check whether the user can view company documents."""
+    return has_role_permission(user, 'documents', 'view')
 
 
 def can_create_company_documents(user):
-    """Only administrators can create company documents."""
-    return is_admin(user)
+    """Check whether the user can create company documents."""
+    return has_role_permission(user, 'documents', 'create')
 
 
 def can_edit_company_documents(user):
-    """Managers and admins can update company document metadata."""
-    return is_manager(user)
+    """Check whether the user can edit company documents."""
+    return has_role_permission(user, 'documents', 'edit')
 
 
 def can_delete_company_documents(user):
-    """Managers and admins can delete company documents through the existing management flow."""
-    return is_manager(user)
+    """Check whether the user can delete company documents."""
+    return has_role_permission(user, 'documents', 'delete')
 
 
 def can_request_driver(user):
-    """Drivers, staff, and managers can request driver assignment support."""
-    return get_user_role(user) in ['driver', 'staff', 'manager']
+    """Drivers, staff, and Vehicle Managers can request driver assignment support."""
+    return get_user_role(user) in ['driver', 'staff', 'vehicle_manager']
 
 
 def can_assign_driver(user):
-    """Only managers and admins can assign drivers to requests."""
-    return is_manager(user)
+    """Check whether the user may approve and assign driver requests."""
+    return has_role_permission(user, 'requests', 'approve', approval_level='level_1')
 
 
 def can_access_admin_tools(user):
@@ -151,13 +198,21 @@ def can_manage_staff(user):
 
 
 def can_create_assets(user):
-    """Asset creation is an administrator-only workflow."""
-    return is_admin(user)
+    """Check whether the user can create vehicles."""
+    return has_role_permission(user, 'vehicles', 'create')
+
+
+def can_delete_assets(user):
+    return has_role_permission(user, 'vehicles', 'delete')
 
 
 def can_create_equipment(user):
-    """Equipment creation is an administrator-only workflow."""
-    return is_admin(user)
+    """Check whether the user can create equipment."""
+    return has_role_permission(user, 'equipment', 'create')
+
+
+def can_delete_equipment(user):
+    return has_role_permission(user, 'equipment', 'delete')
 
 
 def can_bulk_import_assets(user):
@@ -178,7 +233,7 @@ def can_export_assets(user):
 def is_staff(user):
     """Check if user is staff or higher"""
     role = get_user_role(user)
-    return role in ['admin', 'manager', 'staff']
+    return role in ['admin', 'document_manager', 'vehicle_manager', 'equipment_manager', 'staff']
 
 
 def log_audit(user, action, model_name, object_id=None, description=None, ip_address=None):
@@ -247,19 +302,26 @@ def require_admin(view_func):
     return wrapper
 
 
-def require_manager(view_func):
-    """Decorator to require manager role or higher"""
-    @wraps(view_func)
-    @login_required
-    def wrapper(request, *args, **kwargs):
-        if not is_manager(request.user):
-            log_audit(
-                request.user,
-                'permission_denied',
-                'manager_view',
-                description=f"Attempted manager access: {view_func.__name__}",
-                ip_address=get_client_ip(request)
+def require_manager(view_func=None, *, module=None, action='view'):
+    """Require the existing manager role, or a module-specific permission."""
+    def decorator(target_view):
+        @wraps(target_view)
+        @login_required
+        def wrapper(request, *args, **kwargs):
+            allowed = (
+                has_role_permission(request.user, module, action)
+                if module else is_manager(request.user)
             )
-            return HttpResponseForbidden('Manager access required')
-        return view_func(request, *args, **kwargs)
-    return wrapper
+            if not allowed:
+                log_audit(
+                    request.user,
+                    'permission_denied',
+                    'manager_view',
+                    description=f"Attempted manager access: {target_view.__name__}",
+                    ip_address=get_client_ip(request)
+                )
+                return HttpResponseForbidden('Manager access required')
+            return target_view(request, *args, **kwargs)
+        return wrapper
+
+    return decorator(view_func) if view_func else decorator

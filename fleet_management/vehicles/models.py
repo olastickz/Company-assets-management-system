@@ -362,7 +362,9 @@ class EquipmentWorkOrder(models.Model):
 class UserRole(models.Model):
     ROLE_CHOICES = [
         ('admin', 'Administrator'),
-        ('manager', 'Manager'),
+        ('document_manager', 'Document Manager'),
+        ('vehicle_manager', 'Vehicle Manager'),
+        ('equipment_manager', 'Equipment Manager'),
         ('driver', 'Driver'),
         ('staff', 'Staff'),
     ]
@@ -432,6 +434,14 @@ class StaffMember(models.Model):
         blank=True,
         null=True,
         help_text='Primary Telnet branch'
+    )
+    reporting_manager = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='direct_reports',
+    )
+    supervisor = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='supervised_staff',
     )
     driver_status = models.CharField(
         max_length=20,
@@ -654,6 +664,78 @@ class AssetAssignmentHistory(models.Model):
     def __str__(self):
         staff = str(self.staff_member) if self.staff_member else 'Unassigned'
         return f"{self.asset} → {staff} ({self.assigned_at.date()})"
+
+
+class AssetAssignmentRequest(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending approval'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+
+    asset = models.ForeignKey(Asset, on_delete=models.CASCADE, related_name='assignment_requests')
+    previous_staff = models.ForeignKey(
+        StaffMember, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='outgoing_assignment_requests',
+    )
+    requested_staff = models.ForeignKey(
+        StaffMember, on_delete=models.CASCADE, related_name='incoming_assignment_requests',
+    )
+    requested_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, related_name='asset_assignment_requests',
+    )
+    supervisor_approver = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='supervisor_asset_approvals',
+    )
+    supervisor_approved_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='approved_supervisor_asset_assignments',
+    )
+    supervisor_approved_at = models.DateTimeField(null=True, blank=True)
+    reporting_manager_approver = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='manager_asset_approvals',
+    )
+    reporting_manager_approved_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='approved_manager_asset_assignments',
+    )
+    reporting_manager_approved_at = models.DateTimeField(null=True, blank=True)
+    supervisor_approval_required = models.BooleanField(default=False)
+    reporting_manager_approval_required = models.BooleanField(default=False)
+    requires_superadmin_approval = models.BooleanField(default=False)
+    superadmin_approved_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='approved_superadmin_asset_assignments',
+    )
+    superadmin_approved_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    reason = models.CharField(max_length=255, blank=True)
+    notes = models.TextField(blank=True)
+    rejection_note = models.TextField(blank=True)
+    rejected_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='rejected_asset_assignments',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    @property
+    def approvals_complete(self):
+        supervisor_approved = (
+            not self.supervisor_approval_required or self.supervisor_approved_at is not None
+        )
+        manager_approved = (
+            not self.reporting_manager_approval_required or self.reporting_manager_approved_at is not None
+        )
+        superadmin_approved = (
+            not self.requires_superadmin_approval or self.superadmin_approved_at is not None
+        )
+        return supervisor_approved and manager_approved and superadmin_approved
 
 
 # ========================

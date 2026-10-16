@@ -1,13 +1,13 @@
 {
   "info": {
     "name": "Settings API v1",
-    "description": "Settings API requests with tested saved responses.",
+    "description": "Settings API requests against the live Telnet deployment. Refresh examples only after server changes are verified.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "base_url",
-      "value": "http://127.0.0.1:8000"
+      "value": "http://207.180.246.69:8038"
     },
     {
       "key": "token",
@@ -16,6 +16,18 @@
     {
       "key": "delivery_id",
       "value": "1"
+    },
+    {
+      "key": "current_password",
+      "value": ""
+    },
+    {
+      "key": "new_password",
+      "value": ""
+    },
+    {
+      "key": "password_confirm",
+      "value": ""
     }
   ],
   "item": [
@@ -143,7 +155,7 @@
           "_postman_previewlanguage": "json",
           "header": [],
           "cookie": [],
-          "body": "{\"id\":4,\"schedule_time\":\"10:00:00\",\"alert_days\":15,\"is_enabled\":true,\"last_sent\":\"2026-07-14T10:41:05.600417Z\",\"updated_at\":\"2026-09-14T17:24:52.378970Z\"}"
+          "body": "{\"id\":1,\"schedule_time\":\"10:00:00\",\"alert_days\":15,\"is_enabled\":true,\"last_sent\":\"2026-10-10T09:00:03.540843Z\",\"updated_at\":\"2026-10-05T18:16:30.120841Z\"}"
         }
       ]
     },
@@ -177,7 +189,7 @@
           "_postman_previewlanguage": "json",
           "header": [],
           "cookie": [],
-          "body": "{\"id\":3,\"username\":\"Olastickz\",\"first_name\":\"\",\"last_name\":\"\",\"email\":\"[redacted]\"}"
+          "body": "{\"id\":1,\"username\":\"telnet\",\"first_name\":\"\",\"last_name\":\"\",\"email\":\"topafgg@gmail.com\"}"
         }
       ]
     },
@@ -238,6 +250,112 @@
           "header": [],
           "cookie": [],
           "body": "{\"id\":3,\"username\":\"Olastickz\",\"first_name\":\"Postman\",\"last_name\":\"Tester\",\"email\":\"[redacted]\"}"
+        }
+      ]
+    },
+    {
+      "name": "Change Password",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token {{token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/settings/password/",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"current_password\": \"{{current_password}}\", \"new_password\": \"{{new_password}}\", \"password_confirm\": \"{{password_confirm}}\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": [
+        {
+          "name": "200 OK - Password changed",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Token {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/settings/password/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"current_password\": \"{{current_password}}\", \"new_password\": \"{{new_password}}\", \"password_confirm\": \"{{password_confirm}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "cookie": [],
+          "body": "{\"detail\": \"Password changed successfully.\"}"
+        },
+        {
+          "name": "400 Bad Request - Current password incorrect",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Token {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/settings/password/",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"current_password\": \"{{current_password}}\", \"new_password\": \"{{new_password}}\", \"password_confirm\": \"{{password_confirm}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "cookie": [],
+          "body": "{\"current_password\": \"Current password is incorrect.\"}"
+        }
+      ],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('password is changed successfully', function () {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.json().detail).to.eql('Password changed successfully.');",
+              "});"
+            ]
+          }
         }
       ]
     }

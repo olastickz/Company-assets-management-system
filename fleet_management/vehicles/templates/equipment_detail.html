@@ -159,7 +159,7 @@
 <div class="card-panel">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
         <h2 style="margin:0; color:#0F172A;">Linked Documents</h2>
-        {% if is_admin %}
+        {% if can_create_company_documents %}
         <a href="{% url 'company_document_create' %}?related_equipment={{ equipment.pk }}&back_url={{ request.get_full_path|urlencode }}" class="button-inline" style="white-space:nowrap;">📄 Create Equipment Document</a>
         {% endif %}
     </div>
@@ -236,7 +236,7 @@
             <h2 style="margin:0; color:#0F172A;">Maintenance Records</h2>
             <p style="margin:8px 0 0; color:#64748B;">Track equipment maintenance, due dates, and costs.</p>
         </div>
-        {% if is_admin %}
+        {% if can_create_equipment_maintenance %}
         <a href="{% url 'equipment_maintenance_create' equipment.pk %}" class="button-inline">+ Add Maintenance Record</a>
         {% elif can_report_maintenance %}
         <a href="{% url 'maintenance_request_create' %}" class="button-inline">Report Maintenance Issue</a>
@@ -250,7 +250,7 @@
                     <th>Maintenance Date</th>
                     <th>Due Date</th>
                     <th>Cost</th>
-                    {% if is_admin %}<th style="text-align:center;">Actions</th>{% endif %}
+                    {% if can_edit_equipment_maintenance or can_delete_equipment_maintenance %}<th style="text-align:center;">Actions</th>{% endif %}
                 </tr>
             </thead>
             <tbody>
@@ -260,16 +260,20 @@
                     <td>{{ record.maintenance_date|date:"M d, Y" }}</td>
                     <td>{{ record.due_date|date:"M d, Y"|default:"N/A" }}</td>
                     <td>{{ record.cost|floatformat:2|default:"N/A" }}</td>
-                    {% if is_admin %}
+                    {% if can_edit_equipment_maintenance or can_delete_equipment_maintenance %}
                     <td style="text-align:center;">
+                        {% if can_edit_equipment_maintenance %}
                         <a href="{% url 'equipment_maintenance_update' record.pk %}" class="link">Edit</a>
+                        {% endif %}
+                        {% if can_delete_equipment_maintenance %}
                         <a href="{% url 'equipment_maintenance_delete' record.pk %}" class="link" style="margin-left:12px; color:#e74c3c;">Delete</a>
+                        {% endif %}
                     </td>
                     {% endif %}
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="{% if is_admin %}5{% else %}4{% endif %}" style="text-align:center; color:#64748B; padding:24px;">No maintenance records found.</td>
+                    <td colspan="{% if can_edit_equipment_maintenance or can_delete_equipment_maintenance %}5{% else %}4{% endif %}" style="text-align:center; color:#64748B; padding:24px;">No maintenance records found.</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -283,8 +287,8 @@
 </div>
 
 <div class="actions-block">
-    <a href="{% url 'equipment_transfer' equipment.pk %}" class="button-inline" style="background:#27ae60;">🔄 New Transfer</a>
-    <a href="{% url 'equipment_transfer_history' equipment.pk %}" class="button-inline">📋 View Transfer History</a>
+    {% if can_manage_transfers %}<a href="{% url 'equipment_transfer' equipment.pk %}" class="button-inline" style="background:#27ae60;">🔄 New Transfer</a>{% endif %}
+    {% if can_view_transfers %}<a href="{% url 'equipment_transfer_history' equipment.pk %}" class="button-inline">📋 View Transfer History</a>{% endif %}
     {% if is_admin %}
     <div style="display:inline-block; vertical-align:middle; margin-right:12px;">
         <div class="release-warning">
@@ -296,7 +300,11 @@
         <button type="submit" class="button-inline warning" onclick="return confirm('Release this equipment assignment? This will unassign the current staff.');">Release Assignment</button>
     </form>
     </div>
+    {% endif %}
+    {% if can_manage_equipment %}
     <a href="{% url 'equipment_update' equipment.pk %}?back_url={{ request.get_full_path|urlencode }}" class="button-inline">Edit Equipment</a>
+    {% endif %}
+    {% if can_delete_equipment %}
     <a href="{% url 'equipment_delete' equipment.pk %}?back_url={{ request.get_full_path|urlencode }}" class="button-inline" style="background:#e74c3c;">Delete Equipment</a>
     {% endif %}
 </div>

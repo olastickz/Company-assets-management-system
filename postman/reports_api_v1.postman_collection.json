@@ -7,11 +7,11 @@
   "variable": [
     {
       "key": "base_url",
-      "value": "http://127.0.0.1:8000"
+      "value": "http://207.180.246.69:8038"
     },
     {
       "key": "token",
-      "value": ""
+      "value": "{{token}}"
     },
     {
       "key": "delivery_id",
@@ -49,7 +49,7 @@
           "_postman_previewlanguage": "json",
           "header": [],
           "cookie": [],
-          "body": "{\"generated_at\": \"2026-09-14T17:24:34.731349Z\", \"assets\": {\"total\": 359, \"active\": 336, \"unassigned\": 20}, \"vehicles\": 15, \"equipment\": 6, \"documents\": {\"total\": 27, \"expired\": 4, \"expiring\": 2}, \"maintenance\": {\"vehicle_cost\": 260000.0, \"equipment_cost\": 128100.0}}"
+          "body": "{\"generated_at\": \"2026-10-10T15:22:46.243833Z\", \"assets\": {\"total\": 21, \"active\": 12, \"unassigned\": 21}, \"vehicles\": 15, \"equipment\": 6, \"documents\": {\"total\": 29, \"expired\": 7, \"expiring\": 5}, \"maintenance\": {\"vehicle_cost\": 0, \"equipment_cost\": 0}}"
         }
       ]
     },

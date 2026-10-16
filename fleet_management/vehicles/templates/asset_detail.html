@@ -83,8 +83,10 @@
             <p style="margin:6px 0 0; color:#64748B; line-height:1.6;">Review recent maintenance items for this asset.</p>
         </div>
         <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
-            {% if is_admin %}
+            {% if can_create_company_documents %}
             <a href="{% url 'company_document_create' %}?related_vehicle={{ vehicle.pk }}" class="button-inline">📄 Create Asset Document</a>
+            {% endif %}
+            {% if can_create_vehicle_maintenance %}
             <a href="{% url 'maintenance_create' vehicle.pk %}" class="button-inline">+ Add Maintenance Record</a>
             {% elif can_report_maintenance %}
             <a href="{% url 'maintenance_request_create' %}" class="button-inline">Report Maintenance Issue</a>
@@ -98,7 +100,7 @@
                     <th>Description</th>
                     <th>Date Performed</th>
                     <th>Cost</th>
-                    {% if is_admin %}<th style="text-align:center;">Actions</th>{% endif %}
+                    {% if can_edit_vehicle_maintenance or can_delete_vehicle_maintenance %}<th style="text-align:center;">Actions</th>{% endif %}
                 </tr>
             </thead>
             <tbody>
@@ -107,16 +109,20 @@
                     <td>{{ item.description }}</td>
                     <td>{{ item.date_performed|date:"M d, Y"|default:"N/A" }}</td>
                     <td>{{ item.cost|floatformat:2|default:"N/A" }}</td>
-                    {% if is_admin %}
+                    {% if can_edit_vehicle_maintenance or can_delete_vehicle_maintenance %}
                     <td style="text-align:center;">
+                        {% if can_edit_vehicle_maintenance %}
                         <a href="{% url 'maintenance_update' item.pk %}?back_url={{ request.get_full_path|urlencode }}" class="link">Edit</a>
+                        {% endif %}
+                        {% if can_delete_vehicle_maintenance %}
                         <a href="{% url 'maintenance_delete' item.pk %}?back_url={{ request.get_full_path|urlencode }}" class="link" style="margin-left:12px; color:#e74c3c;">Delete</a>
+                        {% endif %}
                     </td>
                     {% endif %}
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="{% if is_admin %}4{% else %}3{% endif %}" style="text-align:center; color:#64748B; padding:24px;">No maintenance records found</td>
+                    <td colspan="{% if can_edit_vehicle_maintenance or can_delete_vehicle_maintenance %}4{% else %}3{% endif %}" style="text-align:center; color:#64748B; padding:24px;">No maintenance records found</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -135,8 +141,16 @@
                     <button type="submit" class="button-inline warning" onclick="return confirm('Release this vehicle assignment? This will unassign the current staff.');">Release Assignment</button>
                     </form>
             </div>
+    </div>
+    {% endif %}
+    {% if can_manage_vehicles or can_delete_assets %}
+    <div class="action-row">
+        {% if can_manage_vehicles %}
         <a href="{% url 'asset_update' vehicle.pk %}?back_url={{ back_url|urlencode }}" class="button-inline">Edit Asset</a>
+        {% endif %}
+        {% if can_delete_assets %}
         <a href="{% url 'asset_delete' vehicle.pk %}?back_url={{ back_url|urlencode }}" class="button-inline" style="background:#e74c3c;">Delete Asset</a>
+        {% endif %}
     </div>
     {% endif %}
 </div>
@@ -183,7 +197,7 @@
         <div class="detail-card">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
                 <h2 style="margin:0;">Linked Documents</h2>
-                {% if is_admin %}
+                {% if can_create_company_documents %}
                 <a href="{% url 'company_document_create' %}?related_vehicle={{ vehicle.pk }}&back_url={{ request.get_full_path|urlencode }}" class="button-inline" style="white-space:nowrap;">📄 Create Document</a>
                 {% endif %}
             </div>

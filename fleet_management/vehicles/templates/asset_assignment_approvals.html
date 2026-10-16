@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+
+{% block title %}Asset Assignment Approvals{% endblock %}
+
+{% block content %}
+<main style="max-width:1100px; margin:24px auto; padding:0 18px;">
+    <div class="page-header">
+        <div>
+            <h1>Asset Assignment Approvals</h1>
+            <p>Review requests for assets being assigned to staff.</p>
+        </div>
+    </div>
+
+    {% if assignment_requests %}
+        {% for assignment in assignment_requests %}
+        <section class="section-card" style="margin-bottom:16px; padding:18px; border-radius:8px;">
+            <h2 style="margin:0 0 12px; font-size:1.15rem;">{{ assignment.asset.name }}</h2>
+            <div class="detail-grid">
+                <div><strong>Current staff:</strong> {{ assignment.previous_staff|default:'Unassigned' }}</div>
+                <div><strong>Requested staff:</strong> {{ assignment.requested_staff }}</div>
+                <div><strong>Requested by:</strong> {{ assignment.requested_by|default:'System' }}</div>
+                <div><strong>Reason:</strong> {{ assignment.reason|default:'Not provided' }}</div>
+            </div>
+            {% if assignment.notes %}<p><strong>Notes:</strong> {{ assignment.notes }}</p>{% endif %}
+            <p>
+                <strong>Supervisor:</strong>
+                {% if assignment.supervisor_approver %}{{ assignment.supervisor_approver.get_full_name|default:assignment.supervisor_approver.username }}{% else %}Superadmin approval required{% endif %}
+                {% if assignment.supervisor_approved_at %} (Approved){% endif %}
+                <br>
+                <strong>Reporting manager:</strong>
+                {% if assignment.reporting_manager_approver %}{{ assignment.reporting_manager_approver.get_full_name|default:assignment.reporting_manager_approver.username }}{% else %}Superadmin approval required{% endif %}
+                {% if assignment.reporting_manager_approved_at %} (Approved){% endif %}
+                {% if assignment.requires_superadmin_approval %}<br><strong>Superadmin:</strong> Approval required{% if assignment.superadmin_approved_at %} (Approved){% endif %}{% endif %}
+            </p>
+            <form method="post" action="{% url 'asset_assignment_approval_action' assignment.pk %}" style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+                {% csrf_token %}
+                <label style="flex:1; min-width:220px;">Rejection note
+                    <input type="text" name="rejection_note" maxlength="1000" style="display:block; width:100%; padding:8px; margin-top:4px;">
+                </label>
+                <button type="submit" name="action" value="approve" class="button" style="width:auto; padding:9px 16px;">Approve</button>
+                <button type="submit" name="action" value="reject" style="padding:9px 16px; border:0; border-radius:6px; background:#a52834; color:white; cursor:pointer;">Reject</button>
+            </form>
+        </section>
+        {% endfor %}
+    {% else %}
+        <section class="section-card" style="padding:20px; border-radius:8px;">No asset assignment approvals are waiting for you.</section>
+    {% endif %}
+</main>
+{% endblock %}

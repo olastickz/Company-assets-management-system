@@ -1,13 +1,13 @@
 {
   "info": {
     "name": "Documents API",
-    "description": "Document CRUD requests, including multipart file upload. POST, PATCH, and DELETE modify data; run against an isolated development/test database. The list and detail GET examples are current local snapshots captured 2026-10-09.",
+    "description": "Document CRUD requests for the live Telnet deployment. GET examples are verified against the active server; write actions should be used carefully in a test database.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "base_url",
-      "value": "http://127.0.0.1:8000"
+      "value": "http://207.180.246.69:8038"
     },
     {
       "key": "token",

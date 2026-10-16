@@ -1,13 +1,13 @@
 {
   "info": {
     "name": "Equipment Work Orders API",
-    "description": "Admin/manager requests for the equipment work-order queue. Includes token login and work-order listing.",
+    "description": "Admin/manager requests for the equipment work-order queue on the live Telnet deployment. Use verified examples and test credentials before mutating data.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "base_url",
-      "value": "http://127.0.0.1:8000",
+      "value": "http://207.180.246.69:8038",
       "type": "string"
     },
     {
@@ -167,7 +167,7 @@
               "value": "application/json"
             }
           ],
-          "body": "[{\"id\":1,\"equipment\":2025,\"machine_name\":\"LG Split Air Conditioner\",\"equipment_type\":\"ac\",\"office_location\":\"Port Harcourt\",\"work_type\":\"repair\",\"title\":\"Repair required: LG Split Air Conditioner\",\"report_name\":\"Repair required: LG Split Air Conditioner\",\"description\":\"Automatically created for existing equipment with status damaged.\",\"priority\":\"high\",\"status\":\"open\",\"due_date\":null,\"created_at\":\"2026-10-08T12:08:11.193919+01:00\",\"updated_at\":\"2026-10-08T12:08:11.193982+01:00\",\"completed_at\":null}]",
+          "body": "[{\"id\":1,\"equipment\":2,\"machine_name\":\"LG Split Air Conditioner\",\"equipment_type\":\"ac\",\"office_location\":\"Port Harcourt\",\"work_type\":\"repair\",\"title\":\"Repair required: LG Split Air Conditioner\",\"report_name\":\"Repair required: LG Split Air Conditioner\",\"description\":\"Automatically created when equipment status changed to Damaged.\",\"priority\":\"high\",\"status\":\"open\",\"due_date\":null,\"created_at\":\"2026-10-08T11:34:53.579226-04:00\",\"updated_at\":\"2026-10-08T11:34:53.579246-04:00\",\"completed_at\":null}]",
           "_postman_previewlanguage": "json"
         }
       ]

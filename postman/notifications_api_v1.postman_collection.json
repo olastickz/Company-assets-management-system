@@ -1,13 +1,13 @@
 {
   "info": {
     "name": "Notifications API v1",
-    "description": "Notification API requests. GET examples in this older collection are historical; use Local API Read-Only Smoke for redacted local snapshots captured 2026-10-09. This collection also contains writes: schedule/recipient changes, send-now can email recipients, and retry requeues a delivery. Run writes only against an isolated development/test database. Set delivery_id to a disposable test delivery before retrying.",
+    "description": "Notification API requests against the live Telnet deployment. Saved GET examples are verified from the active server. Use with caution on write actions and isolated test data.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "base_url",
-      "value": "http://127.0.0.1:8000"
+      "value": "http://207.180.246.69:8038"
     },
     {
       "key": "token",
@@ -16,6 +16,10 @@
     {
       "key": "delivery_id",
       "value": ""
+    },
+    {
+      "key": "recipient_id",
+      "value": "1"
     }
   ],
   "item": [
@@ -49,7 +53,7 @@
           "_postman_previewlanguage": "json",
           "header": [],
           "cookie": [],
-          "body": "{\"id\": 4, \"schedule_time\": \"10:00:00\", \"alert_days\": 15, \"is_enabled\": true, \"last_sent\": \"2026-07-14T10:41:05.600417Z\", \"updated_at\": \"2026-09-14T17:13:18.864454Z\"}"
+          "body": "{\"id\": 1, \"schedule_time\": \"10:00:00\", \"alert_days\": 15, \"is_enabled\": true, \"last_sent\": \"2026-10-10T09:00:03.540843Z\", \"updated_at\": \"2026-10-05T18:16:30.120841Z\"}"
         }
       ]
     },
@@ -204,6 +208,54 @@
           "header": [],
           "cookie": [],
           "body": "{\"id\": 16, \"email\": \"new-f0d6f81d@example.com\", \"full_name\": \"Postman Test\", \"is_active\": true, \"created_at\": \"2026-09-14T17:24:35.131792Z\"}"
+        }
+      ]
+    },
+    {
+      "name": "Get Notification Recipient Detail",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Token {{token}}"
+          }
+        ],
+        "url": "{{base_url}}/api/v1/notifications/recipients/{{recipient_id}}/"
+      },
+      "response": [
+        {
+          "name": "200 OK - Live 2026-10-10",
+          "originalRequest": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Token {{token}}"
+              }
+            ],
+            "url": "{{base_url}}/api/v1/notifications/recipients/{{recipient_id}}/"
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [],
+          "cookie": [],
+          "body": "{\"id\":1,\"email\":\"olamilekanilori45@gmail.com\",\"full_name\":\"olami\",\"is_active\":true,\"created_at\":\"2026-10-05T14:17:12.790742-04:00\"}"
+        }
+      ],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('admin can retrieve a notification recipient', function () {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.json().id).to.eql(Number(pm.variables.get('recipient_id')));",
+              "});"
+            ]
+          }
         }
       ]
     },

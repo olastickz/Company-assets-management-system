@@ -564,11 +564,11 @@
 
     <div class="dashboard-topbar">
         <div class="dashboard-actions">
-            {% if can_create_assets %}
+            {% if can_create_assets or can_create_equipment or can_create_company_documents %}
                 {% include 'partials/create_dropdown.html' %}
             {% endif %}
-            <a href="{% url 'dashboard' %}?asset_type=vehicles" class="action-btn secondary">🚗 View Vehicle Assets</a>
-            <a href="{% url 'dashboard' %}?asset_type=equipment" class="action-btn secondary">🛠️ View Equipment</a>
+            {% if can_view_vehicles %}<a href="{% url 'dashboard' %}?asset_type=vehicles" class="action-btn secondary">🚗 View Vehicle Assets</a>{% endif %}
+            {% if can_view_equipment %}<a href="{% url 'dashboard' %}?asset_type=equipment" class="action-btn secondary">🛠️ View Equipment</a>{% endif %}
             {% if can_view_company_documents %}
                 <a href="{% url 'company_documents_list' %}" class="action-btn">📁 Documents</a>
             {% endif %}
@@ -598,14 +598,24 @@
             <p class="metric-label">{{ inventory_breakdown }}</p>
         </div>
 
-        <a href="{% url 'dashboard' %}?asset_type=vehicles" class="metric-card">
+        {% if can_view_vehicles %}<a href="{% url 'dashboard' %}?asset_type=vehicles" class="metric-card">
             <div class="metric-card-header">
                 <h3 class="metric-card-title">Vehicle Assets</h3>
                 <span class="metric-card-icon">🚗</span>
             </div>
             <p class="metric-value">{{ vehicle_count }}</p>
             <p class="metric-label">Active vehicle assets</p>
+        </a>{% endif %}
+        {% if can_view_equipment %}
+        <a href="{% url 'dashboard' %}?asset_type=equipment" class="metric-card">
+            <div class="metric-card-header">
+                <h3 class="metric-card-title">Equipment</h3>
+                <span class="metric-card-icon">🛠️</span>
+            </div>
+            <p class="metric-value">{{ equipment_count }}</p>
+            <p class="metric-label">Tracked equipment</p>
         </a>
+        {% endif %}
 
         {% if can_view_company_documents %}
         <a href="{% url 'company_documents_list' %}" class="metric-card">
@@ -664,16 +674,16 @@
             </svg>
             <h3>No assets yet</h3>
             <p>This workspace has no assets or documents yet. Contact your manager or administrator to add assets and documents.</p>
-            {% if can_access_admin_tools %}
             <div class="empty-actions">
                 {% if can_create_assets %}<a href="{% url 'asset_create' %}" class="action-btn">➕ Add Vehicle Asset</a>{% endif %}
                 {% if can_create_equipment %}<a href="{% url 'equipment_create' %}" class="action-btn">➕ Add Equipment</a>{% endif %}
                 {% if can_create_company_documents %}<a href="{% url 'company_document_create' %}" class="action-btn">📄 Add Document</a>{% endif %}
+                {% if can_access_admin_tools %}
                 {% if can_manage_staff %}<a href="{% url 'staff_create' %}" class="action-btn">➕ Add Staff</a>{% endif %}
                 {% if can_manage_staff %}<a href="{% url 'staff_list' %}" class="action-btn secondary">👥 View All Staff</a>{% endif %}
                 {% if can_bulk_import_assets %}<a href="{% url 'bulk_upload_assets' %}" class="action-btn">📥 Import Assets</a>{% endif %}
+                {% endif %}
             </div>
-            {% endif %}
         </div>
         {% elif total_assets == 0 %}
         <div class="empty-state-card">
@@ -697,8 +707,8 @@
                 <input name="search" value="{{ search_query }}" placeholder="Search name, VIN, make, model, plate...">
                 <select name="asset_type">
                     <option value="all"{% if asset_type == 'all' %} selected{% endif %}>All assets</option>
-                    <option value="vehicles"{% if asset_type == 'vehicles' %} selected{% endif %}>Vehicle Assets</option>
-                    <option value="equipment"{% if asset_type == 'equipment' %} selected{% endif %}>Equipment</option>
+                    {% if can_view_vehicles %}<option value="vehicles"{% if asset_type == 'vehicles' %} selected{% endif %}>Vehicle Assets</option>{% endif %}
+                    {% if can_view_equipment %}<option value="equipment"{% if asset_type == 'equipment' %} selected{% endif %}>Equipment</option>{% endif %}
                     {% if can_view_company_documents %}
                         <option value="documents"{% if asset_type == 'documents' %} selected{% endif %}>Documents</option>
                     {% endif %}

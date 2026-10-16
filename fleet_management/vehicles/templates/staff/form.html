@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}{{ action }} Staff Member{% endblock %}
 
@@ -72,6 +73,7 @@
 
 </div>
 
+<script src="{% static 'vehicles/js/staff_autocomplete.js' %}"></script>
 <style>
     input, select, textarea {
         width: 100%;

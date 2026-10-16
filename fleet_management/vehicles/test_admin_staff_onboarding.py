@@ -82,7 +82,7 @@ class AdminStaffOnboardingTests(TestCase):
             email='promoted@example.test',
             password='Initial!StaffPassword_2026',
         )
-        UserRole.objects.create(user=user, role='manager')
+        UserRole.objects.create(user=user, role='vehicle_manager')
         api_client = APIClient()
         api_client.force_authenticate(self.admin)
 

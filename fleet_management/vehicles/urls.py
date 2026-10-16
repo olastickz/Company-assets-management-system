@@ -41,6 +41,8 @@ urlpatterns = [
     # Equipment Transfer routes
     path('equipment/<int:pk>/transfer/', views.equipment_transfer, name='equipment_transfer'),
     path('equipment/<int:pk>/transfer-history/', views.equipment_transfer_history, name='equipment_transfer_history'),
+    path('asset-assignment-approvals/', views.asset_assignment_approvals, name='asset_assignment_approvals'),
+    path('asset-assignment-approvals/<int:pk>/', views.asset_assignment_approval_action, name='asset_assignment_approval_action'),
 
     # Bulk upload routes
     path('bulk-upload-assets/', views.bulk_upload_assets, name='bulk_upload_assets'),

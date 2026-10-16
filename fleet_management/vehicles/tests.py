@@ -10,7 +10,6 @@ from asset_management import settings as app_settings
 from .models import Asset, Vehicle, CompanyDocument, StaffApplication, UserRole, StaffMember, OfficeEquipment, EquipmentWorkOrder, DriverRequest, EquipmentTransfer, MaintenanceItem, MaintenanceRequest
 from .staff_onboarding import review_staff_application
 
-
 class DatabaseConfigurationTests(TestCase):
     def test_placeholder_database_url_is_detected(self):
         self.assertTrue(app_settings._is_placeholder_database_url('postgresql://USER:PASSWORD@HOST:5432/DB_NAME'))
@@ -175,7 +174,7 @@ class EquipmentWorkOrderTests(TestCase):
 
     def test_work_order_api_is_manager_only_and_returns_equipment_fields(self):
         manager = User.objects.create_user(username='work-order-manager', password='manager-pass')
-        UserRole.objects.create(user=manager, role='manager')
+        UserRole.objects.create(user=manager, role='equipment_manager')
         staff = User.objects.create_user(username='work-order-staff', password='staff-pass')
         UserRole.objects.create(user=staff, role='staff')
         equipment = OfficeEquipment.objects.create(name='Damaged Monitor', status='damaged')
@@ -197,7 +196,7 @@ class AdminApiTests(TestCase):
         self.admin = User.objects.create_user(username='api-admin', password='admin-pass')
         UserRole.objects.create(user=self.admin, role='admin')
         self.manager = User.objects.create_user(username='api-manager', password='manager-pass')
-        UserRole.objects.create(user=self.manager, role='manager')
+        UserRole.objects.create(user=self.manager, role='vehicle_manager')
         self.staff_user = User.objects.create_user(username='api-staff', password='staff-pass')
         UserRole.objects.create(user=self.staff_user, role='staff')
         self.admin_client = APIClient()
@@ -218,14 +217,85 @@ class AdminApiTests(TestCase):
         self.assertEqual(roles_response.status_code, 200)
         self.assertEqual(
             {role['value'] for role in roles_response.data},
-            {'admin', 'manager', 'driver', 'staff'},
+            {
+                'admin', 'document_manager', 'vehicle_manager',
+                'equipment_manager', 'driver', 'staff',
+            },
         )
+
+    def test_domain_manager_roles_are_limited_to_their_modules(self):
+        users = {}
+        clients = {}
+        for role in ('document_manager', 'vehicle_manager', 'equipment_manager'):
+            user = User.objects.create_user(username=role, password='domain-manager-pass')
+            UserRole.objects.create(user=user, role=role)
+            users[role] = user
+            clients[role] = APIClient()
+            clients[role].force_authenticate(user=user)
+
+        endpoints = {
+            'vehicle_manager': '/api/vehicles/',
+            'equipment_manager': '/api/equipment/',
+            'document_manager': '/api/documents/',
+        }
+        for role, client in clients.items():
+            for allowed_role, endpoint in endpoints.items():
+                expected_status = 200 if role == allowed_role else 403
+                self.assertEqual(
+                    client.get(endpoint).status_code,
+                    expected_status,
+                    f'{role} access to {endpoint}',
+                )
+
+        self.assertEqual(
+            clients['vehicle_manager'].get('/api/vehicle-maintenance/').status_code,
+            200,
+        )
+        self.assertEqual(
+            clients['vehicle_manager'].get('/api/equipment-maintenance/').status_code,
+            403,
+        )
+        self.assertEqual(
+            clients['equipment_manager'].get('/api/equipment-maintenance/').status_code,
+            200,
+        )
+        self.assertEqual(
+            clients['equipment_manager'].get('/api/vehicle-maintenance/').status_code,
+            403,
+        )
+
+        page_client = self.client
+        page_client.force_login(users['document_manager'])
+        self.assertEqual(page_client.get('/documents/add/').status_code, 200)
+        page_client.force_login(users['vehicle_manager'])
+        self.assertEqual(page_client.get('/documents/add/').status_code, 403)
+        self.assertEqual(page_client.get('/asset/add/').status_code, 200)
+        self.assertEqual(page_client.get('/equipment/add/').status_code, 403)
+        page_client.force_login(users['equipment_manager'])
+        self.assertEqual(page_client.get('/equipment/add/').status_code, 200)
+        self.assertEqual(page_client.get('/asset/add/').status_code, 403)
+
+        vehicle = Vehicle.objects.create(name='Scoped vehicle', license_plate='SCOPE-VEH')
+        equipment = OfficeEquipment.objects.create(name='Scoped equipment')
+        self.assertEqual(page_client.get(f'/equipment/{equipment.pk}/').status_code, 200)
+        self.assertEqual(page_client.get(f'/asset/{vehicle.pk}/').status_code, 403)
+        self.assertEqual(page_client.get('/export/vehicles/csv/').status_code, 403)
+
+        page_client.force_login(users['vehicle_manager'])
+        self.assertEqual(page_client.get('/equipment/').status_code, 403)
+        self.assertEqual(page_client.get(f'/equipment/{equipment.pk}/').status_code, 403)
+        self.assertEqual(page_client.get('/export/equipment/csv/').status_code, 403)
+        self.assertEqual(page_client.get(f'/asset/{vehicle.pk}/').status_code, 200)
+
+        page_client.force_login(users['document_manager'])
+        self.assertEqual(page_client.get('/equipment/').status_code, 403)
+        self.assertEqual(page_client.get(f'/asset/{vehicle.pk}/').status_code, 403)
 
     def test_admin_can_create_and_update_app_user_without_superuser_privileges(self):
         create_response = self.admin_client.post('/api/v1/admin/users/', {
             'username': 'managed-api-user',
             'email': 'managed-api-user@example.com',
-            'role': 'manager',
+            'role': 'vehicle_manager',
             'department': 'Operations',
             'password': 'Initial!ManagerPassword_2026',
         }, format='json')
@@ -234,7 +304,7 @@ class AdminApiTests(TestCase):
         self.assertTrue(user.check_password('Initial!ManagerPassword_2026'))
         self.assertFalse(user.is_staff)
         self.assertFalse(user.is_superuser)
-        self.assertEqual(user.role.role, 'manager')
+        self.assertEqual(user.role.role, 'vehicle_manager')
 
         update_response = self.admin_client.patch(
             f'/api/v1/admin/users/{user.pk}/',
@@ -254,12 +324,12 @@ class AdminApiTests(TestCase):
 
     def test_admin_can_read_and_update_role_permission_matrix(self):
         url = '/api/v1/admin/roles/permissions/'
-        initial = self.admin_client.get(f'{url}?role=manager')
+        initial = self.admin_client.get(f'{url}?role=vehicle_manager')
         self.assertEqual(initial.status_code, 200)
         self.assertTrue(initial.data['modules']['vehicles']['view'])
 
         response = self.admin_client.patch(url, {
-            'role': 'manager',
+            'role': 'vehicle_manager',
             'modules': {
                 'vehicles': {'view': True, 'edit': True},
                 'reports': {'all': True},
@@ -274,13 +344,13 @@ class AdminApiTests(TestCase):
         self.assertEqual(self.manager_client.get('/api/vehicles/').status_code, 200)
 
         revoke_response = self.admin_client.patch(url, {
-            'role': 'manager',
+            'role': 'vehicle_manager',
             'modules': {'vehicles': {'view': False}},
         }, format='json')
         self.assertEqual(revoke_response.status_code, 200)
         self.assertEqual(self.manager_client.get('/api/vehicles/').status_code, 403)
 
-        refreshed = self.admin_client.get(f'{url}?role=manager')
+        refreshed = self.admin_client.get(f'{url}?role=vehicle_manager')
         self.assertEqual(refreshed.data['modules']['vehicles']['edit'], True)
 
     def test_admin_role_permissions_are_locked_and_updates_are_validated(self):
@@ -310,7 +380,7 @@ class AdminApiTests(TestCase):
         )
         config_url = '/api/v1/admin/roles/permissions/'
         self.admin_client.patch(config_url, {
-            'role': 'manager',
+            'role': 'vehicle_manager',
             'approval_authority': {'level_1': False},
         }, format='json')
 
@@ -319,7 +389,7 @@ class AdminApiTests(TestCase):
         self.assertEqual(denied.status_code, 403)
 
         self.admin_client.patch(config_url, {
-            'role': 'manager',
+            'role': 'vehicle_manager',
             'approval_authority': {'level_1': True},
         }, format='json')
         allowed_to_validate = self.manager_client.post(assignment_url, {}, format='json')
@@ -339,7 +409,7 @@ class AdminApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 403)
 
-    def test_non_admin_cannot_write_staff_assets_or_vehicle_api(self):
+    def test_vehicle_manager_can_write_vehicles_but_equipment_manager_cannot(self):
         staff_response = self.manager_client.post('/api/staff/', {
             'staff_id': 'API-NEW-STAFF',
             'first_name': 'New',
@@ -353,7 +423,16 @@ class AdminApiTests(TestCase):
         )
         self.assertEqual(asset_response.status_code, 403)
         vehicle_response = self.manager_client.post('/api/vehicles/', {}, format='json')
-        self.assertEqual(vehicle_response.status_code, 403)
+        self.assertEqual(vehicle_response.status_code, 201)
+
+        equipment_manager = User.objects.create_user(
+            username='equipment-manager-write-check', password='manager-pass'
+        )
+        UserRole.objects.create(user=equipment_manager, role='equipment_manager')
+        equipment_client = APIClient()
+        equipment_client.force_authenticate(equipment_manager)
+        denied_vehicle_response = equipment_client.post('/api/vehicles/', {}, format='json')
+        self.assertEqual(denied_vehicle_response.status_code, 403)
 
     def test_admin_can_create_update_and_delete_notification_recipient(self):
         create_response = self.admin_client.post('/api/v1/notifications/recipients/', {
@@ -707,9 +786,11 @@ class ViewsTests(TestCase):
             branch='ABUJA',
             is_active=True
         )
-        UserRole.objects.create(user=manager_user, role='manager')
+        UserRole.objects.create(user=manager_user, role='vehicle_manager')
 
         driver_user = User.objects.create_user(username='driver_assign', password='dpass_assign')
+        from .permissions import has_role_permission
+        self.assertTrue(has_role_permission(manager_user, 'requests', 'approve'))
         driver_staff = StaffMember.objects.create(
             user=driver_user,
             staff_id='DRV07',
@@ -765,7 +846,7 @@ class ViewsTests(TestCase):
             branch='ABUJA',
             is_active=True
         )
-        UserRole.objects.create(user=manager_user, role='manager')
+        UserRole.objects.create(user=manager_user, role='vehicle_manager')
 
         original_driver_user = User.objects.create_user(username='driver_orig', password='dpass_orig')
         original_driver = StaffMember.objects.create(
@@ -969,7 +1050,7 @@ class ViewsTests(TestCase):
             branch='LAGOS',
             is_active=True
         )
-        UserRole.objects.create(user=manager_user, role='manager')
+        UserRole.objects.create(user=manager_user, role='vehicle_manager')
 
         self.client.login(username='mgr2', password='mgrpass2')
         response = self.client.get(reverse('company_document_create'))
@@ -992,14 +1073,14 @@ class ViewsTests(TestCase):
             branch='LAGOS',
             is_active=True
         )
-        UserRole.objects.create(user=manager_user, role='manager')
+        UserRole.objects.create(user=manager_user, role='document_manager')
 
         self.client.login(username='mgr3', password='mgrpass3')
         response = self.client.get(reverse('company_documents_list'))
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.context['can_view_company_documents'])
-        self.assertFalse(response.context['can_create_company_documents'])
+        self.assertTrue(response.context['can_create_company_documents'])
 
     def test_staff_cannot_delete_company_document(self):
         staff_user = User.objects.create_user(username='staff7', password='spass7')
@@ -1126,7 +1207,7 @@ class ViewsTests(TestCase):
     def test_manager_dashboard_shows_all_departments(self):
         # Managers should see all assets across departments by default
         manager = User.objects.create_user(username='mgr', password='mgrpass')
-        UserRole.objects.create(user=manager, role='manager', department='HR')
+        UserRole.objects.create(user=manager, role='vehicle_manager', department='HR')
 
         staff_hr = StaffMember.objects.create(
             staff_id='HR001', first_name='Helen', last_name='Ray', department='HR', branch='LAGOS', is_active=True
@@ -1234,7 +1315,7 @@ class CompanyDocumentTests(TestCase):
     def setUp(self):
         self.client = Client()
         self.user = User.objects.create_user(username='docuser', password='docpass')
-        self.user_role = UserRole.objects.create(user=self.user, role='manager')
+        self.user_role = UserRole.objects.create(user=self.user, role='document_manager')
         self.user.save()
 
     def test_vehicle_scope_requires_related_vehicle(self):
@@ -1504,14 +1585,21 @@ class VersionedApiTests(TestCase):
             password='api-pass',
             email='manager@example.com',
         )
-        UserRole.objects.create(user=self.user, role='manager')
+        UserRole.objects.create(user=self.user, role='document_manager')
 
     def test_profile_requires_authentication(self):
         response = self.client.get('/api/v1/settings/profile/')
         self.assertEqual(response.status_code, 401)
 
-    def test_manager_can_read_overview_report(self):
+    def test_specialist_manager_cannot_read_general_reports(self):
         self.client.force_authenticate(self.user)
+        response = self.client.get('/api/v1/reports/overview/')
+        self.assertEqual(response.status_code, 403)
+
+    def test_admin_can_read_overview_report(self):
+        admin = User.objects.create_user(username='reports-admin', password='admin-pass')
+        UserRole.objects.create(user=admin, role='admin')
+        self.client.force_authenticate(admin)
         response = self.client.get('/api/v1/reports/overview/')
         self.assertEqual(response.status_code, 200)
         self.assertIn('assets', response.data)
@@ -1604,7 +1692,7 @@ class MaintenanceRequestWorkflowTests(TestCase):
 
     def test_manager_cannot_submit_staff_or_driver_request(self):
         manager = User.objects.create_user(username='maintenance-manager', password='manager-pass')
-        UserRole.objects.create(user=manager, role='manager')
+        UserRole.objects.create(user=manager, role='vehicle_manager')
         self.client.login(username='maintenance-manager', password='manager-pass')
 
         response = self.client.get(reverse('maintenance_request_create'))
@@ -1684,7 +1772,7 @@ class MaintenanceRequestWorkflowTests(TestCase):
 
     def test_manager_cannot_submit_emergency_request(self):
         manager = User.objects.create_user(username='maintenance-api-manager', password='manager-pass')
-        UserRole.objects.create(user=manager, role='manager')
+        UserRole.objects.create(user=manager, role='vehicle_manager')
         manager_client = APIClient()
         manager_client.force_authenticate(manager)
 
@@ -1699,9 +1787,15 @@ class MaintenanceRequestWorkflowTests(TestCase):
 class WorkflowApiTests(TestCase):
     def setUp(self):
         self.manager = User.objects.create_user(username='workflow-manager', password='manager-pass')
-        UserRole.objects.create(user=self.manager, role='manager')
+        UserRole.objects.create(user=self.manager, role='vehicle_manager')
         self.manager_client = APIClient()
         self.manager_client.force_authenticate(self.manager)
+        self.equipment_manager = User.objects.create_user(
+            username='workflow-equipment-manager', password='manager-pass'
+        )
+        UserRole.objects.create(user=self.equipment_manager, role='equipment_manager')
+        self.equipment_manager_client = APIClient()
+        self.equipment_manager_client.force_authenticate(self.equipment_manager)
         self.vehicle = Vehicle.objects.create(name='Workflow vehicle', license_plate='WF-VEHICLE-1')
         self.equipment = OfficeEquipment.objects.create(name='Workflow laptop', assigned_user='Previous Owner')
 
@@ -1745,7 +1839,7 @@ class WorkflowApiTests(TestCase):
         self.assertFalse(MaintenanceItem.objects.exists())
 
     def test_equipment_transfer_records_previous_owner_and_updates_equipment(self):
-        response = self.manager_client.post('/api/equipment-transfers/', {
+        response = self.equipment_manager_client.post('/api/equipment-transfers/', {
             'equipment': self.equipment.pk,
             'transferred_to': 'Next Owner',
             'transferred_to_department': 'Operations',
@@ -1756,7 +1850,7 @@ class WorkflowApiTests(TestCase):
         self.equipment.refresh_from_db()
         self.assertEqual(self.equipment.assigned_user, 'Next Owner')
         self.assertEqual(
-            self.manager_client.get(f'/api/equipment-transfers/?equipment={self.equipment.pk}').data[0]['id'],
+            self.equipment_manager_client.get(f'/api/equipment-transfers/?equipment={self.equipment.pk}').data[0]['id'],
             response.data['id'],
         )
 

@@ -25,7 +25,7 @@ from .models import (
 class WorkOrderApiContractTests(TestCase):
     def test_manager_can_create_read_update_and_delete_work_order(self):
         manager = User.objects.create_user(username='work-order-api-manager', password='manager-pass')
-        UserRole.objects.create(user=manager, role='manager')
+        UserRole.objects.create(user=manager, role='equipment_manager')
         equipment = OfficeEquipment.objects.create(name='Work Order API Equipment')
         client = APIClient()
         client.force_authenticate(manager)
@@ -212,9 +212,11 @@ class CoreResourceApiContractTests(TestCase):
         assign_response = self.client.post(
             f'/api/asset/{asset.pk}/assign/', {'staff_id': staff.pk}, format='json'
         )
-        self.assertEqual(assign_response.status_code, 200)
-        self.assertEqual(assign_response.data['asset']['assigned_staff'], staff.pk)
-        self.assertEqual(len(self.client.get(f'/api/asset/{asset.pk}/history/').data), 1)
+        self.assertEqual(assign_response.status_code, 202)
+        self.assertEqual(asset.assignment_requests.get().requested_staff, staff)
+        asset.refresh_from_db()
+        self.assertIsNone(asset.assigned_staff)
+        self.assertEqual(len(self.client.get(f'/api/asset/{asset.pk}/history/').data), 0)
 
         release_response = self.client.post(f'/api/asset/{asset.pk}/release/')
         self.assertEqual(release_response.status_code, 200)
@@ -307,9 +309,9 @@ class CoreResourceApiContractTests(TestCase):
 class VersionedReadApiContractTests(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.manager = User.objects.create_user(username='api-contract-manager', password='manager-pass')
-        UserRole.objects.create(user=self.manager, role='manager')
-        self.client.force_authenticate(self.manager)
+        self.admin = User.objects.create_user(username='api-contract-admin', password='admin-pass')
+        UserRole.objects.create(user=self.admin, role='admin')
+        self.client.force_authenticate(self.admin)
 
     def test_reports_and_read_only_settings_return_expected_json(self):
         for path in (
@@ -364,7 +366,7 @@ class VersionedReadApiContractTests(TestCase):
 class WorkflowDetailApiContractTests(TestCase):
     def setUp(self):
         self.manager = User.objects.create_user(username='workflow-detail-manager', password='manager-pass')
-        UserRole.objects.create(user=self.manager, role='manager')
+        UserRole.objects.create(user=self.manager, role='equipment_manager')
         self.client = APIClient()
         self.client.force_authenticate(self.manager)
 
@@ -380,10 +382,16 @@ class WorkflowDetailApiContractTests(TestCase):
         self.assertEqual(transfer_response.status_code, 200)
         self.assertEqual(transfer_response.data['transferred_to'], 'Next Owner')
 
+        vehicle_manager = User.objects.create_user(
+            username='workflow-detail-vehicle-manager', password='manager-pass'
+        )
+        UserRole.objects.create(user=vehicle_manager, role='vehicle_manager')
+        vehicle_client = APIClient()
+        vehicle_client.force_authenticate(vehicle_manager)
         driver_request = DriverRequest.objects.create(
-            requester_user=self.manager,
+            requester_user=vehicle_manager,
             details='Read request detail',
         )
-        request_response = self.client.get(f'/api/driver-requests/{driver_request.pk}/')
+        request_response = vehicle_client.get(f'/api/driver-requests/{driver_request.pk}/')
         self.assertEqual(request_response.status_code, 200)
         self.assertEqual(request_response.data['details'], 'Read request detail')

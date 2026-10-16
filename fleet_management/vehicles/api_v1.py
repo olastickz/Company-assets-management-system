@@ -179,6 +179,8 @@ class AdminRolePermissionsView(APIView):
         'staff': 'Staff',
         'documents': 'Documents',
         'maintenance': 'Maintenance',
+        'vehicle_maintenance': 'Vehicle Maintenance',
+        'equipment_maintenance': 'Equipment Maintenance',
         'work_orders': 'Work Orders',
         'transfers': 'Transfers',
         'requests': 'Requests',
@@ -796,8 +798,7 @@ class NotificationSettingsView(NotificationScheduleView):
 
 
 class ProfileSettingsView(APIView):
-    permission_classes = [RoleMatrixPermission]
-    permission_module = 'settings'
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         return Response(serialize_user(request.user))
