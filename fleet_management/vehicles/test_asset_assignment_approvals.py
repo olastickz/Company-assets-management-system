@@ -159,6 +159,93 @@ class AssetAssignmentApprovalTests(TestCase):
         self.asset.refresh_from_db()
         self.assertIsNone(self.asset.assigned_staff)
 
+    def test_assignment_approval_api_waits_for_both_approvers(self):
+        assignment = submit_assignment_request(self.asset, self.assignee, self.requester)
+        client = APIClient()
+
+        client.force_authenticate(self.manager_user)
+        manager_response = client.post(
+            reverse('asset-assignment-request-approve', args=[assignment.pk]),
+            format='json',
+        )
+        self.assertEqual(manager_response.status_code, 200)
+        self.assertEqual(manager_response.data['status'], 'pending')
+        self.assertFalse(manager_response.data['approvals_complete'])
+
+        client.force_authenticate(self.supervisor_user)
+        supervisor_response = client.post(
+            reverse('asset-assignment-request-approve', args=[assignment.pk]),
+            format='json',
+        )
+        self.assertEqual(supervisor_response.status_code, 200)
+        self.assertEqual(supervisor_response.data['status'], 'approved')
+        self.assertTrue(supervisor_response.data['approvals_complete'])
+        self.asset.refresh_from_db()
+        self.assertEqual(self.asset.assigned_staff, self.assignee)
+
+    def test_assignment_approval_api_uses_admin_when_approvers_are_missing(self):
+        self.assignee.reporting_manager = None
+        self.assignee.supervisor = None
+        self.assignee.save(update_fields=['reporting_manager', 'supervisor'])
+        assignment = submit_assignment_request(self.asset, self.assignee, self.requester)
+        client = APIClient()
+        client.force_authenticate(self.admin_user)
+
+        response = client.post(
+            reverse('asset-assignment-request-approve', args=[assignment.pk]),
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['status'], 'approved')
+        self.assertTrue(response.data['requires_superadmin_approval'])
+        self.assertEqual(response.data['superadmin_approved_by'], self.admin_user.pk)
+        self.asset.refresh_from_db()
+        self.assertEqual(self.asset.assigned_staff, self.assignee)
+
+    def test_assignment_approval_api_rejects_unrelated_user(self):
+        assignment = submit_assignment_request(self.asset, self.assignee, self.requester)
+        client = APIClient()
+        client.force_authenticate(self.requester)
+
+        response = client.post(
+            reverse('asset-assignment-request-approve', args=[assignment.pk]),
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.asset.refresh_from_db()
+        self.assertIsNone(self.asset.assigned_staff)
+
+    def test_assignment_request_detail_api_exposes_approval_state_to_requester(self):
+        assignment = submit_assignment_request(self.asset, self.assignee, self.requester)
+        client = APIClient()
+        client.force_authenticate(self.requester)
+
+        response = client.get(reverse('asset-assignment-request-detail', args=[assignment.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['status'], 'pending')
+        self.assertTrue(response.data['supervisor_approval_required'])
+        self.assertTrue(response.data['reporting_manager_approval_required'])
+
+    def test_assignment_reject_api_records_rejection_without_reassigning(self):
+        assignment = submit_assignment_request(self.asset, self.assignee, self.requester)
+        client = APIClient()
+        client.force_authenticate(self.manager_user)
+
+        response = client.post(
+            reverse('asset-assignment-request-reject', args=[assignment.pk]),
+            {'rejection_note': 'Not approved'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['status'], 'rejected')
+        self.assertEqual(response.data['rejection_note'], 'Not approved')
+        self.asset.refresh_from_db()
+        self.assertIsNone(self.asset.assigned_staff)
+
     def test_generic_asset_update_api_queues_assignment(self):
         client = APIClient()
         client.force_authenticate(self.superadmin)

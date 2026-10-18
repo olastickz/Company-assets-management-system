@@ -4,6 +4,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from .models import (
     Asset,
+    AssetAssignmentRequest,
     CompanyDocument,
     DriverRequest,
     EquipmentTransfer,
@@ -35,6 +36,23 @@ class AssetSerializer(serializers.ModelSerializer):
     class Meta:
         model = Asset
         fields = '__all__'
+
+
+class AssetAssignmentRequestSerializer(serializers.ModelSerializer):
+    approvals_complete = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = AssetAssignmentRequest
+        fields = [
+            'id', 'asset', 'previous_staff', 'requested_staff', 'requested_by',
+            'supervisor_approver', 'supervisor_approved_by', 'supervisor_approved_at',
+            'reporting_manager_approver', 'reporting_manager_approved_by',
+            'reporting_manager_approved_at', 'supervisor_approval_required',
+            'reporting_manager_approval_required', 'requires_superadmin_approval',
+            'superadmin_approved_by', 'superadmin_approved_at', 'approvals_complete',
+            'status', 'reason', 'notes', 'rejection_note', 'created_at', 'updated_at',
+        ]
+        read_only_fields = fields
 
 
 class StaffMemberSerializer(serializers.ModelSerializer):

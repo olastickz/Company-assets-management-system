@@ -20,13 +20,19 @@ from .models import (
     Asset,
     AuditLog,
     DriverRequest,
+    AssetAssignmentRequest,
     MaintenanceItem,
     MaintenanceRequest,
     StaffMember,
     CompanyDocument,
     OfficeEquipmentMaintenance,
 )
-from .asset_assignment_workflow import AssignmentWorkflowError, submit_assignment_request
+from .asset_assignment_workflow import (
+    AssignmentWorkflowError,
+    approve_assignment_request,
+    reject_assignment_request,
+    submit_assignment_request,
+)
 from .permissions import RoleMatrixPermission, get_user_role, has_role_permission, is_admin, is_manager
 from .serializers import (
     VehicleSerializer,
@@ -41,6 +47,7 @@ from .serializers import (
     EquipmentTransferSerializer,
     DriverRequestSerializer,
     DriverAssignmentSerializer,
+    AssetAssignmentRequestSerializer,
 )
 from . import views
 
@@ -281,6 +288,58 @@ def asset_assign_api(request, pk):
         {'detail': 'Assignment request submitted for approval.', 'request_id': assignment.pk},
         status=status.HTTP_202_ACCEPTED,
     )
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def asset_assignment_request_api(request, pk):
+    assignment = get_object_or_404(
+        AssetAssignmentRequest.objects.select_related(
+            'asset', 'previous_staff', 'requested_staff', 'requested_by',
+            'supervisor_approver', 'supervisor_approved_by',
+            'reporting_manager_approver', 'reporting_manager_approved_by',
+            'superadmin_approved_by',
+        ),
+        pk=pk,
+    )
+    allowed_users = {
+        assignment.supervisor_approver_id,
+        assignment.reporting_manager_approver_id,
+        assignment.requested_by_id,
+    }
+    if not is_admin(request.user) and request.user.pk not in allowed_users:
+        return Response({'detail': 'You cannot view this assignment request.'}, status=status.HTTP_403_FORBIDDEN)
+    return Response(AssetAssignmentRequestSerializer(assignment).data)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def asset_assignment_request_approve_api(request, pk):
+    try:
+        assignment = approve_assignment_request(pk, request.user)
+    except AssetAssignmentRequest.DoesNotExist:
+        return Response({'detail': 'Assignment request not found.'}, status=status.HTTP_404_NOT_FOUND)
+    except PermissionError as error:
+        return Response({'detail': str(error)}, status=status.HTTP_403_FORBIDDEN)
+    except AssignmentWorkflowError as error:
+        return Response({'detail': str(error)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(AssetAssignmentRequestSerializer(assignment).data)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def asset_assignment_request_reject_api(request, pk):
+    try:
+        assignment = reject_assignment_request(
+            pk, request.user, request.data.get('rejection_note', '').strip()
+        )
+    except AssetAssignmentRequest.DoesNotExist:
+        return Response({'detail': 'Assignment request not found.'}, status=status.HTTP_404_NOT_FOUND)
+    except PermissionError as error:
+        return Response({'detail': str(error)}, status=status.HTTP_403_FORBIDDEN)
+    except AssignmentWorkflowError as error:
+        return Response({'detail': str(error)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(AssetAssignmentRequestSerializer(assignment).data)
 
 
 @api_view(['POST'])
