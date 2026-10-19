@@ -167,9 +167,7 @@ def _driver_is_available(driver, driver_request):
 
 @transaction.atomic
 def assign_driver_request(driver_request_id, user, assigned_driver_id, assigned_vehicle_id, notes=None):
-    driver_request = DriverRequest.objects.select_for_update().select_related(
-        'assigned_driver',
-    ).get(pk=driver_request_id)
+    driver_request = DriverRequest.objects.select_for_update().get(pk=driver_request_id)
     if driver_request.status not in ('approved', 'assigned'):
         raise DriverRequestWorkflowError('The request must be approved before dispatch.')
 
