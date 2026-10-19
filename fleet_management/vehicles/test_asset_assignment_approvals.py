@@ -1,11 +1,24 @@
+from datetime import timedelta
+from unittest.mock import patch
+
 from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from .asset_assignment_workflow import approve_assignment_request, reject_assignment_request, submit_assignment_request
 from .forms import StaffMemberForm
-from .models import Asset, AssetAssignmentRequest, EquipmentTransfer, OfficeEquipment, StaffMember, UserRole
+from .models import (
+    ApprovalRecord,
+    Asset,
+    AssetAssignmentRequest,
+    DriverRequest,
+    EquipmentTransfer,
+    OfficeEquipment,
+    StaffMember,
+    UserRole,
+)
 
 
 class AssetAssignmentApprovalTests(TestCase):
@@ -294,3 +307,149 @@ class AssetAssignmentApprovalTests(TestCase):
         self.assertIsNone(self.asset.assigned_staff)
         self.assertIsNotNone(assignment.reporting_manager_approved_at)
         self.assertEqual(assignment.status, 'pending')
+
+    def test_admin_staff_api_stores_and_returns_manager_profile_ids(self):
+        client = APIClient()
+        client.force_authenticate(self.superadmin)
+
+        update = client.patch(
+            reverse('api-v1-admin-staff-detail', args=[self.assignee.pk]),
+            {'supervisor': self.supervisor.pk, 'reporting_manager': self.manager.pk},
+            format='json',
+        )
+
+        self.assertEqual(update.status_code, 200)
+        self.assertEqual(update.data['supervisor'], self.supervisor.pk)
+        self.assertEqual(update.data['reporting_manager'], self.manager.pk)
+        self.assignee.refresh_from_db()
+        self.assertEqual(self.assignee.supervisor_id, self.supervisor.pk)
+        self.assertEqual(self.assignee.reporting_manager_id, self.manager.pk)
+
+        listing = client.get(reverse('api-v1-admin-staff'))
+        result = next(item for item in listing.data['results'] if item['id'] == self.assignee.pk)
+        self.assertEqual(result['supervisor'], self.supervisor.pk)
+        self.assertEqual(result['reporting_manager'], self.manager.pk)
+
+    def test_admin_v1_staff_create_returns_supervisor_and_reporting_manager_ids(self):
+        client = APIClient()
+        client.force_authenticate(self.superadmin)
+
+        with patch('vehicles.api_v1.provision_staff_account', side_effect=lambda staff, request: staff.save()):
+            response = client.post('/api/v1/admin/staff/', {
+                'staff_id': 'API-V1-APPROVAL-STAFF',
+                'first_name': 'V1',
+                'last_name': 'Approval Staff',
+                'email': 'api-v1-approval-staff@example.test',
+                'supervisor': self.supervisor.pk,
+                'reporting_manager': self.manager.pk,
+            }, format='json')
+
+        self.assertEqual(response.status_code, 201)
+        staff = StaffMember.objects.get(staff_id='API-V1-APPROVAL-STAFF')
+        self.assertEqual(staff.supervisor_id, self.supervisor.pk)
+        self.assertEqual(staff.reporting_manager_id, self.manager.pk)
+        self.assertEqual(response.data['supervisor'], self.supervisor.pk)
+        self.assertEqual(response.data['reporting_manager'], self.manager.pk)
+
+    def test_generic_assignment_approvals_require_each_approver(self):
+        assignment = submit_assignment_request(self.asset, self.assignee, self.requester)
+        approvals = list(assignment.approval_records.order_by('approver_id'))
+        self.assertEqual(len(approvals), 2)
+
+        client = APIClient()
+        client.force_authenticate(self.manager_user)
+        manager_inbox = client.get('/api/approvals/?status=pending')
+        self.assertEqual(manager_inbox.status_code, 200)
+        self.assertEqual([item['id'] for item in manager_inbox.data], [
+            next(item.pk for item in approvals if item.approver_id == self.manager_user.pk)
+        ])
+        manager_approval = next(item for item in approvals if item.approver_id == self.manager_user.pk)
+        response = client.post(f'/api/approvals/{manager_approval.pk}/approve/', {}, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['status'], 'approved')
+        self.assertEqual(response.data['acted_by'], self.manager_user.pk)
+        self.asset.refresh_from_db()
+        assignment.refresh_from_db()
+        self.assertIsNone(self.asset.assigned_staff)
+        self.assertEqual(assignment.status, 'pending')
+
+        supervisor_approval = next(item for item in approvals if item.approver_id == self.supervisor_user.pk)
+        client.force_authenticate(self.supervisor_user)
+        response = client.post(f'/api/approvals/{supervisor_approval.pk}/approve/', {}, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        self.asset.refresh_from_db()
+        assignment.refresh_from_db()
+        self.assertEqual(self.asset.assigned_staff, self.assignee)
+        self.assertEqual(assignment.status, 'approved')
+
+    def _create_driver_request_with_two_approvers(self):
+        UserRole.objects.create(user=self.requester, role='staff')
+        requester_staff = StaffMember.objects.create(
+            user=self.requester,
+            staff_id='API-APPROVAL-REQUESTER',
+            first_name='Approval',
+            last_name='Requester',
+            supervisor=self.supervisor,
+            reporting_manager=self.manager,
+        )
+        client = APIClient()
+        client.force_authenticate(self.requester)
+        request_start = timezone.now() + timedelta(days=5)
+        response = client.post('/api/driver-requests/', {
+            'details': 'Multiple approver API test',
+            'preferred_date': request_start.date().isoformat(),
+            'requested_start': request_start.isoformat(),
+            'requested_end': (request_start + timedelta(hours=1)).isoformat(),
+        }, format='json')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data['requested_by'], requester_staff.pk)
+        return DriverRequest.objects.get(pk=response.data['id'])
+
+    def test_driver_request_applies_after_all_approval_records_are_approved(self):
+        driver_request = self._create_driver_request_with_two_approvers()
+        approvals = list(driver_request.approval_records.order_by('approver_id'))
+        self.assertEqual(len(approvals), 2)
+
+        client = APIClient()
+        supervisor_approval = next(item for item in approvals if item.approver_id == self.supervisor_user.pk)
+        client.force_authenticate(self.supervisor_user)
+        response = client.post(f'/api/approvals/{supervisor_approval.pk}/approve/', {}, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        driver_request.refresh_from_db()
+        self.assertEqual(driver_request.status, 'requested')
+        self.assertIsNone(driver_request.approved_by)
+
+        manager_approval = next(item for item in approvals if item.approver_id == self.manager_user.pk)
+        client.force_authenticate(self.manager_user)
+        response = client.post(f'/api/approvals/{manager_approval.pk}/approve/', {}, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        driver_request.refresh_from_db()
+        self.assertEqual(driver_request.status, 'approved')
+        self.assertEqual(driver_request.approved_by, self.manager_user)
+
+    def test_rejection_cancels_other_pending_driver_approvals(self):
+        driver_request = self._create_driver_request_with_two_approvers()
+        approvals = list(driver_request.approval_records.order_by('approver_id'))
+        supervisor_approval = next(item for item in approvals if item.approver_id == self.supervisor_user.pk)
+        client = APIClient()
+        client.force_authenticate(self.supervisor_user)
+
+        response = client.post(
+            f'/api/approvals/{supervisor_approval.pk}/reject/',
+            {'rejection_note': 'Not approved for test'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['status'], 'rejected')
+        self.assertEqual(response.data['acted_by'], self.supervisor_user.pk)
+        driver_request.refresh_from_db()
+        self.assertEqual(driver_request.status, 'declined')
+        self.assertEqual(
+            driver_request.approval_records.get(approver=self.manager_user).status,
+            'cancelled',
+        )

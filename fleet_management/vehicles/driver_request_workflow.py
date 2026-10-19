@@ -2,6 +2,13 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from .approval_workflow import (
+    approval_records_complete,
+    create_approval_records,
+    pending_approval_for_actor,
+    set_approval_record_status,
+    validate_approval_actor,
+)
 from .models import CompanyAsset, DriverRequest, StaffMember
 from .permissions import is_admin
 
@@ -39,26 +46,34 @@ def get_available_drivers(
 
 def prepare_driver_request_approval(driver_request):
     staff = driver_request.requested_by
-    possible_approvers = []
+    approvers = []
     if staff:
-        possible_approvers.extend([staff.supervisor, staff.reporting_manager])
+        for approver_type, staff_approver in (
+            ('supervisor', staff.supervisor),
+            ('reporting_manager', staff.reporting_manager),
+        ):
+            if staff_approver and staff_approver.user_id and staff_approver.user.is_active:
+                approvers.append((approver_type, staff_approver.user))
 
-    approver = next((
-        staff_member.user
-        for staff_member in possible_approvers
-        if staff_member and staff_member.user_id and staff_member.user.is_active
-    ), None)
+    approver = approvers[0][1] if approvers else None
     driver_request.approval_approver = approver
-    driver_request.requires_superadmin_approval = approver is None
+    driver_request.requires_superadmin_approval = not approvers
     driver_request.save(update_fields=[
         'approval_approver', 'requires_superadmin_approval', 'updated_at',
     ])
+    create_approval_records(
+        driver_request,
+        approvers,
+        admin_fallback=not approvers,
+    )
     return driver_request
 
 
 def can_approve_driver_request(driver_request, user):
     if driver_request.status != 'requested' or not user.is_authenticated:
         return False
+    if driver_request.approval_records.exists():
+        return pending_approval_for_actor(driver_request, user) is not None
     if driver_request.approval_approver_id == user.pk:
         return True
     return is_admin(user) and (
@@ -69,8 +84,23 @@ def can_approve_driver_request(driver_request, user):
 
 
 @transaction.atomic
-def approve_driver_request(driver_request_id, user):
+def approve_driver_request(driver_request_id, user, approval_record=None):
     driver_request = DriverRequest.objects.select_for_update().get(pk=driver_request_id)
+    if driver_request.approval_records.exists():
+        approval_record = approval_record or pending_approval_for_actor(driver_request, user)
+        if not approval_record or approval_record.driver_request_id != driver_request.pk:
+            raise PermissionError('You are not an approver for this driver request.')
+        validate_approval_actor(approval_record, user)
+        set_approval_record_status(approval_record, user, 'approved')
+        if approval_records_complete(driver_request):
+            driver_request.approved_by = user
+            driver_request.approved_at = timezone.now()
+            driver_request.status = 'approved'
+            driver_request.save(update_fields=[
+                'approved_by', 'approved_at', 'status', 'updated_at',
+            ])
+        return driver_request
+
     if not can_approve_driver_request(driver_request, user):
         raise PermissionError('You are not an approver for this driver request.')
 
@@ -84,8 +114,23 @@ def approve_driver_request(driver_request_id, user):
 
 
 @transaction.atomic
-def reject_driver_request(driver_request_id, user, rejection_note=''):
+def reject_driver_request(driver_request_id, user, rejection_note='', approval_record=None):
     driver_request = DriverRequest.objects.select_for_update().get(pk=driver_request_id)
+    if driver_request.approval_records.exists():
+        approval_record = approval_record or pending_approval_for_actor(driver_request, user)
+        if not approval_record or approval_record.driver_request_id != driver_request.pk:
+            raise PermissionError('You are not an approver for this driver request.')
+        validate_approval_actor(approval_record, user)
+        set_approval_record_status(approval_record, user, 'rejected', rejection_note)
+        driver_request.status = 'declined'
+        driver_request.rejected_by = user
+        driver_request.rejected_at = timezone.now()
+        driver_request.rejection_note = rejection_note
+        driver_request.save(update_fields=[
+            'status', 'rejected_by', 'rejected_at', 'rejection_note', 'updated_at',
+        ])
+        return driver_request
+
     if not can_approve_driver_request(driver_request, user):
         raise PermissionError('You are not an approver for this driver request.')
 

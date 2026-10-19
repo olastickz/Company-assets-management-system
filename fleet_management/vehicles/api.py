@@ -21,6 +21,7 @@ from .models import (
     AuditLog,
     DriverRequest,
     AssetAssignmentRequest,
+    ApprovalRecord,
     MaintenanceItem,
     MaintenanceRequest,
     StaffMember,
@@ -32,6 +33,11 @@ from .asset_assignment_workflow import (
     approve_assignment_request,
     reject_assignment_request,
     submit_assignment_request,
+)
+from .approval_workflow import (
+    ApprovalWorkflowError,
+    actor_approval_filter,
+    validate_approval_actor,
 )
 from .driver_request_workflow import (
     DriverRequestWorkflowError,
@@ -58,6 +64,7 @@ from .serializers import (
     DriverAssignmentSerializer,
     DriverRequestAvailableVehiclesSerializer,
     AssetAssignmentRequestSerializer,
+    ApprovalRecordSerializer,
 )
 from . import views
 
@@ -704,6 +711,97 @@ def driver_request_review_api(request, pk):
         description=f"{'Approved' if action == 'approve' else 'Rejected'} driver request",
     )
     return Response(DriverRequestSerializer(driver_request).data)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def approvals_api(request):
+    requested_status = request.query_params.get('status', 'pending')
+    valid_statuses = {choice[0] for choice in ApprovalRecord.STATUS_CHOICES}
+    if requested_status not in valid_statuses:
+        return Response(
+            {'status': f"Expected one of: {', '.join(sorted(valid_statuses))}."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    approvals = ApprovalRecord.objects.select_related(
+        'approver', 'acted_by', 'asset_assignment_request', 'driver_request',
+    ).filter(
+        actor_approval_filter(request.user),
+        status=requested_status,
+    )
+    return Response(ApprovalRecordSerializer(approvals, many=True).data)
+
+
+def _act_on_approval(request, pk, action):
+    rejection_note = request.data.get('rejection_note', '').strip()
+    try:
+        with transaction.atomic():
+            approval = ApprovalRecord.objects.select_for_update().get(pk=pk)
+            validate_approval_actor(approval, request.user)
+            if approval.asset_assignment_request_id:
+                if action == 'approve':
+                    approve_assignment_request(
+                        approval.asset_assignment_request_id,
+                        request.user,
+                        approval_record=approval,
+                    )
+                else:
+                    reject_assignment_request(
+                        approval.asset_assignment_request_id,
+                        request.user,
+                        rejection_note,
+                        approval_record=approval,
+                    )
+            elif approval.driver_request_id:
+                if action == 'approve':
+                    approve_driver_request(
+                        approval.driver_request_id,
+                        request.user,
+                        approval_record=approval,
+                    )
+                else:
+                    reject_driver_request(
+                        approval.driver_request_id,
+                        request.user,
+                        rejection_note,
+                        approval_record=approval,
+                    )
+            else:
+                return Response({'detail': 'Approval has no request target.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            AuditLog.objects.create(
+                user=request.user,
+                action='update',
+                model_name='approvalrecord',
+                object_id=approval.pk,
+                description=f"{'Approved' if action == 'approve' else 'Rejected'} approval record",
+            )
+    except ApprovalRecord.DoesNotExist:
+        return Response({'detail': 'Approval not found.'}, status=status.HTTP_404_NOT_FOUND)
+    except PermissionError as error:
+        return Response({'detail': str(error)}, status=status.HTTP_403_FORBIDDEN)
+    except ApprovalWorkflowError as error:
+        return Response({'detail': str(error)}, status=status.HTTP_400_BAD_REQUEST)
+    except AssignmentWorkflowError as error:
+        return Response({'detail': str(error)}, status=status.HTTP_400_BAD_REQUEST)
+    except DriverRequestWorkflowError as error:
+        return Response({'detail': str(error)}, status=status.HTTP_400_BAD_REQUEST)
+
+    approval.refresh_from_db()
+    return Response(ApprovalRecordSerializer(approval).data)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def approval_approve_api(request, pk):
+    return _act_on_approval(request, pk, 'approve')
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def approval_reject_api(request, pk):
+    return _act_on_approval(request, pk, 'reject')
 
 
 @api_view(['POST'])

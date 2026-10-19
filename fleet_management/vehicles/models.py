@@ -1256,3 +1256,73 @@ class DriverRequest(models.Model):
     def __str__(self):
         requester = self.requested_by.full_name if self.requested_by else (self.requester_user.username if self.requester_user else 'Unknown')
         return f"Driver request by {requester} ({self.get_status_display()})"
+
+
+class ApprovalRecord(models.Model):
+    APPROVER_TYPE_CHOICES = [
+        ('supervisor', 'Supervisor'),
+        ('reporting_manager', 'Reporting manager'),
+        ('supervisor_and_reporting_manager', 'Supervisor and reporting manager'),
+        ('admin', 'Admin fallback'),
+    ]
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    asset_assignment_request = models.ForeignKey(
+        AssetAssignmentRequest,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='approval_records',
+    )
+    driver_request = models.ForeignKey(
+        DriverRequest,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='approval_records',
+    )
+    approver = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='approval_records',
+    )
+    approver_type = models.CharField(max_length=40, choices=APPROVER_TYPE_CHOICES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    acted_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='acted_approval_records',
+    )
+    acted_at = models.DateTimeField(null=True, blank=True)
+    rejection_note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['created_at', 'pk']
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(asset_assignment_request__isnull=False, driver_request__isnull=True)
+                    | models.Q(asset_assignment_request__isnull=True, driver_request__isnull=False)
+                ),
+                name='approval_record_exactly_one_request',
+            ),
+        ]
+
+    @property
+    def target_type(self):
+        return 'asset_assignment' if self.asset_assignment_request_id else 'driver_request'
+
+    @property
+    def target_id(self):
+        return self.asset_assignment_request_id or self.driver_request_id

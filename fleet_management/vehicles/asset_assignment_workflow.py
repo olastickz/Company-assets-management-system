@@ -3,6 +3,15 @@ from django.utils import timezone
 
 from .models import Asset, AssetAssignmentRequest, EquipmentTransfer
 from .permissions import is_admin
+from .approval_workflow import (
+    approval_records_complete,
+    create_approval_records,
+    pending_approval_for_actor,
+    set_approval_record_status,
+    sync_assignment_approval_fields,
+    sync_assignment_approval_records,
+    validate_approval_actor,
+)
 
 
 class AssignmentWorkflowError(Exception):
@@ -23,7 +32,7 @@ def submit_assignment_request(asset, staff_member, requested_by, reason='', note
     manager = staff_member.reporting_manager
     supervisor_user = supervisor.user_id if supervisor and supervisor.user_id and supervisor.user.is_active else None
     manager_user = manager.user_id if manager and manager.user_id and manager.user.is_active else None
-    return AssetAssignmentRequest.objects.create(
+    assignment = AssetAssignmentRequest.objects.create(
         asset=asset,
         previous_staff=asset.assigned_staff,
         requested_staff=staff_member,
@@ -36,15 +45,32 @@ def submit_assignment_request(asset, staff_member, requested_by, reason='', note
         reporting_manager_approval_required=manager is not None,
         requires_superadmin_approval=not (supervisor_user and manager_user),
     )
+    create_approval_records(
+        assignment,
+        [('supervisor', supervisor_user), ('reporting_manager', manager_user)],
+        admin_fallback=assignment.requires_superadmin_approval,
+    )
+    return assignment
 
 
 @transaction.atomic
-def approve_assignment_request(assignment_request_id, user):
-    assignment = AssetAssignmentRequest.objects.select_for_update().select_related(
-        'asset', 'requested_staff', 'supervisor_approver', 'reporting_manager_approver'
-    ).get(pk=assignment_request_id)
+def approve_assignment_request(assignment_request_id, user, approval_record=None):
+    assignment = AssetAssignmentRequest.objects.select_for_update().get(pk=assignment_request_id)
     if assignment.status != 'pending':
         raise AssignmentWorkflowError('This assignment request is no longer pending.')
+
+    if assignment.approval_records.exists():
+        approval_record = approval_record or pending_approval_for_actor(assignment, user)
+        if not approval_record or approval_record.asset_assignment_request_id != assignment.pk:
+            raise PermissionError('You are not an approver for this assignment request.')
+        validate_approval_actor(approval_record, user)
+        set_approval_record_status(approval_record, user, 'approved')
+        sync_assignment_approval_fields(assignment, approval_record)
+        if approval_records_complete(assignment):
+            if not assignment.approvals_complete:
+                raise AssignmentWorkflowError('The required assignment approvals are incomplete.')
+            return apply_approved_assignment(assignment)
+        return assignment
 
     now = timezone.now()
     approved_fields = []
@@ -82,58 +108,71 @@ def approve_assignment_request(assignment_request_id, user):
         raise PermissionError('You are not an approver for this assignment request.')
 
     assignment.save(update_fields=approved_fields + ['updated_at'])
+    sync_assignment_approval_records(assignment)
     if assignment.approvals_complete:
-        asset = Asset.objects.select_for_update().get(pk=assignment.asset_id)
-        if asset.assigned_staff_id != assignment.previous_staff_id:
-            assignment.status = 'rejected'
-            assignment.rejection_note = 'The asset assignment changed while this request was awaiting approval.'
-            assignment.save(update_fields=['status', 'rejection_note', 'updated_at'])
-            return assignment
-
-        asset.assigned_staff = assignment.requested_staff
-        asset.save(update_fields=['assigned_staff'])
-        company_asset = getattr(asset, 'company_asset', None)
-        equipment = getattr(asset, 'equipment', None)
-        if company_asset:
-            company_asset.assigned_staff = assignment.requested_staff
-            company_asset.save(update_fields=['assigned_staff'])
-        if equipment:
-            previous_user_label = equipment.assigned_user or (
-                str(assignment.previous_staff) if assignment.previous_staff else 'Unassigned'
-            )
-            equipment.assigned_staff = assignment.requested_staff
-            equipment.save(update_fields=['assigned_staff'])
-            equipment.assigned_user = assignment.requested_staff.full_name
-            equipment.save(update_fields=['assigned_user'])
-            EquipmentTransfer.objects.create(
-                equipment=equipment,
-                transferred_from=previous_user_label,
-                transferred_from_department=assignment.previous_staff.department or '' if assignment.previous_staff else '',
-                transferred_from_email=assignment.previous_staff.email or '' if assignment.previous_staff else '',
-                transferred_to=str(assignment.requested_staff),
-                transferred_to_department=assignment.requested_staff.department or '',
-                transferred_to_email=assignment.requested_staff.email or '',
-                reason=assignment.reason,
-                notes=assignment.notes,
-                recorded_by=assignment.requested_by,
-            )
-        assignment.status = 'approved'
-        assignment.save(update_fields=['status', 'updated_at'])
+        return apply_approved_assignment(assignment)
 
     return assignment
 
 
+def apply_approved_assignment(assignment):
+    asset = Asset.objects.select_for_update().get(pk=assignment.asset_id)
+    if asset.assigned_staff_id != assignment.previous_staff_id:
+        assignment.status = 'rejected'
+        assignment.rejection_note = 'The asset assignment changed while this request was awaiting approval.'
+        assignment.save(update_fields=['status', 'rejection_note', 'updated_at'])
+        return assignment
+
+    asset.assigned_staff = assignment.requested_staff
+    asset.save(update_fields=['assigned_staff'])
+    company_asset = getattr(asset, 'company_asset', None)
+    equipment = getattr(asset, 'equipment', None)
+    if company_asset:
+        company_asset.assigned_staff = assignment.requested_staff
+        company_asset.save(update_fields=['assigned_staff'])
+    if equipment:
+        previous_user_label = equipment.assigned_user or (
+            str(assignment.previous_staff) if assignment.previous_staff else 'Unassigned'
+        )
+        equipment.assigned_staff = assignment.requested_staff
+        equipment.save(update_fields=['assigned_staff'])
+        equipment.assigned_user = assignment.requested_staff.full_name
+        equipment.save(update_fields=['assigned_user'])
+        EquipmentTransfer.objects.create(
+            equipment=equipment,
+            transferred_from=previous_user_label,
+            transferred_from_department=assignment.previous_staff.department or '' if assignment.previous_staff else '',
+            transferred_from_email=assignment.previous_staff.email or '' if assignment.previous_staff else '',
+            transferred_to=str(assignment.requested_staff),
+            transferred_to_department=assignment.requested_staff.department or '',
+            transferred_to_email=assignment.requested_staff.email or '',
+            reason=assignment.reason,
+            notes=assignment.notes,
+            recorded_by=assignment.requested_by,
+        )
+    assignment.status = 'approved'
+    assignment.save(update_fields=['status', 'updated_at'])
+    return assignment
+
+
 @transaction.atomic
-def reject_assignment_request(assignment_request_id, user, rejection_note=''):
+def reject_assignment_request(assignment_request_id, user, rejection_note='', approval_record=None):
     assignment = AssetAssignmentRequest.objects.select_for_update().get(pk=assignment_request_id)
-    authorized = is_admin(user) or user.pk in {
-        assignment.supervisor_approver_id,
-        assignment.reporting_manager_approver_id,
-    }
-    if not authorized:
-        raise PermissionError('You are not an approver for this assignment request.')
     if assignment.status != 'pending':
         raise AssignmentWorkflowError('This assignment request is no longer pending.')
+    if assignment.approval_records.exists():
+        approval_record = approval_record or pending_approval_for_actor(assignment, user)
+        if not approval_record or approval_record.asset_assignment_request_id != assignment.pk:
+            raise PermissionError('You are not an approver for this assignment request.')
+        validate_approval_actor(approval_record, user)
+        set_approval_record_status(approval_record, user, 'rejected', rejection_note)
+    else:
+        authorized = is_admin(user) or user.pk in {
+            assignment.supervisor_approver_id,
+            assignment.reporting_manager_approver_id,
+        }
+        if not authorized:
+            raise PermissionError('You are not an approver for this assignment request.')
     assignment.status = 'rejected'
     assignment.rejected_by = user
     assignment.rejection_note = rejection_note

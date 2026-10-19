@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from .models import (
     Asset,
     AssetAssignmentRequest,
+    ApprovalRecord,
     CompanyAsset,
     CompanyDocument,
     DriverRequest,
@@ -147,6 +148,26 @@ class DriverRequestSerializer(serializers.ModelSerializer):
         if requested_end <= requested_start:
             raise serializers.ValidationError({'requested_end': 'End time must be after start time.'})
         return attrs
+
+
+class ApprovalRecordSerializer(serializers.ModelSerializer):
+    target_type = serializers.SerializerMethodField()
+    target_id = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ApprovalRecord
+        fields = [
+            'id', 'target_type', 'target_id', 'asset_assignment_request',
+            'driver_request', 'approver', 'approver_type', 'status',
+            'acted_by', 'acted_at', 'rejection_note', 'created_at', 'updated_at',
+        ]
+        read_only_fields = fields
+
+    def get_target_type(self, approval):
+        return approval.target_type
+
+    def get_target_id(self, approval):
+        return approval.target_id
 
 
 class DriverAssignmentSerializer(serializers.Serializer):
