@@ -70,9 +70,7 @@ def can_approve_driver_request(driver_request, user):
 
 @transaction.atomic
 def approve_driver_request(driver_request_id, user):
-    driver_request = DriverRequest.objects.select_for_update().select_related(
-        'approval_approver',
-    ).get(pk=driver_request_id)
+    driver_request = DriverRequest.objects.select_for_update().get(pk=driver_request_id)
     if not can_approve_driver_request(driver_request, user):
         raise PermissionError('You are not an approver for this driver request.')
 
@@ -87,9 +85,7 @@ def approve_driver_request(driver_request_id, user):
 
 @transaction.atomic
 def reject_driver_request(driver_request_id, user, rejection_note=''):
-    driver_request = DriverRequest.objects.select_for_update().select_related(
-        'approval_approver',
-    ).get(pk=driver_request_id)
+    driver_request = DriverRequest.objects.select_for_update().get(pk=driver_request_id)
     if not can_approve_driver_request(driver_request, user):
         raise PermissionError('You are not an approver for this driver request.')
 
