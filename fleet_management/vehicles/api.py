@@ -33,6 +33,15 @@ from .asset_assignment_workflow import (
     reject_assignment_request,
     submit_assignment_request,
 )
+from .driver_request_workflow import (
+    DriverRequestWorkflowError,
+    approve_driver_request,
+    assign_driver_request,
+    can_approve_driver_request,
+    get_available_vehicles,
+    prepare_driver_request_approval,
+    reject_driver_request,
+)
 from .permissions import RoleMatrixPermission, get_user_role, has_role_permission, is_admin, is_manager
 from .serializers import (
     VehicleSerializer,
@@ -47,6 +56,7 @@ from .serializers import (
     EquipmentTransferSerializer,
     DriverRequestSerializer,
     DriverAssignmentSerializer,
+    DriverRequestAvailableVehiclesSerializer,
     AssetAssignmentRequestSerializer,
 )
 from . import views
@@ -580,20 +590,55 @@ def can_view_driver_request(user, driver_request):
     staff_profile = getattr(user, 'staff_profile', None)
     return bool(
         driver_request.requester_user_id == user.pk
+        or driver_request.approval_approver_id == user.pk
         or (staff_profile and driver_request.assigned_driver_id == staff_profile.pk)
     )
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def driver_request_available_vehicles_api(request):
+    if not (is_admin(request.user) or get_user_role(request.user) == 'vehicle_manager'):
+        return Response({'detail': 'Only a Vehicle Manager or admin can view dispatch availability.'}, status=status.HTTP_403_FORBIDDEN)
+
+    serializer = DriverRequestAvailableVehiclesSerializer(data=request.query_params)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    values = serializer.validated_data
+    vehicles = get_available_vehicles(
+        values['requested_start'],
+        values['requested_end'],
+        assigned_driver_id=(
+            values['assigned_driver'].pk if values.get('assigned_driver') else None
+        ),
+    )
+    return Response([{
+        'id': vehicle.pk,
+        'name': vehicle.name,
+        'make': vehicle.make,
+        'model': vehicle.model,
+        'license_plate': vehicle.license_plate,
+        'status': vehicle.status,
+        'assigned_staff': vehicle.assigned_staff_id,
+        'assigned_staff_name': vehicle.assigned_staff.full_name if vehicle.assigned_staff_id else None,
+    } for vehicle in vehicles])
 
 
 @api_view(['GET', 'POST'])
 @permission_classes([RoleMatrixPermission.for_module('requests')])
 def driver_requests_api(request):
     if request.method == 'GET':
-        queryset = DriverRequest.objects.select_related('requested_by', 'requester_user', 'assigned_driver')
+        queryset = DriverRequest.objects.select_related(
+            'requested_by', 'requester_user', 'assigned_driver', 'assigned_vehicle',
+            'approval_approver', 'approved_by', 'rejected_by',
+        )
         if not (is_admin(request.user) or get_user_role(request.user) == 'vehicle_manager'):
             staff_profile = getattr(request.user, 'staff_profile', None)
-            queryset = queryset.filter(
-                Q(requester_user=request.user) | Q(assigned_driver=staff_profile)
-            ) if staff_profile else queryset.filter(requester_user=request.user)
+            visibility = Q(requester_user=request.user) | Q(approval_approver=request.user)
+            if staff_profile:
+                visibility |= Q(assigned_driver=staff_profile)
+            queryset = queryset.filter(visibility).distinct()
         if request.query_params.get('status'):
             queryset = queryset.filter(status=request.query_params['status'])
         return Response(DriverRequestSerializer(queryset, many=True).data)
@@ -604,6 +649,7 @@ def driver_requests_api(request):
             requester_user=request.user,
             requested_by=getattr(request.user, 'staff_profile', None),
         )
+        prepare_driver_request_approval(driver_request)
         AuditLog.objects.create(
             user=request.user,
             action='create',
@@ -619,7 +665,10 @@ def driver_requests_api(request):
 @permission_classes([RoleMatrixPermission.for_module('requests')])
 def driver_request_detail_api(request, pk):
     driver_request = get_object_or_404(
-        DriverRequest.objects.select_related('requested_by', 'requester_user', 'assigned_driver'),
+        DriverRequest.objects.select_related(
+            'requested_by', 'requester_user', 'assigned_driver', 'assigned_vehicle',
+            'approval_approver', 'approved_by', 'rejected_by',
+        ),
         pk=pk,
     )
     if not can_view_driver_request(request.user, driver_request):
@@ -628,35 +677,62 @@ def driver_request_detail_api(request, pk):
 
 
 @api_view(['POST'])
-@permission_classes([RoleMatrixPermission.for_module('requests', {'POST': ('approve', 'level_1')})])
-def driver_request_assign_api(request, pk):
-    driver_request = get_object_or_404(DriverRequest, pk=pk)
-    if driver_request.status == 'cancelled':
-        return Response({'detail': 'Cannot assign a cancelled request.'}, status=status.HTTP_400_BAD_REQUEST)
-    serializer = DriverAssignmentSerializer(data=request.data, instance=driver_request)
-    if not serializer.is_valid():
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+@permission_classes([permissions.IsAuthenticated])
+def driver_request_review_api(request, pk):
+    action = request.data.get('action')
+    try:
+        if action == 'approve':
+            driver_request = approve_driver_request(pk, request.user)
+        elif action == 'reject':
+            driver_request = reject_driver_request(
+                pk, request.user, request.data.get('rejection_note', '').strip()
+            )
+        else:
+            return Response({'detail': 'action must be approve or reject.'}, status=status.HTTP_400_BAD_REQUEST)
+    except DriverRequest.DoesNotExist:
+        return Response({'detail': 'Driver request not found.'}, status=status.HTTP_404_NOT_FOUND)
+    except PermissionError as error:
+        return Response({'detail': str(error)}, status=status.HTTP_403_FORBIDDEN)
+    except DriverRequestWorkflowError as error:
+        return Response({'detail': str(error)}, status=status.HTTP_400_BAD_REQUEST)
 
-    assigned_driver = serializer.validated_data['assigned_driver']
-    previous_driver = driver_request.assigned_driver
-    if previous_driver and previous_driver.pk != assigned_driver.pk:
-        previous_driver.driver_status = 'available'
-        previous_driver.save(update_fields=['driver_status'])
-    assigned_driver.driver_status = 'unavailable'
-    assigned_driver.save(update_fields=['driver_status'])
-    driver_request.assigned_driver = assigned_driver
-    driver_request.assigned_by = request.user
-    driver_request.assigned_at = timezone.now()
-    driver_request.status = 'assigned'
-    if 'notes' in serializer.validated_data:
-        driver_request.notes = serializer.validated_data['notes']
-    driver_request.save()
     AuditLog.objects.create(
         user=request.user,
         action='update',
         model_name='driverrequest',
         object_id=driver_request.pk,
-        description=f'Assigned driver {assigned_driver} to request',
+        description=f"{'Approved' if action == 'approve' else 'Rejected'} driver request",
+    )
+    return Response(DriverRequestSerializer(driver_request).data)
+
+
+@api_view(['POST'])
+@permission_classes([RoleMatrixPermission.for_module('requests', {'POST': ('approve', 'level_1')})])
+def driver_request_assign_api(request, pk):
+    driver_request = get_object_or_404(DriverRequest, pk=pk)
+    if not (is_admin(request.user) or get_user_role(request.user) == 'vehicle_manager'):
+        return Response({'detail': 'Only a Vehicle Manager or admin can dispatch this request.'}, status=status.HTTP_403_FORBIDDEN)
+    serializer = DriverAssignmentSerializer(data=request.data, instance=driver_request)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        driver_request = assign_driver_request(
+            driver_request.pk,
+            request.user,
+            serializer.validated_data['assigned_driver'].pk,
+            serializer.validated_data['assigned_vehicle'].pk,
+            serializer.validated_data.get('notes'),
+        )
+    except DriverRequestWorkflowError as error:
+        return Response({'detail': str(error)}, status=status.HTTP_400_BAD_REQUEST)
+
+    AuditLog.objects.create(
+        user=request.user,
+        action='update',
+        model_name='driverrequest',
+        object_id=driver_request.pk,
+        description=f'Assigned driver {driver_request.assigned_driver} and vehicle {driver_request.assigned_vehicle} to request',
     )
     return Response(DriverRequestSerializer(driver_request).data)
 

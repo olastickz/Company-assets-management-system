@@ -27,6 +27,14 @@
             <h2>Status</h2>
             <p>{{ driver_request.get_status_display }}</p>
             <p>Preferred date: {{ driver_request.preferred_date|default:'Not specified' }}</p>
+            <p>Requested: {{ driver_request.requested_start|default:'Not specified' }} to {{ driver_request.requested_end|default:'Not specified' }}</p>
+            {% if driver_request.approval_approver %}
+                <p>Approver: {{ driver_request.approval_approver.get_full_name|default:driver_request.approval_approver.username }}</p>
+            {% elif driver_request.requires_superadmin_approval %}
+                <p>Approval: Superadmin review</p>
+            {% endif %}
+            {% if driver_request.approved_at %}<p>Approved: {{ driver_request.approved_at }}</p>{% endif %}
+            {% if driver_request.rejection_note %}<p>Rejection note: {{ driver_request.rejection_note }}</p>{% endif %}
         </div>
         <div class="detail-card">
             <h2>Assigned driver</h2>
@@ -36,6 +44,10 @@
                 <p>Not assigned</p>
             {% endif %}
             <p>Assigned at: {{ driver_request.assigned_at|default:'N/A' }}</p>
+        </div>
+        <div class="detail-card">
+            <h2>Assigned vehicle</h2>
+            <p>{% if driver_request.assigned_vehicle %}{{ driver_request.assigned_vehicle }}{% else %}Not assigned{% endif %}</p>
         </div>
     </div>
 </div>
@@ -47,16 +59,41 @@
     <p style="white-space: pre-wrap;">{{ driver_request.notes|default:'No assignment notes yet' }}</p>
 </div>
 
+{% if can_approve %}
+<div class="section-card">
+    <h2>Review request</h2>
+    <form method="post" action="{% url 'driver_request_review' driver_request.pk %}">
+        {% csrf_token %}
+        <div class="form-item">
+            <label for="rejection_note">Rejection note</label>
+            <textarea id="rejection_note" name="rejection_note" rows="2" class="form-control"></textarea>
+        </div>
+        <div class="action-row">
+            <button type="submit" name="action" value="approve" class="button-inline">Approve</button>
+            <button type="submit" name="action" value="reject" class="button-inline">Reject</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+
 {% if assign_form %}
 <div class="section-card">
-    <h2>Assign driver</h2>
+    <h2>Dispatch driver and vehicle</h2>
     <form method="post" action="{% url 'driver_request_assign' driver_request.pk %}">
         {% csrf_token %}
+        {% if assign_form.non_field_errors %}<div class="field-errors">{{ assign_form.non_field_errors }}</div>{% endif %}
         <div class="form-item">
             {{ assign_form.assigned_driver.label_tag }}
             {{ assign_form.assigned_driver }}
             {% if assign_form.assigned_driver.errors %}
                 <div class="field-errors">{{ assign_form.assigned_driver.errors }}</div>
+            {% endif %}
+        </div>
+        <div class="form-item">
+            {{ assign_form.assigned_vehicle.label_tag }}
+            {{ assign_form.assigned_vehicle }}
+            {% if assign_form.assigned_vehicle.errors %}
+                <div class="field-errors">{{ assign_form.assigned_vehicle.errors }}</div>
             {% endif %}
         </div>
         <div class="form-item">
@@ -67,7 +104,7 @@
             {% endif %}
         </div>
         <div class="action-row">
-            <button type="submit" class="button-inline">Assign Driver</button>
+            <button type="submit" class="button-inline">Assign Driver and Vehicle</button>
         </div>
     </form>
 </div>

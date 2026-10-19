@@ -27,6 +27,14 @@ from .asset_assignment_workflow import (
     save_record_with_assignment_request,
     submit_assignment_request,
 )
+from .driver_request_workflow import (
+    DriverRequestWorkflowError,
+    approve_driver_request,
+    assign_driver_request,
+    can_approve_driver_request,
+    prepare_driver_request_approval,
+    reject_driver_request,
+)
 
 # Logger for application events
 logger = logging.getLogger(__name__)
@@ -2650,12 +2658,10 @@ def driver_requests_list(request):
         requests_qs = DriverRequest.objects.all().order_by('-created_at')
     else:
         staff_profile = getattr(request.user, 'staff_profile', None)
+        access_filter = Q(requester_user=request.user) | Q(approval_approver=request.user)
         if staff_profile is not None:
-            requests_qs = DriverRequest.objects.filter(
-                Q(requested_by=staff_profile) | Q(assigned_driver=staff_profile)
-            ).order_by('-created_at')
-        else:
-            requests_qs = DriverRequest.objects.none()
+            access_filter |= Q(requested_by=staff_profile) | Q(assigned_driver=staff_profile)
+        requests_qs = DriverRequest.objects.filter(access_filter).distinct().order_by('-created_at')
 
     status_filter = request.GET.get('status', '')
     if status_filter:
@@ -2687,6 +2693,7 @@ def driver_request_create(request):
             driver_request.requested_by = staff_profile
             driver_request.status = 'requested'
             driver_request.save()
+            prepare_driver_request_approval(driver_request)
             log_audit(
                 request.user,
                 'create',
@@ -2713,18 +2720,57 @@ def driver_request_detail(request, pk):
     if not (
         is_admin(request.user) or get_user_role(request.user) == 'vehicle_manager' or
         driver_request.requester_user == request.user or
+        driver_request.approval_approver_id == request.user.pk or
         (driver_request.assigned_driver and driver_request.assigned_driver == staff_profile)
     ):
         return HttpResponseForbidden('Access denied')
 
     assign_form = None
-    if can_assign_driver(request.user) and driver_request.status in ['requested', 'assigned']:
+    if can_assign_driver(request.user) and driver_request.status in ['approved', 'assigned']:
         assign_form = DriverAssignmentForm(instance=driver_request)
 
     return render(request, 'driver_requests/detail.html', {
         'driver_request': driver_request,
         'assign_form': assign_form,
+        'can_approve': can_approve_driver_request(driver_request, request.user),
     })
+
+
+@login_required
+@require_POST
+def driver_request_review(request, pk):
+    action = request.POST.get('action')
+    rejection_note = request.POST.get('rejection_note', '').strip()
+    try:
+        if action == 'approve':
+            driver_request = approve_driver_request(pk, request.user)
+            log_audit(
+                request.user,
+                'update',
+                'driverrequest',
+                object_id=driver_request.pk,
+                description='Approved driver request',
+            )
+            messages.success(request, 'Driver request approved and sent to the Vehicle Manager.')
+        elif action == 'reject':
+            driver_request = reject_driver_request(pk, request.user, rejection_note)
+            log_audit(
+                request.user,
+                'update',
+                'driverrequest',
+                object_id=driver_request.pk,
+                description='Rejected driver request',
+            )
+            messages.success(request, 'Driver request rejected.')
+        else:
+            return HttpResponseForbidden('Invalid review action.')
+    except DriverRequest.DoesNotExist:
+        return HttpResponseForbidden('Driver request not found.')
+    except PermissionError as error:
+        return HttpResponseForbidden(str(error))
+    except DriverRequestWorkflowError as error:
+        messages.error(request, str(error))
+    return redirect('driver_request_detail', pk=pk)
 
 
 @login_required
@@ -2734,37 +2780,30 @@ def driver_request_assign(request, pk):
     if request.method != 'POST':
         return redirect('driver_request_detail', pk=pk)
 
-    if driver_request.status == 'cancelled':
-        return HttpResponseForbidden('Cannot assign a cancelled request')
-
-    previous_driver_id = driver_request.assigned_driver_id
     form = DriverAssignmentForm(request.POST, instance=driver_request)
     if form.is_valid():
-        assigned_driver = form.cleaned_data['assigned_driver']
-        if assigned_driver.driver_status != 'available' and assigned_driver.pk != previous_driver_id:
-            return HttpResponseForbidden('Selected driver is not available')
-
-        driver_request = form.save(commit=False)
-        driver_request.status = 'assigned'
-        driver_request.assigned_by = request.user
-        driver_request.assigned_at = timezone.now()
-        driver_request.save()
-
-        if previous_driver_id and previous_driver_id != assigned_driver.pk:
-            previous_driver = StaffMember.objects.filter(pk=previous_driver_id).first()
-            if previous_driver:
-                previous_driver.driver_status = 'available'
-                previous_driver.save(update_fields=['driver_status'])
-
-        assigned_driver.driver_status = 'unavailable'
-        assigned_driver.save(update_fields=['driver_status'])
+        try:
+            driver_request = assign_driver_request(
+                driver_request.pk,
+                request.user,
+                form.cleaned_data['assigned_driver'].pk,
+                form.cleaned_data['assigned_vehicle'].pk,
+                form.cleaned_data.get('notes'),
+            )
+        except DriverRequestWorkflowError as error:
+            form.add_error(None, str(error))
+            return render(request, 'driver_requests/detail.html', {
+                'driver_request': driver_request,
+                'assign_form': form,
+                'can_approve': can_approve_driver_request(driver_request, request.user),
+            })
 
         log_audit(
             request.user,
             'update',
             'driverrequest',
             object_id=driver_request.pk,
-            description=f'Assigned driver {assigned_driver} to request'
+            description=f'Assigned driver {driver_request.assigned_driver} and vehicle {driver_request.assigned_vehicle} to request'
         )
         messages.success(request, 'Driver has been assigned to the request.')
         return redirect('driver_request_detail', pk=pk)
@@ -2772,6 +2811,7 @@ def driver_request_assign(request, pk):
     return render(request, 'driver_requests/detail.html', {
         'driver_request': driver_request,
         'assign_form': form,
+        'can_approve': can_approve_driver_request(driver_request, request.user),
     })
 
 

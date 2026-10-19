@@ -20,8 +20,9 @@
                 <th>ID</th>
                 <th>Requested by</th>
                 <th>Status</th>
-                <th>Preferred Date</th>
+                <th>Requested Window</th>
                 <th>Assigned Driver</th>
+                <th>Assigned Vehicle</th>
                 <th>Created</th>
                 <th></th>
             </tr>
@@ -38,7 +39,7 @@
                     {% endif %}
                 </td>
                 <td>{{ request.get_status_display }}</td>
-                <td>{{ request.preferred_date|default:'—' }}</td>
+                <td>{{ request.requested_start|date:'M j, Y H:i' }} - {{ request.requested_end|date:'H:i' }}</td>
                 <td>
                     {% if request.assigned_driver %}
                         {{ request.assigned_driver.full_name }}
@@ -46,12 +47,13 @@
                         Unassigned
                     {% endif %}
                 </td>
+                <td>{{ request.assigned_vehicle|default:'Unassigned' }}</td>
                 <td>{{ request.created_at|date:'M j, Y' }}</td>
                 <td><a href="{% url 'driver_request_detail' request.pk %}">View</a></td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="7">No driver requests found.</td>
+                <td colspan="8">No driver requests found.</td>
             </tr>
             {% endfor %}
         </tbody>

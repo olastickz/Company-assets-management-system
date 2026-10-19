@@ -13,6 +13,13 @@ class StaffMemberChoiceField(forms.ModelChoiceField):
         return f"{obj.staff_id} — {obj.full_name}{branch_label}"
 
 
+class AvailableVehicleChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        if obj.assigned_staff_id:
+            return f'{obj} (assigned to {obj.assigned_staff.full_name})'
+        return str(obj)
+
+
 class CompanyAssetForm(forms.ModelForm):
     # License plate: alphanumeric only, max 20 characters (optional for non-vehicles)
     license_plate = forms.CharField(
@@ -257,6 +264,22 @@ class MaintenanceRequestForm(forms.ModelForm):
 
 
 class DriverRequestForm(forms.ModelForm):
+    requested_start = forms.DateTimeField(
+        required=True,
+        widget=forms.DateTimeInput(
+            format='%Y-%m-%dT%H:%M',
+            attrs={'type': 'datetime-local', 'class': 'form-control'},
+        ),
+        label='Requested start',
+    )
+    requested_end = forms.DateTimeField(
+        required=True,
+        widget=forms.DateTimeInput(
+            format='%Y-%m-%dT%H:%M',
+            attrs={'type': 'datetime-local', 'class': 'form-control'},
+        ),
+        label='Requested end',
+    )
     preferred_date = forms.DateField(
         required=False,
         widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
@@ -265,7 +288,7 @@ class DriverRequestForm(forms.ModelForm):
 
     class Meta:
         model = DriverRequest
-        fields = ['details', 'preferred_date']
+        fields = ['details', 'preferred_date', 'requested_start', 'requested_end']
         widgets = {
             'details': forms.Textarea(attrs={
                 'class': 'form-control',
@@ -273,6 +296,14 @@ class DriverRequestForm(forms.ModelForm):
                 'placeholder': 'Describe the task, pickup location, destination, or support needed',
             }),
         }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        requested_start = cleaned_data.get('requested_start')
+        requested_end = cleaned_data.get('requested_end')
+        if requested_start and requested_end and requested_end <= requested_start:
+            self.add_error('requested_end', 'End time must be after start time.')
+        return cleaned_data
 
 
 class DriverAssignmentForm(forms.ModelForm):
@@ -291,24 +322,45 @@ class DriverAssignmentForm(forms.ModelForm):
         }),
         label='Assignment notes'
     )
+    assigned_vehicle = AvailableVehicleChoiceField(
+        queryset=CompanyAsset.objects.none(),
+        required=True,
+        label='Available vehicle',
+        widget=forms.Select(attrs={'class': 'form-control'}),
+    )
 
     class Meta:
         model = DriverRequest
-        fields = ['assigned_driver', 'notes']
+        fields = ['assigned_driver', 'assigned_vehicle', 'notes']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        queryset = StaffMember.objects.filter(
-            user__role__role='driver',
-            driver_status='available',
-            is_active=True,
-        ).order_by('staff_id')
-
         instance = kwargs.get('instance')
-        if instance and instance.assigned_driver is not None:
-            queryset = queryset | StaffMember.objects.filter(pk=instance.assigned_driver.pk)
+        if instance and instance.requested_start and instance.requested_end:
+            from .driver_request_workflow import get_available_drivers
 
-        self.fields['assigned_driver'].queryset = queryset.distinct().order_by('staff_id')
+            queryset = get_available_drivers(
+                instance.requested_start,
+                instance.requested_end,
+                exclude_request_id=instance.pk,
+                include_driver_id=instance.assigned_driver_id,
+            )
+            self.fields['assigned_driver'].queryset = queryset.distinct().order_by('staff_id')
+        if instance and instance.requested_start and instance.requested_end:
+            from .driver_request_workflow import get_available_vehicles
+
+            assigned_driver_id = (
+                self.data.get('assigned_driver')
+                if self.is_bound
+                else instance.assigned_driver_id
+            )
+            vehicle_queryset = get_available_vehicles(
+                instance.requested_start,
+                instance.requested_end,
+                exclude_request_id=instance.pk,
+                assigned_driver_id=assigned_driver_id,
+            )
+            self.fields['assigned_vehicle'].queryset = vehicle_queryset.distinct().order_by('name')
 
 
 class EquipmentTransferForm(forms.Form):

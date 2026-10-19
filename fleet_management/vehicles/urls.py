@@ -55,6 +55,7 @@ urlpatterns = [
     path('driver-requests/', views.driver_requests_list, name='driver_requests_list'),
     path('driver-requests/add/', views.driver_request_create, name='driver_request_create'),
     path('driver-requests/<int:pk>/', views.driver_request_detail, name='driver_request_detail'),
+    path('driver-requests/<int:pk>/review/', views.driver_request_review, name='driver_request_review'),
     path('driver-requests/<int:pk>/assign/', views.driver_request_assign, name='driver_request_assign'),
     path('export/vehicles/csv/', views.export_vehicles_csv, name='export_vehicles_csv'),
     path('export/vehicles/xlsx/', views.export_vehicles_excel, name='export_vehicles_excel'),

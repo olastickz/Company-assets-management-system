@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from .models import (
     Asset,
     AssetAssignmentRequest,
+    CompanyAsset,
     CompanyDocument,
     DriverRequest,
     EquipmentTransfer,
@@ -18,6 +19,7 @@ from .models import (
     UserRole,
     Vehicle,
 )
+from .driver_request_workflow import get_available_drivers, get_available_vehicles
 
 
 class VehicleSerializer(serializers.ModelSerializer):
@@ -113,36 +115,88 @@ class EquipmentTransferSerializer(serializers.ModelSerializer):
 class DriverRequestSerializer(serializers.ModelSerializer):
     requested_by_name = serializers.CharField(source='requested_by.full_name', read_only=True)
     assigned_driver_name = serializers.CharField(source='assigned_driver.full_name', read_only=True)
+    assigned_vehicle_name = serializers.CharField(source='assigned_vehicle.name', read_only=True)
 
     class Meta:
         model = DriverRequest
         fields = [
             'id', 'requested_by', 'requested_by_name', 'requester_user', 'details',
-            'preferred_date', 'status', 'assigned_driver', 'assigned_driver_name',
-            'assigned_by', 'assigned_at', 'notes', 'created_at', 'updated_at',
+            'preferred_date', 'requested_start', 'requested_end', 'status',
+            'approval_approver', 'approved_by', 'approved_at',
+            'requires_superadmin_approval', 'rejected_by', 'rejected_at',
+            'rejection_note', 'assigned_driver', 'assigned_driver_name',
+            'assigned_vehicle', 'assigned_vehicle_name', 'assigned_by', 'assigned_at',
+            'notes', 'created_at', 'updated_at',
         ]
         read_only_fields = [
             'id', 'requested_by', 'requested_by_name', 'requester_user', 'status',
-            'assigned_driver', 'assigned_driver_name', 'assigned_by', 'assigned_at',
+            'approval_approver', 'approved_by', 'approved_at',
+            'requires_superadmin_approval', 'rejected_by', 'rejected_at',
+            'rejection_note', 'assigned_driver', 'assigned_driver_name',
+            'assigned_vehicle', 'assigned_vehicle_name', 'assigned_by', 'assigned_at',
             'created_at', 'updated_at',
         ]
+
+    def validate(self, attrs):
+        requested_start = attrs.get('requested_start')
+        requested_end = attrs.get('requested_end')
+        if not requested_start:
+            raise serializers.ValidationError({'requested_start': 'This field is required.'})
+        if not requested_end:
+            raise serializers.ValidationError({'requested_end': 'This field is required.'})
+        if requested_end <= requested_start:
+            raise serializers.ValidationError({'requested_end': 'End time must be after start time.'})
+        return attrs
 
 
 class DriverAssignmentSerializer(serializers.Serializer):
     assigned_driver = serializers.PrimaryKeyRelatedField(queryset=StaffMember.objects.none())
+    assigned_vehicle = serializers.PrimaryKeyRelatedField(queryset=CompanyAsset.objects.none())
     notes = serializers.CharField(required=False, allow_blank=True)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        drivers = StaffMember.objects.filter(
-            user__role__role='driver',
-            driver_status='available',
-            is_active=True,
-        )
         instance = kwargs.get('instance')
-        if instance and instance.assigned_driver_id:
-            drivers = drivers | StaffMember.objects.filter(pk=instance.assigned_driver_id)
-        self.fields['assigned_driver'].queryset = drivers.distinct()
+        if instance and instance.requested_start and instance.requested_end:
+            drivers = get_available_drivers(
+                instance.requested_start,
+                instance.requested_end,
+                exclude_request_id=instance.pk,
+                include_driver_id=instance.assigned_driver_id,
+            )
+            self.fields['assigned_driver'].queryset = drivers.distinct()
+        instance = kwargs.get('instance')
+        if instance and instance.requested_start and instance.requested_end:
+            assigned_driver_id = self.initial_data.get(
+                'assigned_driver', instance.assigned_driver_id
+            )
+            vehicles = get_available_vehicles(
+                instance.requested_start,
+                instance.requested_end,
+                exclude_request_id=instance.pk,
+                assigned_driver_id=assigned_driver_id,
+            )
+            self.fields['assigned_vehicle'].queryset = vehicles.distinct()
+
+
+class DriverRequestAvailableVehiclesSerializer(serializers.Serializer):
+    requested_start = serializers.DateTimeField()
+    requested_end = serializers.DateTimeField()
+    assigned_driver = serializers.PrimaryKeyRelatedField(
+        required=False,
+        allow_null=True,
+        queryset=StaffMember.objects.filter(
+            user__role__role='driver',
+            is_active=True,
+        ),
+    )
+
+    def validate(self, attrs):
+        if attrs['requested_end'] <= attrs['requested_start']:
+            raise serializers.ValidationError({
+                'requested_end': 'End time must be after start time.'
+            })
+        return attrs
 
 
 class EquipmentWorkOrderSerializer(serializers.ModelSerializer):

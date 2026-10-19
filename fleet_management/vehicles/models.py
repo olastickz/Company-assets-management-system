@@ -1160,7 +1160,8 @@ class CompanyDocument(models.Model):
 
 class DriverRequest(models.Model):
     STATUS_CHOICES = [
-        ('requested', 'Requested'),
+        ('requested', 'Awaiting manager approval'),
+        ('approved', 'Approved, awaiting vehicle assignment'),
         ('assigned', 'Assigned'),
         ('declined', 'Declined'),
         ('cancelled', 'Cancelled'),
@@ -1185,7 +1186,34 @@ class DriverRequest(models.Model):
     )
     details = models.TextField(blank=True, null=True)
     preferred_date = models.DateField(blank=True, null=True)
+    requested_start = models.DateTimeField(blank=True, null=True)
+    requested_end = models.DateTimeField(blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='requested')
+    approval_approver = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='driver_requests_to_approve',
+    )
+    approved_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='driver_requests_approved',
+    )
+    approved_at = models.DateTimeField(blank=True, null=True)
+    requires_superadmin_approval = models.BooleanField(default=False)
+    rejected_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='driver_requests_rejected',
+    )
+    rejected_at = models.DateTimeField(blank=True, null=True)
+    rejection_note = models.TextField(blank=True)
     assigned_driver = models.ForeignKey(
         'StaffMember',
         on_delete=models.SET_NULL,
@@ -1193,6 +1221,14 @@ class DriverRequest(models.Model):
         blank=True,
         related_name='assigned_driver_requests',
         help_text='Driver assigned to handle this request'
+    )
+    assigned_vehicle = models.ForeignKey(
+        CompanyAsset,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='driver_requests',
+        help_text='Vehicle assigned to handle this request'
     )
     assigned_by = models.ForeignKey(
         User,

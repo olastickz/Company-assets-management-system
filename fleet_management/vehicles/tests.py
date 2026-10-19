@@ -4,11 +4,13 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, Client, RequestFactory, override_settings
 from django.urls import reverse
 from django.utils import timezone
+from datetime import timedelta
 import tempfile
 from rest_framework.test import APIClient
 from asset_management import settings as app_settings
 from .models import Asset, Vehicle, CompanyDocument, StaffApplication, UserRole, StaffMember, OfficeEquipment, EquipmentWorkOrder, DriverRequest, EquipmentTransfer, MaintenanceItem, MaintenanceRequest
 from .staff_onboarding import review_staff_application
+from .driver_request_workflow import approve_driver_request, prepare_driver_request_approval
 
 class DatabaseConfigurationTests(TestCase):
     def test_placeholder_database_url_is_detected(self):
@@ -768,12 +770,15 @@ class ViewsTests(TestCase):
         response = self.client.post(reverse('driver_request_create'), {
             'details': 'Need a driver for offsite inspection',
             'preferred_date': timezone.now().date().isoformat(),
+            'requested_start': (timezone.now() + timedelta(days=1)).strftime('%Y-%m-%dT%H:%M'),
+            'requested_end': (timezone.now() + timedelta(days=1, hours=2)).strftime('%Y-%m-%dT%H:%M'),
         })
         self.assertEqual(response.status_code, 302)
         self.assertEqual(DriverRequest.objects.count(), 1)
         request_obj = DriverRequest.objects.first()
         self.assertEqual(request_obj.requested_by, staff)
         self.assertEqual(request_obj.status, 'requested')
+        self.assertTrue(request_obj.requires_superadmin_approval)
 
     def test_manager_can_assign_driver_to_request(self):
         manager_user = User.objects.create_user(username='manager_assign', password='mgrpass_assign')
@@ -802,6 +807,7 @@ class ViewsTests(TestCase):
             is_active=True
         )
         UserRole.objects.create(user=driver_user, role='driver')
+        vehicle = Vehicle.objects.create(name='Driver assignment vehicle', license_plate='DRIVER-ASSIGN-1')
 
         request_user = User.objects.create_user(username='staff_request', password='spass_request')
         staff_request = StaffMember.objects.create(
@@ -811,6 +817,7 @@ class ViewsTests(TestCase):
             last_name='Baker',
             department='FIELD',
             branch='LAGOS',
+            supervisor=manager_staff,
             is_active=True
         )
         UserRole.objects.create(user=request_user, role='staff')
@@ -819,21 +826,34 @@ class ViewsTests(TestCase):
             requested_by=staff_request,
             requester_user=request_user,
             details='Transfer support needed',
+            requested_start=timezone.now() + timedelta(days=1),
+            requested_end=timezone.now() + timedelta(days=1, hours=2),
             status='requested'
         )
+        prepare_driver_request_approval(driver_request)
 
         self.client.login(username='manager_assign', password='mgrpass_assign')
+        review_response = self.client.post(reverse('driver_request_review', args=[driver_request.pk]), {
+            'action': 'approve',
+        })
+        self.assertEqual(review_response.status_code, 302)
         response = self.client.post(reverse('driver_request_assign', args=[driver_request.pk]), {
             'assigned_driver': driver_staff.pk,
+            'assigned_vehicle': vehicle.pk,
             'notes': 'Please arrive by 10 AM',
         })
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response.status_code,
+            302,
+            response.context['assign_form'].errors if response.context else None,
+        )
 
         driver_request.refresh_from_db()
         driver_staff.refresh_from_db()
         self.assertEqual(driver_request.status, 'assigned')
         self.assertEqual(driver_request.assigned_driver, driver_staff)
-        self.assertEqual(driver_staff.driver_status, 'unavailable')
+        self.assertEqual(driver_request.assigned_vehicle, vehicle)
+        self.assertEqual(driver_staff.driver_status, 'available')
 
     def test_manager_can_reassign_driver_and_restore_previous_driver(self):
         manager_user = User.objects.create_user(username='manager_reassign', password='mgrpass_reassign')
@@ -856,7 +876,7 @@ class ViewsTests(TestCase):
             last_name='Williams',
             department='FIELD',
             branch='LAGOS',
-            driver_status='unavailable',
+            driver_status='available',
             is_active=True
         )
         UserRole.objects.create(user=original_driver_user, role='driver')
@@ -873,6 +893,7 @@ class ViewsTests(TestCase):
             is_active=True
         )
         UserRole.objects.create(user=new_driver_user, role='driver')
+        vehicle = Vehicle.objects.create(name='Driver reassignment vehicle', license_plate='DRIVER-REASSIGN-1')
 
         request_user = User.objects.create_user(username='staff_reassign', password='spass_reassign')
         staff_request = StaffMember.objects.create(
@@ -891,7 +912,10 @@ class ViewsTests(TestCase):
             requester_user=request_user,
             details='Urgent route support',
             status='assigned',
+            requested_start=timezone.now() + timedelta(days=1),
+            requested_end=timezone.now() + timedelta(days=1, hours=2),
             assigned_driver=original_driver,
+            assigned_vehicle=vehicle,
             assigned_by=manager_user,
             assigned_at=timezone.now(),
         )
@@ -899,15 +923,21 @@ class ViewsTests(TestCase):
         self.client.login(username='manager_reassign', password='mgrpass_reassign')
         response = self.client.post(reverse('driver_request_assign', args=[driver_request.pk]), {
             'assigned_driver': new_driver.pk,
+            'assigned_vehicle': vehicle.pk,
             'notes': 'Switching to a closer driver',
         })
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response.status_code,
+            302,
+            response.context['assign_form'].errors if response.context else None,
+        )
 
         driver_request.refresh_from_db()
         original_driver.refresh_from_db()
         new_driver.refresh_from_db()
         self.assertEqual(driver_request.assigned_driver, new_driver)
-        self.assertEqual(new_driver.driver_status, 'unavailable')
+        self.assertEqual(driver_request.assigned_vehicle, vehicle)
+        self.assertEqual(new_driver.driver_status, 'available')
         self.assertEqual(original_driver.driver_status, 'available')
 
     def test_driver_request_detail_restricts_access_for_other_staff(self):
@@ -1857,9 +1887,17 @@ class WorkflowApiTests(TestCase):
     def test_driver_request_assignment_updates_driver_availability(self):
         requester = User.objects.create_user(username='workflow-requester', password='requester-pass')
         UserRole.objects.create(user=requester, role='staff')
+        manager_staff = StaffMember.objects.create(
+            user=self.manager,
+            staff_id='WF-MANAGER-1',
+            first_name='Workflow',
+            last_name='Manager',
+        )
         requester_staff = StaffMember.objects.create(
             user=requester, staff_id='WF-REQUESTER-1', first_name='Request', last_name='Owner'
         )
+        requester_staff.supervisor = manager_staff
+        requester_staff.save(update_fields=['supervisor'])
         driver_user = User.objects.create_user(username='workflow-driver', password='driver-pass')
         UserRole.objects.create(user=driver_user, role='driver')
         driver = StaffMember.objects.create(
@@ -1868,8 +1906,12 @@ class WorkflowApiTests(TestCase):
         requester_client = APIClient()
         requester_client.force_authenticate(requester)
 
+        request_start = timezone.now() + timedelta(days=2)
         create_response = requester_client.post('/api/driver-requests/', {
-            'details': 'Pickup support', 'preferred_date': '2026-10-10',
+            'details': 'Pickup support',
+            'preferred_date': request_start.date().isoformat(),
+            'requested_start': request_start.isoformat(),
+            'requested_end': (request_start + timedelta(hours=2)).isoformat(),
         }, format='json')
         self.assertEqual(create_response.status_code, 201)
         self.assertEqual(create_response.data['status'], 'requested')
@@ -1878,15 +1920,382 @@ class WorkflowApiTests(TestCase):
         list_response = requester_client.get('/api/driver-requests/')
         self.assertEqual(list_response.status_code, 200)
         self.assertEqual(list_response.data[0]['id'], create_response.data['id'])
+        self.assertEqual(create_response.data['approval_approver'], self.manager.pk)
+        premature_assignment = self.manager_client.post(
+            f"/api/driver-requests/{create_response.data['id']}/assign/",
+            {'assigned_driver': driver.pk, 'assigned_vehicle': self.vehicle.pk},
+            format='json',
+        )
+        self.assertEqual(premature_assignment.status_code, 400)
+        approve_response = self.manager_client.post(
+            f"/api/driver-requests/{create_response.data['id']}/review/",
+            {'action': 'approve'},
+            format='json',
+        )
+        self.assertEqual(approve_response.status_code, 200)
+        self.assertEqual(approve_response.data['status'], 'approved')
         assign_response = self.manager_client.post(
             f"/api/driver-requests/{create_response.data['id']}/assign/",
-            {'assigned_driver': driver.pk, 'notes': 'Confirmed'},
+            {'assigned_driver': driver.pk, 'assigned_vehicle': self.vehicle.pk, 'notes': 'Confirmed'},
             format='json',
         )
         self.assertEqual(assign_response.status_code, 200)
         self.assertEqual(assign_response.data['status'], 'assigned')
+        self.assertEqual(assign_response.data['assigned_vehicle'], self.vehicle.pk)
         driver.refresh_from_db()
-        self.assertEqual(driver.driver_status, 'unavailable')
+        self.assertEqual(driver.driver_status, 'available')
+
+    def test_vehicle_cannot_be_assigned_to_overlapping_driver_requests(self):
+        now = timezone.now()
+        assigned_driver_user = User.objects.create_user(username='reserved-driver', password='driver-pass')
+        UserRole.objects.create(user=assigned_driver_user, role='driver')
+        assigned_driver = StaffMember.objects.create(
+            user=assigned_driver_user,
+            staff_id='WF-RESERVED-DRIVER',
+            first_name='Reserved',
+            last_name='Driver',
+            driver_status='available',
+        )
+        first_request = DriverRequest.objects.create(
+            requester_user=self.manager,
+            details='Existing vehicle reservation',
+            status='assigned',
+            requested_start=now + timedelta(days=2),
+            requested_end=now + timedelta(days=2, hours=2),
+            assigned_driver=assigned_driver,
+            assigned_vehicle=self.vehicle,
+        )
+        second_request = DriverRequest.objects.create(
+            requester_user=self.manager,
+            details='Overlapping vehicle reservation',
+            status='approved',
+            requested_start=now + timedelta(days=2, hours=1),
+            requested_end=now + timedelta(days=2, hours=3),
+        )
+        available_driver_user = User.objects.create_user(username='available-driver', password='driver-pass')
+        UserRole.objects.create(user=available_driver_user, role='driver')
+        available_driver = StaffMember.objects.create(
+            user=available_driver_user,
+            staff_id='WF-AVAILABLE-DRIVER',
+            first_name='Available',
+            last_name='Driver',
+        )
+
+        response = self.manager_client.post(
+            f'/api/driver-requests/{second_request.pk}/assign/',
+            {'assigned_driver': available_driver.pk, 'assigned_vehicle': self.vehicle.pk},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('assigned_vehicle', response.data)
+
+        alternate_vehicle = Vehicle.objects.create(
+            name='Alternate workflow vehicle',
+            license_plate='WF-VEHICLE-ALT',
+        )
+        driver_conflict_request = DriverRequest.objects.create(
+            requester_user=self.manager,
+            details='Overlapping driver reservation',
+            status='approved',
+            requested_start=now + timedelta(days=2, hours=1),
+            requested_end=now + timedelta(days=2, hours=3),
+        )
+        driver_conflict = self.manager_client.post(
+            f'/api/driver-requests/{driver_conflict_request.pk}/assign/',
+            {'assigned_driver': assigned_driver.pk, 'assigned_vehicle': alternate_vehicle.pk},
+            format='json',
+        )
+        self.assertEqual(driver_conflict.status_code, 400)
+        self.assertIn('assigned_driver', driver_conflict.data)
+        first_request.refresh_from_db()
+        second_request.refresh_from_db()
+        self.assertEqual(first_request.assigned_vehicle, self.vehicle)
+        self.assertIsNone(second_request.assigned_vehicle)
+
+    def test_driver_can_take_non_overlapping_scheduled_requests(self):
+        driver_user = User.objects.create_user(username='multi-shift-driver', password='driver-pass')
+        UserRole.objects.create(user=driver_user, role='driver')
+        driver = StaffMember.objects.create(
+            user=driver_user,
+            staff_id='WF-MULTI-SHIFT-DRIVER',
+            first_name='Multi Shift',
+            last_name='Driver',
+            driver_status='available',
+        )
+        second_vehicle = Vehicle.objects.create(
+            name='Second workflow vehicle',
+            license_plate='WF-VEHICLE-2',
+        )
+        first_start = timezone.now() + timedelta(days=7)
+        first_request = DriverRequest.objects.create(
+            requester_user=self.manager,
+            details='Morning booking',
+            status='approved',
+            requested_start=first_start,
+            requested_end=first_start + timedelta(hours=1),
+        )
+        first_assignment = self.manager_client.post(
+            f'/api/driver-requests/{first_request.pk}/assign/',
+            {'assigned_driver': driver.pk, 'assigned_vehicle': self.vehicle.pk},
+            format='json',
+        )
+        self.assertEqual(first_assignment.status_code, 200)
+
+        second_start = first_start + timedelta(hours=2)
+        second_request = DriverRequest.objects.create(
+            requester_user=self.manager,
+            details='Afternoon booking',
+            status='approved',
+            requested_start=second_start,
+            requested_end=second_start + timedelta(hours=1),
+        )
+        second_assignment = self.manager_client.post(
+            f'/api/driver-requests/{second_request.pk}/assign/',
+            {'assigned_driver': driver.pk, 'assigned_vehicle': second_vehicle.pk},
+            format='json',
+        )
+
+        self.assertEqual(second_assignment.status_code, 200)
+        self.assertEqual(second_assignment.data['assigned_driver'], driver.pk)
+        driver.refresh_from_db()
+        self.assertEqual(driver.driver_status, 'available')
+
+    def test_vehicle_assigned_to_selected_driver_can_be_dispatched(self):
+        driver_user = User.objects.create_user(username='vehicle-owner-driver', password='driver-pass')
+        UserRole.objects.create(user=driver_user, role='driver')
+        driver = StaffMember.objects.create(
+            user=driver_user,
+            staff_id='WF-OWNER-DRIVER',
+            first_name='Vehicle Owner',
+            last_name='Driver',
+        )
+        self.vehicle.assigned_staff = driver
+        self.vehicle.save(update_fields=['assigned_staff'])
+        start = timezone.now() + timedelta(days=9)
+        driver_request = DriverRequest.objects.create(
+            requester_user=self.manager,
+            details='Use the selected driver vehicle',
+            status='approved',
+            requested_start=start,
+            requested_end=start + timedelta(hours=1),
+        )
+
+        response = self.manager_client.post(
+            f'/api/driver-requests/{driver_request.pk}/assign/',
+            {'assigned_driver': driver.pk, 'assigned_vehicle': self.vehicle.pk},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['assigned_driver'], driver.pk)
+        self.assertEqual(response.data['assigned_vehicle'], self.vehicle.pk)
+
+    def test_available_vehicles_api_honors_time_window_and_driver_vehicle(self):
+        driver_user = User.objects.create_user(username='availability-driver', password='driver-pass')
+        UserRole.objects.create(user=driver_user, role='driver')
+        driver = StaffMember.objects.create(
+            user=driver_user,
+            staff_id='WF-AVAILABILITY-DRIVER',
+            first_name='Availability',
+            last_name='Driver',
+        )
+        driver_vehicle = Vehicle.objects.create(
+            name='Driver-owned workflow vehicle',
+            license_plate='WF-DRIVER-OWNED',
+            assigned_staff=driver,
+        )
+        start = timezone.now() + timedelta(days=10)
+        DriverRequest.objects.create(
+            requester_user=self.manager,
+            details='Existing reservation',
+            status='assigned',
+            requested_start=start,
+            requested_end=start + timedelta(hours=2),
+            assigned_vehicle=self.vehicle,
+        )
+
+        response = self.manager_client.get('/api/driver-requests/available-vehicles/', {
+            'requested_start': start.isoformat(),
+            'requested_end': (start + timedelta(hours=1)).isoformat(),
+            'assigned_driver': driver.pk,
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(driver_vehicle.pk, [item['id'] for item in response.data])
+        self.assertNotIn(self.vehicle.pk, [item['id'] for item in response.data])
+
+    def test_driver_request_without_people_manager_requires_admin_approval(self):
+        requester = User.objects.create_user(username='fallback-requester', password='staff-pass')
+        UserRole.objects.create(user=requester, role='staff')
+        StaffMember.objects.create(
+            user=requester,
+            staff_id='WF-FALLBACK-REQUESTER',
+            first_name='Fallback',
+            last_name='Requester',
+        )
+        admin = User.objects.create_superuser(
+            username='fallback-admin', email='fallback-admin@example.com', password='admin-pass'
+        )
+        requester_client = APIClient()
+        requester_client.force_authenticate(requester)
+        request_start = timezone.now() + timedelta(days=3)
+
+        created = requester_client.post('/api/driver-requests/', {
+            'details': 'Needs executive approval',
+            'requested_start': request_start.isoformat(),
+            'requested_end': (request_start + timedelta(hours=1)).isoformat(),
+        }, format='json')
+
+        self.assertEqual(created.status_code, 201)
+        self.assertTrue(created.data['requires_superadmin_approval'])
+        request_id = created.data['id']
+        denied = self.manager_client.post(
+            f'/api/driver-requests/{request_id}/review/',
+            {'action': 'approve'},
+            format='json',
+        )
+        self.assertEqual(denied.status_code, 403)
+
+        admin_client = APIClient()
+        admin_client.force_authenticate(admin)
+        approved = admin_client.post(
+            f'/api/driver-requests/{request_id}/review/',
+            {'action': 'approve'},
+            format='json',
+        )
+        self.assertEqual(approved.status_code, 200)
+        self.assertEqual(approved.data['status'], 'approved')
+        self.assertEqual(approved.data['approved_by'], admin.pk)
+
+    def test_designated_staff_approver_can_open_driver_request_detail(self):
+        approver = User.objects.create_user(username='detail-approver', password='approver-pass')
+        UserRole.objects.create(user=approver, role='staff')
+        approver_staff = StaffMember.objects.create(
+            user=approver,
+            staff_id='WF-DETAIL-APPROVER',
+            first_name='Detail',
+            last_name='Approver',
+        )
+        requester = User.objects.create_user(username='detail-requester', password='staff-pass')
+        UserRole.objects.create(user=requester, role='staff')
+        StaffMember.objects.create(
+            user=requester,
+            staff_id='WF-DETAIL-REQUESTER',
+            first_name='Detail',
+            last_name='Requester',
+            supervisor=approver_staff,
+        )
+        requester_client = APIClient()
+        requester_client.force_authenticate(requester)
+        start = timezone.now() + timedelta(days=8)
+        created = requester_client.post('/api/driver-requests/', {
+            'details': 'Needs supervisor approval',
+            'requested_start': start.isoformat(),
+            'requested_end': (start + timedelta(hours=1)).isoformat(),
+        }, format='json')
+        self.client.force_login(approver)
+
+        detail = self.client.get(reverse('driver_request_detail', args=[created.data['id']]))
+
+        self.assertEqual(detail.status_code, 200)
+        self.assertContains(detail, 'Review request')
+
+    def test_driver_request_uses_supervisor_before_reporting_manager(self):
+        supervisor = User.objects.create_user(username='request-supervisor', password='manager-pass')
+        reporting_manager = User.objects.create_user(username='request-reporting-manager', password='manager-pass')
+        supervisor_staff = StaffMember.objects.create(
+            user=supervisor,
+            staff_id='WF-SUPERVISOR',
+            first_name='Request',
+            last_name='Supervisor',
+        )
+        reporting_manager_staff = StaffMember.objects.create(
+            user=reporting_manager,
+            staff_id='WF-REPORTING-MANAGER',
+            first_name='Request',
+            last_name='Reporting Manager',
+        )
+        requester = User.objects.create_user(username='priority-requester', password='staff-pass')
+        UserRole.objects.create(user=requester, role='staff')
+        StaffMember.objects.create(
+            user=requester,
+            staff_id='WF-PRIORITY-REQUESTER',
+            first_name='Priority',
+            last_name='Requester',
+            supervisor=supervisor_staff,
+            reporting_manager=reporting_manager_staff,
+        )
+        requester_client = APIClient()
+        requester_client.force_authenticate(requester)
+        request_start = timezone.now() + timedelta(days=4)
+
+        response = requester_client.post('/api/driver-requests/', {
+            'details': 'Supervisor should approve first',
+            'requested_start': request_start.isoformat(),
+            'requested_end': (request_start + timedelta(hours=1)).isoformat(),
+        }, format='json')
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data['approval_approver'], supervisor.pk)
+        self.assertFalse(response.data['requires_superadmin_approval'])
+
+    def test_driver_request_requires_a_valid_time_window(self):
+        requester = User.objects.create_user(username='schedule-requester', password='staff-pass')
+        UserRole.objects.create(user=requester, role='staff')
+        requester_client = APIClient()
+        requester_client.force_authenticate(requester)
+        response = requester_client.post('/api/driver-requests/', {
+            'details': 'Missing schedule',
+        }, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('requested_start', response.data)
+
+        request_start = timezone.now() + timedelta(days=5)
+        invalid_window = requester_client.post('/api/driver-requests/', {
+            'details': 'Invalid schedule',
+            'requested_start': request_start.isoformat(),
+            'requested_end': (request_start - timedelta(minutes=1)).isoformat(),
+        }, format='json')
+        self.assertEqual(invalid_window.status_code, 400)
+        self.assertIn('requested_end', invalid_window.data)
+
+    def test_designated_approver_can_reject_driver_request(self):
+        requester = User.objects.create_user(username='reject-requester', password='staff-pass')
+        UserRole.objects.create(user=requester, role='staff')
+        requester_staff = StaffMember.objects.create(
+            user=requester,
+            staff_id='WF-REJECT-REQUESTER',
+            first_name='Reject',
+            last_name='Requester',
+        )
+        manager_staff = StaffMember.objects.create(
+            user=self.manager,
+            staff_id='WF-REJECT-MANAGER',
+            first_name='Reject',
+            last_name='Manager',
+        )
+        requester_staff.reporting_manager = manager_staff
+        requester_staff.save(update_fields=['reporting_manager'])
+        requester_client = APIClient()
+        requester_client.force_authenticate(requester)
+        request_start = timezone.now() + timedelta(days=6)
+        created = requester_client.post('/api/driver-requests/', {
+            'details': 'Reject this request',
+            'requested_start': request_start.isoformat(),
+            'requested_end': (request_start + timedelta(hours=1)).isoformat(),
+        }, format='json')
+
+        rejected = self.manager_client.post(
+            f"/api/driver-requests/{created.data['id']}/review/",
+            {'action': 'reject', 'rejection_note': 'No vehicle capacity'},
+            format='json',
+        )
+
+        self.assertEqual(rejected.status_code, 200)
+        self.assertEqual(rejected.data['status'], 'declined')
+        self.assertEqual(rejected.data['rejected_by'], self.manager.pk)
+        self.assertEqual(rejected.data['rejection_note'], 'No vehicle capacity')
 
     def test_non_manager_cannot_assign_driver_request(self):
         staff_user = User.objects.create_user(username='workflow-staff-2', password='staff-pass')

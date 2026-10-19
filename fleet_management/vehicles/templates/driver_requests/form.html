@@ -29,6 +29,22 @@
             {% endif %}
         </div>
 
+        <div class="form-item">
+            {{ form.requested_start.label_tag }}
+            {{ form.requested_start }}
+            {% if form.requested_start.errors %}
+                <div class="field-errors">{{ form.requested_start.errors }}</div>
+            {% endif %}
+        </div>
+
+        <div class="form-item">
+            {{ form.requested_end.label_tag }}
+            {{ form.requested_end }}
+            {% if form.requested_end.errors %}
+                <div class="field-errors">{{ form.requested_end.errors }}</div>
+            {% endif %}
+        </div>
+
         <div class="action-row">
             <button type="submit" class="button-inline">Submit Request</button>
             <a class="link" href="{% url 'driver_requests_list' %}">Back to list</a>
