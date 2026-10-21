@@ -17,20 +17,15 @@ def create_approval_records(target, approvers, admin_fallback=False):
     else:
         raise TypeError('Unsupported approval target.')
 
-    approver_roles = {}
+    records = []
     for approver_type, user in approvers:
         if user:
             user_id = getattr(user, 'pk', user)
-            approver_roles.setdefault(user_id, []).append(approver_type)
-
-    records = []
-    for user_id, roles in approver_roles.items():
-        approver_type = roles[0] if len(roles) == 1 else 'supervisor_and_reporting_manager'
-        records.append(ApprovalRecord.objects.create(
-            **{target_field: target},
-            approver_id=user_id,
-            approver_type=approver_type,
-        ))
+            records.append(ApprovalRecord.objects.create(
+                **{target_field: target},
+                approver_id=user_id,
+                approver_type=approver_type,
+            ))
 
     if admin_fallback:
         records.append(ApprovalRecord.objects.create(

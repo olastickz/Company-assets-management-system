@@ -329,6 +329,27 @@ def asset_assignment_request_api(request, pk):
     return Response(AssetAssignmentRequestSerializer(assignment).data)
 
 
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def asset_assignment_requests_pending_api(request):
+    """Return assignment requests that still need the current user's decision."""
+    approvals = ApprovalRecord.objects.filter(
+        actor_approval_filter(request.user),
+        status='pending',
+        asset_assignment_request__isnull=False,
+    )
+    assignments = AssetAssignmentRequest.objects.filter(
+        status='pending',
+        approval_records__in=approvals,
+    ).select_related(
+        'asset', 'previous_staff', 'requested_staff', 'requested_by',
+        'supervisor_approver', 'supervisor_approved_by',
+        'reporting_manager_approver', 'reporting_manager_approved_by',
+        'superadmin_approved_by',
+    ).distinct()
+    return Response(AssetAssignmentRequestSerializer(assignments, many=True).data)
+
+
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def asset_assignment_request_approve_api(request, pk):

@@ -43,6 +43,7 @@ class AssetSerializer(serializers.ModelSerializer):
 
 class AssetAssignmentRequestSerializer(serializers.ModelSerializer):
     approvals_complete = serializers.BooleanField(read_only=True)
+    approval_records = serializers.SerializerMethodField()
 
     class Meta:
         model = AssetAssignmentRequest
@@ -53,9 +54,16 @@ class AssetAssignmentRequestSerializer(serializers.ModelSerializer):
             'reporting_manager_approved_at', 'supervisor_approval_required',
             'reporting_manager_approval_required', 'requires_superadmin_approval',
             'superadmin_approved_by', 'superadmin_approved_at', 'approvals_complete',
+            'approval_records',
             'status', 'reason', 'notes', 'rejection_note', 'created_at', 'updated_at',
         ]
         read_only_fields = fields
+
+    def get_approval_records(self, assignment):
+        return ApprovalRecordSerializer(
+            assignment.approval_records.select_related('approver', 'acted_by').all(),
+            many=True,
+        ).data
 
 
 class StaffMemberSerializer(serializers.ModelSerializer):
@@ -117,6 +125,7 @@ class DriverRequestSerializer(serializers.ModelSerializer):
     requested_by_name = serializers.CharField(source='requested_by.full_name', read_only=True)
     assigned_driver_name = serializers.CharField(source='assigned_driver.full_name', read_only=True)
     assigned_vehicle_name = serializers.CharField(source='assigned_vehicle.name', read_only=True)
+    approval_records = serializers.SerializerMethodField()
 
     class Meta:
         model = DriverRequest
@@ -124,6 +133,7 @@ class DriverRequestSerializer(serializers.ModelSerializer):
             'id', 'requested_by', 'requested_by_name', 'requester_user', 'details',
             'preferred_date', 'requested_start', 'requested_end', 'status',
             'approval_approver', 'approved_by', 'approved_at',
+            'approval_records',
             'requires_superadmin_approval', 'rejected_by', 'rejected_at',
             'rejection_note', 'assigned_driver', 'assigned_driver_name',
             'assigned_vehicle', 'assigned_vehicle_name', 'assigned_by', 'assigned_at',
@@ -137,6 +147,12 @@ class DriverRequestSerializer(serializers.ModelSerializer):
             'assigned_vehicle', 'assigned_vehicle_name', 'assigned_by', 'assigned_at',
             'created_at', 'updated_at',
         ]
+
+    def get_approval_records(self, driver_request):
+        return ApprovalRecordSerializer(
+            driver_request.approval_records.select_related('approver', 'acted_by').all(),
+            many=True,
+        ).data
 
     def validate(self, attrs):
         requested_start = attrs.get('requested_start')

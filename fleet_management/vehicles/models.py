@@ -1262,6 +1262,7 @@ class ApprovalRecord(models.Model):
     APPROVER_TYPE_CHOICES = [
         ('supervisor', 'Supervisor'),
         ('reporting_manager', 'Reporting manager'),
+        ('vehicle_manager', 'Vehicle manager'),
         ('supervisor_and_reporting_manager', 'Supervisor and reporting manager'),
         ('admin', 'Admin fallback'),
     ]

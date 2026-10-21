@@ -1,6 +1,7 @@
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
+from django.contrib.auth.models import User
 
 from .approval_workflow import (
     approval_records_complete,
@@ -47,24 +48,27 @@ def get_available_drivers(
 def prepare_driver_request_approval(driver_request):
     staff = driver_request.requested_by
     approvers = []
+    vehicle_manager = User.objects.filter(
+        role__role='vehicle_manager',
+        is_active=True,
+    ).order_by('pk').first()
+    if vehicle_manager:
+        approvers.append(('vehicle_manager', vehicle_manager))
     if staff:
-        for approver_type, staff_approver in (
-            ('supervisor', staff.supervisor),
-            ('reporting_manager', staff.reporting_manager),
-        ):
-            if staff_approver and staff_approver.user_id and staff_approver.user.is_active:
-                approvers.append((approver_type, staff_approver.user))
+        reporting_manager = staff.reporting_manager
+        if reporting_manager and reporting_manager.user_id and reporting_manager.user.is_active:
+            approvers.append(('reporting_manager', reporting_manager.user))
 
     approver = approvers[0][1] if approvers else None
     driver_request.approval_approver = approver
-    driver_request.requires_superadmin_approval = not approvers
+    driver_request.requires_superadmin_approval = len(approvers) < 2
     driver_request.save(update_fields=[
         'approval_approver', 'requires_superadmin_approval', 'updated_at',
     ])
     create_approval_records(
         driver_request,
         approvers,
-        admin_fallback=not approvers,
+        admin_fallback=len(approvers) < 2,
     )
     return driver_request
 

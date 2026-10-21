@@ -327,7 +327,9 @@ class AdminStaffListView(generics.ListCreateAPIView):
     pagination_class = AdminPagination
 
     def get_queryset(self):
-        staff = StaffMember.objects.select_related('user').order_by('staff_id')
+        staff = StaffMember.objects.select_related(
+            'user', 'supervisor', 'reporting_manager'
+        ).order_by('staff_id')
         search = self.request.query_params.get('search')
         if search:
             staff = staff.filter(
@@ -410,7 +412,9 @@ class PasswordChangeAPIView(APIView):
 class AdminStaffDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [RoleMatrixPermission]
     permission_module = 'staff'
-    queryset = StaffMember.objects.select_related('user').all()
+    queryset = StaffMember.objects.select_related(
+        'user', 'supervisor', 'reporting_manager'
+    ).all()
     serializer_class = StaffMemberSerializer
 
 
