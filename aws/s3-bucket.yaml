@@ -1,0 +1,81 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Private S3 storage for Fleet Management uploaded files.
+
+Parameters:
+  BucketName:
+    Type: String
+    Description: Globally unique S3 bucket name.
+    MinLength: 3
+    MaxLength: 63
+
+Resources:
+  UploadsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref BucketName
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+
+  UploadsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref UploadsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt UploadsBucket.Arn
+              - !Sub '${UploadsBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+  ApplicationStoragePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Read and manage Fleet Management uploaded files in its S3 bucket.
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ListBucket
+            Effect: Allow
+            Action:
+              - s3:GetBucketLocation
+              - s3:ListBucket
+            Resource: !GetAtt UploadsBucket.Arn
+          - Sid: ManageUploadedFiles
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+            Resource: !Sub '${UploadsBucket.Arn}/*'
+
+Outputs:
+  BucketName:
+    Description: Set this as AWS_STORAGE_BUCKET_NAME.
+    Value: !Ref UploadsBucket
+  BucketRegion:
+    Description: Set this as AWS_S3_REGION_NAME.
+    Value: !Ref AWS::Region
+  ApplicationStoragePolicyArn:
+    Description: Attach this policy to the identity used by the application server.
+    Value: !Ref ApplicationStoragePolicy
